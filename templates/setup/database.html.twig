@@ -1,0 +1,19 @@
+{% extends 'setup/layout.html.twig' %}
+{% block title %}Database setup{% endblock %}
+{% block body %}
+    <main>
+        <h1>Database setup</h1>
+        <p>Enter the restricted Emailer Light application-database credentials—not the MariaDB <code>root</code> password and not your administrator login password.</p>
+        <p>If the root installer created the database, copy the Host, Port, Database, Username, and generated application Password printed at the end of that installer session. The same protected connection is already stored in <code>/etc/emailer/runtime.env</code>; the browser submission is used once to prove it matches and to install the schema.</p>
+        <p>If you supplied an existing <code>DATABASE_URL</code>, enter the exact components of that URL. Emailer Light never stores this submitted password in setup state or redisplays it.</p>
+    <form method="post" action="{{ path('setup_database') }}" autocomplete="off">
+        <input type="hidden" name="_token" value="{{ csrf_token('setup-database') }}">
+        <label>Host <input name="host" required autocomplete="off"></label>
+        <label>Port <input name="port" type="number" min="1" max="65535" value="3306" required></label>
+        <label>Database <input name="database" required autocomplete="off"></label>
+        <label>Runtime username <input name="username" required autocomplete="off"></label>
+        <label>Application database password <input name="password" type="password" required autocomplete="off"></label>
+        <button type="submit">Verify application credentials and install schema</button>
+    </form>
+</main>
+{% endblock %}

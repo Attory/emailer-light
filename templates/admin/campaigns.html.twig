@@ -1,0 +1,31 @@
+{% extends 'admin/layout.html.twig' %}
+{% block title %}Campaigns — Emailer Light{% endblock %}
+{% block admin_body %}
+{% set values = form_values|default({}) %}
+<div class="page-heading"><div><p class="eyebrow">Campaigns</p><h1>Your campaigns</h1><p>Each campaign owns its recipients. Upload a CSV for this campaign, then preview, test and approve it.</p></div><a class="button" href="#compose">Create campaign</a></div>
+<section class="panel"><h2>History</h2>
+{% if campaigns %}<table><thead><tr><th>Campaign</th><th>Status</th><th>Recipients</th><th>Accepted</th><th>Failures</th><th>Updated</th></tr></thead><tbody>
+{% for campaign in campaigns %}<tr><td><a href="{{ path('admin_campaign', {id: campaign.id}) }}">{{ campaign.name }}</a></td><td>{{ campaign.state|replace({'_': ' '})|title }}</td><td>{{ campaign.recipient_count }}</td><td>{{ campaign.accepted_count|default(0) }}</td><td>{{ campaign.failure_count|default(0) }}</td><td>{{ campaign.updated_at|date('d M Y, H:i') }}</td></tr>{% endfor %}
+</tbody></table>{% else %}<p>No campaigns yet.</p>{% endif %}
+</section>
+<section class="panel" id="compose"><h2>Create a campaign draft</h2>
+<form method="post" action="{{ path('admin_campaign_create') }}" enctype="multipart/form-data">
+<input type="hidden" name="_token" value="{{ csrf_token('campaign-create') }}">
+<label>Campaign name <input name="name" value="{{ values.name|default('') }}" maxlength="160" required></label>
+<label>Recipient CSV <input type="file" name="recipient_csv" accept="text/csv,.csv" required></label>
+<p class="help">A header row with <code>email</code> is required. Optional columns: <code>display_name</code>, <code>first_name</code>, <code>last_name</code>, <code>locale</code>, <code>time_zone</code>. The upload belongs only to this campaign. Review counts and a recipient preview before approval.</p>
+<fieldset><legend>Template</legend>
+<label><input type="radio" name="template_mode" value="existing" checked> Use a saved template</label>
+<label>Saved template <select name="template_version"><option value="">Choose a template</option>{% for template in options.templates %}<option value="{{ template.id }}"{% if template.id == values.template_version|default('') %} selected{% endif %}>{{ template.name }} · version {{ template.version_number }}</option>{% endfor %}</select></label>
+<label><input type="radio" name="template_mode" value="upload"> Create from HTML below</label>
+<label>Template name <input name="template_name" value="{{ values.template_name|default('') }}" maxlength="160"></label>
+<label>Subject <input name="subject" value="{{ values.subject|default('') }}" maxlength="200"></label>
+<label>Preheader <input name="preheader" value="{{ values.preheader|default('') }}" maxlength="200"></label>
+<label>HTML file <input type="file" name="template_file" accept="text/html,.html,.htm"></label>
+<label>Or paste HTML <textarea name="html" maxlength="200000">{{ values.html|default('') }}</textarea></label>
+</fieldset>
+<label>Messages per minute <input name="messages_per_minute" type="number" min="1" max="600" value="{{ values.messages_per_minute|default('') }}" placeholder="{{ limits.messages_per_minute }}"></label>
+<p class="help">Leave blank for the installation limit. The destination-domain limit also applies.</p>
+<button type="submit">Save draft</button>
+</form></section>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends 'base.html.twig' %}
+{% block title %}RSVP — {{ form.campaign_name }}{% endblock %}
+{% block body %}
+<main class="public-action">
+    <h1>RSVP</h1>
+    <p>{{ form.campaign_name }}</p>
+    {% if submitted %}<p role="status">Your response has been recorded.</p>{% endif %}
+    <form method="post">
+        <fieldset><legend>Your response</legend>
+            {% for choice in ['yes', 'no', 'maybe'] %}<label><input type="radio" name="response" value="{{ choice }}"{% if form.response == choice %} checked{% endif %} required> {{ choice|capitalize }}</label>{% endfor %}
+        </fieldset>
+        <label>Additional guests <input type="number" name="guests" min="0" max="20" value="{{ form.guests }}" required></label>
+        <label>Note (optional) <textarea name="note" maxlength="500">{{ form.note }}</textarea></label>
+        <button type="submit">Send RSVP</button>
+    </form>
+</main>
+{% endblock %}

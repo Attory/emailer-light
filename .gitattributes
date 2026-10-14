@@ -1,0 +1,17 @@
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+
+/.editorconfig export-ignore
+/.env.example export-ignore
+/.gitattributes export-ignore
+/.gitignore export-ignore
+/.github export-ignore
+/prompts export-ignore

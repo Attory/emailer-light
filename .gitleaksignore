@@ -1,0 +1,12 @@
+# Exact reviewed false positives in locked third-party source. Each entry is
+# intentionally line-specific; dependency updates must re-review rather than
+# broad-allowlisting vendor directories.
+vendor/symfony/security-core/Validator/Constraints/UserPassword.php:generic-api-key:20
+vendor/symfony/validator/Constraints/PasswordStrength.php:generic-api-key:32
+vendor/symfony/mime/MimeTypes.php:generic-api-key:2838
+vendor/phpstan/phpstan/phpstan.phar:generic-api-key:86680
+vendor/phpstan/phpstan/phpstan.phar:generic-api-key:569909
+vendor/phpstan/phpstan/phpstan.phar:generic-api-key:569924
+build/artifact/vendor/symfony/security-core/Validator/Constraints/UserPassword.php:generic-api-key:20
+build/artifact/vendor/symfony/validator/Constraints/PasswordStrength.php:generic-api-key:32
+build/artifact/vendor/symfony/mime/MimeTypes.php:generic-api-key:2838

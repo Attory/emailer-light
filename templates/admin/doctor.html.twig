@@ -1,0 +1,35 @@
+{% extends 'admin/layout.html.twig' %}
+{% block title %}Configuration Doctor · Emailer Light{% endblock %}
+{% block admin_body %}
+    <h1>Configuration Doctor</h1>
+    <p>Critical findings block queueing and scheduled materialisation. Acknowledgement never disables a gate.</p>
+    <p>Login performs only a lightweight cached check. Run the full Doctor here after setup or a repair to clear resolved findings and record current evidence.</p>
+    <form method="post" action="{{ path('admin_doctor_run') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('doctor-run') }}">
+        <button type="submit">Run full Doctor now</button>
+    </form>
+    <p><a href="{{ path('admin_doctor_export') }}">Export redacted JSON report</a></p>
+    <h2>Active findings</h2>
+    {% for finding in active_findings %}
+        <article>
+            <h3>{{ finding.severity|upper }} {{ finding.code }}</h3>
+            <p><strong>Summary:</strong> {{ finding.summary }}</p>
+            <p><strong>Risk:</strong> {{ finding.risk }}</p>
+            <p><strong>Evidence:</strong> {{ finding.evidence }}</p>
+            <p><strong>Remediation:</strong> {{ finding.remediation }}</p>
+            <p>Observed {{ finding.first_observed_at }}; last confirmed {{ finding.last_observed_at }}. {% if finding.sending_blocked %}Sending is blocked.{% endif %} {% if finding.acknowledged_at %}Acknowledged {{ finding.acknowledged_at }}.{% endif %}</p>
+            {% if is_granted('ROLE_ADMIN') and not finding.acknowledged_at %}<form method="post" action="{{ path('admin_doctor_acknowledge', {code: finding.code}) }}"><input type="hidden" name="_token" value="{{ csrf_token('doctor-acknowledge-' ~ finding.code) }}"><button>Acknowledge without disabling gate</button></form>{% endif %}
+        </article>
+    {% else %}<p>No active findings.</p>{% endfor %}
+    <h2>Recent runs</h2>
+    {% for run in runs %}
+        <article>
+            <h3>{{ run.status|capitalize }} — {{ run.finished_at }}</h3>
+            <p>{{ run.run_type|capitalize }} check triggered by {{ run.trigger_source }}.</p>
+            <p>{{ run.critical_count }} critical; {{ run.warning_count }} warning.</p>
+            <ul>
+                {% for finding in run.findings %}<li><strong>{{ finding.severity|upper }} {{ finding.code }}</strong>: {{ finding.summary }} {{ finding.remediation }}</li>{% else %}<li>No findings.</li>{% endfor %}
+            </ul>
+        </article>
+    {% else %}<p>No Doctor run has been recorded.</p>{% endfor %}
+{% endblock %}

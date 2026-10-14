@@ -1,0 +1,18 @@
+{% extends 'setup/layout.html.twig' %}
+{% block title %}Organisation setup{% endblock %}
+{% block body %}
+<main>
+    <h1>Organisation</h1>
+    <p>The canonical HTTPS base URL is the public origin users will open: scheme plus hostname, with no <code>/setup</code>, other path, query, or fragment. For example, <code>https://mailer.example.com</code>. It must match the HTTPS hostname configured by the installer.</p>
+    <form method="post" action="{{ path('setup_organisation') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('setup-organisation') }}">
+        <label>Display name <input name="display_name" maxlength="160" required></label>
+        <label>Canonical HTTPS base URL <input name="base_url" type="url" placeholder="https://mailer.example.com" required></label>
+        <label>Locale
+            <select name="locale"><option>en_AU</option><option>en_GB</option><option>en_US</option></select>
+        </label>
+        <label>Time zone <input name="time_zone" value="Australia/Sydney" required></label>
+        <button type="submit">Save organisation</button>
+    </form>
+</main>
+{% endblock %}

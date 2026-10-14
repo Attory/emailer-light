@@ -1,0 +1,16 @@
+{% extends 'setup/layout.html.twig' %}
+
+{% block title %}Ownership proof not accepted{% endblock %}
+
+{% block body %}
+    <main>
+        <h1>Ownership proof not accepted</h1>
+        <p>The proof could not be verified. In the same browser session, run <code>emailer-setup-proof</code> again and paste the still-visible code exactly. The helper must report success before you retry.</p>
+        <p>If the code is no longer visible, the session changed, or 15 minutes have passed, wait for the active challenge to expire and return to <code>/setup</code> for a new code.</p>
+        <form method="post" action="{{ path('setup_proof_verify') }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('setup-proof') }}">
+            <button type="submit">Retry the installed proof</button>
+        </form>
+        <a href="{{ path('setup_index') }}">Return to setup</a>
+    </main>
+{% endblock %}

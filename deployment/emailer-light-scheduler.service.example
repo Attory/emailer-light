@@ -1,0 +1,15 @@
+[Unit]
+Description=Emailer Light scheduler run
+After=network.target mariadb.service
+
+[Service]
+Type=oneshot
+User=emailer
+Group=emailer
+WorkingDirectory=/srv/emailer-light/releases/current
+EnvironmentFile=/etc/emailer-light/runtime.env
+ExecStart=/usr/bin/php /srv/emailer-light/releases/current/bin/console emailer:scheduler:run
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/emailer-light/private /var/backups/emailer-light

@@ -1,0 +1,9 @@
+{% extends 'admin/layout.html.twig' %}
+{% block title %}RSVP — Emailer Light{% endblock %}
+{% block admin_body %}
+<h1>RSVP summary</h1>
+<p>Installation RSVP: {{ policy.rsvp_enabled ? 'enabled' : 'disabled' }}. Retention: {{ policy.rsvp_retention_days }} days. Repeat policy for future approvals: {{ policy.rsvp_repeat_policy }}.</p>
+<table><thead><tr><th scope="col">Campaign</th><th scope="col">Enabled</th><th scope="col">Invited</th><th scope="col">Responded</th><th scope="col">Yes</th><th scope="col">No</th><th scope="col">Maybe</th><th scope="col">Guests</th><th scope="col">Private export</th></tr></thead><tbody>
+{% for campaign in campaigns %}<tr><td>{{ campaign.name }}</td><td>{{ campaign.rsvp_enabled ? 'yes' : 'no' }}</td><td>{{ campaign.invited }}</td><td>{{ campaign.responded }}</td><td>{{ campaign.yes_count }}</td><td>{{ campaign.no_count }}</td><td>{{ campaign.maybe_count }}</td><td>{{ campaign.guest_count }}</td><td>{% if campaign.rsvp_enabled and is_granted('ROLE_ADMIN') %}<form method="post" action="{{ path('admin_rsvp_export', {campaign: campaign.id}) }}"><input type="hidden" name="_token" value="{{ csrf_token('rsvp-export-' ~ campaign.id) }}"><button>Export private responses</button></form>{% else %}—{% endif %}</td></tr>{% else %}<tr><td colspan="9">No approved campaigns.</td></tr>{% endfor %}
+</tbody></table>
+{% endblock %}

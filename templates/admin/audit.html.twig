@@ -1,0 +1,8 @@
+{% extends 'admin/layout.html.twig' %}
+{% block title %}Audit — Emailer Light{% endblock %}
+{% block admin_body %}
+<h1>Append-only audit events</h1>
+<table><thead><tr><th scope="col">Time (UTC)</th><th scope="col">Action</th><th scope="col">Result</th><th scope="col">Actor</th><th scope="col">Target</th><th scope="col">Redacted summary</th></tr></thead><tbody>
+{% for event in events %}<tr><td>{{ event.occurred_at }}</td><td>{{ event.action }}</td><td>{{ event.result }}</td><td><code>{{ event.actor_user_id ?? 'system/anonymous' }}</code></td><td><code>{{ event.target_id ?? 'none' }}</code></td><td><code>{{ event.summary|json_encode }}</code></td></tr>{% else %}<tr><td colspan="6">No events.</td></tr>{% endfor %}
+</tbody></table>
+{% endblock %}

@@ -1,0 +1,3 @@
+{% extends 'admin/layout.html.twig' %}
+{% block title %}Synthetic template preview — Emailer Light{% endblock %}
+{% block admin_body %}<h1>[SYNTHETIC PREVIEW] {{ preview.subject }}</h1><p>{{ preview.preheader }}</p><section aria-label="Sanitized synthetic HTML preview">{{ preview.html_body|raw }}</section><h2>Plain text</h2><pre>{{ preview.text_body }}</pre><p>No live recipient data was used.</p>{% endblock %}

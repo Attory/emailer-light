@@ -1,0 +1,24 @@
+{% extends 'admin/layout.html.twig' %}
+{% block title %}Mail settings · Emailer Light{% endblock %}
+{% block admin_body %}
+<h1>Mail transport</h1>
+<p>Configured host: {{ mail.smtp_host }}:{{ mail.smtp_port }}; mode: {{ mail.encryption_mode }}; TLS peer verification: {{ mail.tls_peer_verification ? 'on' : 'off' }}.</p>
+<p>Username: {{ mail.smtp_username|default('none') }}; credential: {{ mail.credential_configured ? 'stored encrypted' : 'not stored' }}; sender: {{ mail.sender_address }}.</p>
+<p>RFC 8058 provider signing attestation: {{ mail.one_click_dkim_confirmed ? 'confirmed' : 'not confirmed; one-click header disabled' }}.</p>
+
+<form method="post" action="{{ path('admin_mail_settings_update') }}" autocomplete="off">
+    <input type="hidden" name="_token" value="{{ csrf_token('mail-settings-update') }}">
+    <label>SMTP hostname <input name="host" value="{{ mail.smtp_host }}" required></label>
+    <label>Port <input name="port" value="{{ mail.smtp_port }}" type="number" min="1" max="65535" required></label>
+    <label>Encryption <select name="encryption"><option value="starttls"{% if mail.encryption_mode == 'starttls' %} selected{% endif %}>STARTTLS required</option><option value="tls"{% if mail.encryption_mode == 'tls' %} selected{% endif %}>Direct TLS</option></select></label>
+    <label>Username <input name="username" value="{{ mail.smtp_username }}" autocomplete="off" required></label>
+    <label>SMTP password <input name="password" type="password" autocomplete="new-password" required></label>
+    <label>Sender address <input name="sender_address" value="{{ mail.sender_address }}" type="email" required></label>
+    <label>Sender name <input name="sender_name" value="{{ mail.sender_name }}" required></label>
+    <label>Reply-to (optional) <input name="reply_to" value="{{ mail.reply_to_address }}" type="email"></label>
+    <label><input name="one_click_dkim_confirmed" type="checkbox" value="1"{% if mail.one_click_dkim_confirmed %} checked{% endif %}> I have verified that the provider applies a valid DKIM signature covering both List-Unsubscribe headers</label>
+
+    <button type="submit">Store secure SMTP configuration</button>
+</form>
+<p>Saving validates and encrypts configuration only. Use a queued campaign test to verify transport.</p>
+{% endblock %}

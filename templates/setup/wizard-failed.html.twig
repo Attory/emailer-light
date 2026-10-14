@@ -1,0 +1,10 @@
+{% extends 'setup/layout.html.twig' %}
+{% block title %}Setup step not completed{% endblock %}
+{% block body %}
+<main>
+    <h1>Setup step not completed</h1>
+    <p>{{ message }}</p>
+    <p>No submitted password or credential is available for redisplay.</p>
+    <p>Return to the preceding form and re-enter its values. If the database step failed, use the restricted application credentials printed by the root installer and confirm that the MariaDB schema is still reachable. The failure page deliberately contains no secret or detailed server error; an operator can inspect protected service logs.</p>
+</main>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends 'admin/layout.html.twig' %}
+{% block title %}Backups · Emailer Light{% endblock %}
+{% block admin_body %}
+<h1>Encrypted backups</h1>
+<p>Paths, keys, and private content are deliberately omitted. Restore remains CLI-only and always leaves delivery quiesced.</p>
+
+
+<h2>Policy and approved destination</h2>
+<p>Filesystem destination: {% if destination_available %}available{% else %}not provisioned or unsafe{% endif %}. This optional destination is a separate operator-mounted location for scheduled copies. Its path cannot be entered in the browser and remains external runtime configuration.</p>
+{% if not destination_available %}<p>You can still create and immediately verify an on-demand local encrypted backup below. Leave external transfer unchecked.</p>{% endif %}
+<form method="post" action="{{ path('admin_backup_policy') }}">
+    <input type="hidden" name="_token" value="{{ csrf_token('backup-policy') }}">
+    <label>Destination <select name="backup_destination_type"><option value="none" {% if policy.backup_destination_type == 'none' %}selected{% endif %}>Disabled</option><option value="filesystem" {% if policy.backup_destination_type == 'filesystem' %}selected{% endif %}>Approved filesystem mount</option></select></label>
+    <label><input type="checkbox" name="backup_automation_enabled" value="1" {% if policy.backup_automation_enabled %}checked{% endif %}> Enable scheduled encrypted backup and verified transfer</label>
+    <label>Run interval hours <input type="number" min="1" max="720" name="backup_interval_hours" value="{{ policy.backup_interval_hours }}" required></label>
+    <p>How often the operations service should create and transfer a backup after scheduling is enabled.</p>
+    <label>Retention days <input type="number" min="2" max="365" name="backup_retention_days" value="{{ policy.backup_retention_days }}" required></label>
+    <p>How long automated backup records and eligible external copies should be retained.</p>
+    <label>Restore-drill target days <input type="number" min="7" max="365" name="restore_drill_interval_days" value="{{ policy.restore_drill_interval_days }}" required></label>
+    <p>The maximum planned interval between supervised restore tests; this setting does not run a restore automatically.</p>
+    <button>Save backup policy</button>
+</form>
+
+<h2>On-demand backup</h2>
+<p>The button creates an encrypted backup in private application storage and verifies it immediately. It does not restore, email, or publish anything.</p>
+<form method="post" action="{{ path('admin_backup_create') }}">
+    <input type="hidden" name="_token" value="{{ csrf_token('backup-create') }}">
+    <label><input type="checkbox" name="transfer" value="1"> Also transfer to the approved destination and verify its digest</label>
+    <button>Create and verify local backup</button>
+</form>
+
+<h2>Backup evidence</h2>
+<table><thead><tr><th scope="col">ID</th><th scope="col">Status</th><th scope="col">Version</th><th scope="col">Schema</th><th scope="col">Bytes</th><th scope="col">Verified</th><th scope="col">Restored</th></tr></thead><tbody>{% for backup in backups %}<tr><td>{{ backup.id }}</td><td>{{ backup.status }}</td><td>{{ backup.source_version }}</td><td>{{ backup.schema_version }}</td><td>{{ backup.byte_size }}</td><td>{{ backup.verified_at }}</td><td>{{ backup.restored_at }}</td></tr>{% else %}<tr><td colspan="7">No backup evidence.</td></tr>{% endfor %}</tbody></table>
+
+<h2>External transfer evidence</h2>
+<table><thead><tr><th scope="col">Backup</th><th scope="col">Adapter</th><th scope="col">Status</th><th scope="col">Result</th><th scope="col">Bytes</th><th scope="col">Completed</th></tr></thead><tbody>{% for transfer in transfers %}<tr><td>{{ transfer.backup_id }}</td><td>{{ transfer.destination_type }}</td><td>{{ transfer.status }}</td><td>{{ transfer.detail_code }}</td><td>{{ transfer.byte_size }}</td><td>{{ transfer.completed_at }}</td></tr>{% else %}<tr><td colspan="6">No external transfer evidence.</td></tr>{% endfor %}</tbody></table>
+{% endblock %}

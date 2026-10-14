@@ -1,0 +1,25 @@
+{% extends 'setup/layout.html.twig' %}
+{% block title %}Safe defaults{% endblock %}
+{% block body %}
+<main>
+    <h1>Delivery limits and privacy defaults</h1>
+    <p>These are safe starting limits, not a request to send mail. Tracking and RSVP remain disabled. The installer has already provisioned supervised services; this step records their intended profile and sends no campaign.</p>
+    <form method="post" action="{{ path('setup_policy') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('setup-policy') }}">
+        <label>Messages per minute <input name="messages_per_minute" type="number" min="1" max="600" value="60" required></label>
+        <p>Global application pacing ceiling; the production provider may impose a lower limit.</p>
+        <label>Worker concurrency <input name="worker_concurrency" type="number" min="1" max="16" value="1" required></label>
+        <p>Maximum parallel delivery work. Keep <code>1</code> for initial acceptance testing.</p>
+        <label>Retry limit <input name="retry_limit" type="number" min="1" max="10" value="5" required></label>
+        <p>Maximum controlled attempts for a transient delivery failure; permanent failures are not retried.</p>
+        <label>Maximum campaign size <input name="maximum_campaign_size" type="number" value="10000" required></label>
+        <label>Maximum CSV bytes <input name="maximum_csv_bytes" type="number" value="10485760" required></label>
+        <label>Maximum CSV rows <input name="maximum_csv_rows" type="number" value="100000" required></label>
+        <label>Operational retention days <input name="operational_retention_days" type="number" value="30" required></label>
+        <label>Delivery retention days <input name="delivery_retention_days" type="number" value="365" required></label>
+        <label>Worker profile <select name="worker_mode"><option value="supervised">Supervised CLI worker</option><option value="cron">Bounded cron fallback</option></select></label>
+        <label>Default unsubscribe footer <textarea name="unsubscribe_footer" maxlength="500" required>You are receiving this message from the configured organisation. An unsubscribe link is included below.</textarea></label>
+        <button type="submit">Save these non-sending safety defaults</button>
+    </form>
+</main>
+{% endblock %}
