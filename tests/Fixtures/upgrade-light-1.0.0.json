@@ -1,0 +1,175 @@
+{
+  "format": "emailer-light-upgrade-fixture-v1",
+  "synthetic": true,
+  "installation": {
+    "product_id": "emailer-light",
+    "product_version": "1.0.0",
+    "schema_version": "20261014000000",
+    "upgrade_contract_version": "1.0",
+    "installation_uuid": "01990101-0000-7000-8000-000000000001"
+  },
+  "administrator": {
+    "id": "01990101-0000-7000-8000-000000000002",
+    "login_identifier": "admin@example.test",
+    "password": "synthetic-fixture-only-not-a-real-secret",
+    "role": "administrator"
+  },
+  "smtp": {
+    "host": "smtp.example.test",
+    "username": "synthetic-user",
+    "password": "synthetic-credential-only",
+    "sender": "sender@example.test"
+  },
+  "templates": [
+    {
+      "id": "01990101-0000-7000-8000-000000000003",
+      "subject": "Synthetic update",
+      "html": "<p>Fixture only</p>"
+    }
+  ],
+  "campaigns": [
+    {
+      "id": "01990101-0000-7000-8000-000000000004",
+      "state": "draft",
+      "recipient_ids": [
+        "01990101-0000-7000-8000-000000000020"
+      ],
+      "delivery_ids": []
+    },
+    {
+      "id": "01990101-0000-7000-8000-000000000005",
+      "state": "scheduled",
+      "recipient_ids": [
+        "01990101-0000-7000-8000-000000000021"
+      ],
+      "delivery_ids": []
+    },
+    {
+      "id": "01990101-0000-7000-8000-000000000006",
+      "state": "paused",
+      "recipient_ids": [
+        "01990101-0000-7000-8000-000000000022"
+      ],
+      "delivery_ids": [
+        "01990101-0000-7000-8000-000000000032"
+      ]
+    },
+    {
+      "id": "01990101-0000-7000-8000-000000000007",
+      "state": "completed",
+      "recipient_ids": [
+        "01990101-0000-7000-8000-000000000023"
+      ],
+      "delivery_ids": [
+        "01990101-0000-7000-8000-000000000033"
+      ]
+    },
+    {
+      "id": "01990101-0000-7000-8000-000000000008",
+      "state": "failed",
+      "recipient_ids": [
+        "01990101-0000-7000-8000-000000000024"
+      ],
+      "delivery_ids": [
+        "01990101-0000-7000-8000-000000000034"
+      ]
+    }
+  ],
+  "recipients": [
+    {
+      "id": "01990101-0000-7000-8000-000000000020",
+      "campaign_id": "01990101-0000-7000-8000-000000000004",
+      "email": "person1@example.test",
+      "profile": {
+        "first_name": "Synthetic1"
+      }
+    },
+    {
+      "id": "01990101-0000-7000-8000-000000000021",
+      "campaign_id": "01990101-0000-7000-8000-000000000005",
+      "email": "person2@example.test",
+      "profile": {
+        "first_name": "Synthetic2"
+      }
+    },
+    {
+      "id": "01990101-0000-7000-8000-000000000022",
+      "campaign_id": "01990101-0000-7000-8000-000000000006",
+      "email": "person3@example.test",
+      "profile": {
+        "first_name": "Synthetic3"
+      }
+    },
+    {
+      "id": "01990101-0000-7000-8000-000000000023",
+      "campaign_id": "01990101-0000-7000-8000-000000000007",
+      "email": "person4@example.test",
+      "profile": {
+        "first_name": "Synthetic4"
+      }
+    },
+    {
+      "id": "01990101-0000-7000-8000-000000000024",
+      "campaign_id": "01990101-0000-7000-8000-000000000008",
+      "email": "person5@example.test",
+      "profile": {
+        "first_name": "Synthetic5"
+      }
+    }
+  ],
+  "suppressions": [
+    {
+      "email": "person4@example.test",
+      "reason": "unsubscribe"
+    },
+    {
+      "email": "blocked@example.test",
+      "reason": "hard_bounce"
+    }
+  ],
+  "delivery_attempts": [
+    {
+      "id": "01990101-0000-7000-8000-000000000040",
+      "delivery_id": "01990101-0000-7000-8000-000000000032",
+      "state": "accepted"
+    },
+    {
+      "id": "01990101-0000-7000-8000-000000000041",
+      "delivery_id": "01990101-0000-7000-8000-000000000034",
+      "state": "permanent_failure"
+    }
+  ],
+  "tracking": [
+    {
+      "delivery_id": "01990101-0000-7000-8000-000000000032",
+      "event": "open",
+      "count": 1
+    }
+  ],
+  "bounces": [
+    {
+      "delivery_id": "01990101-0000-7000-8000-000000000034",
+      "failure_class": "hard_bounce"
+    }
+  ],
+  "audit": [
+    {
+      "id": "01990101-0000-7000-8000-000000000050",
+      "action": "campaign.approved"
+    },
+    {
+      "id": "01990101-0000-7000-8000-000000000051",
+      "action": "recipient.unsubscribe"
+    }
+  ],
+  "assertions": {
+    "preserve_ids": true,
+    "preserve_password_hash": true,
+    "preserve_snapshot_digest": true,
+    "preserve_delivery_and_tracking": true,
+    "preserve_suppressions": true,
+    "empty_reusable_lists": true,
+    "no_send_during_upgrade": true,
+    "high_security_and_owner_mapping": true
+  }
+}

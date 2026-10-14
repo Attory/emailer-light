@@ -1,0 +1,24 @@
+[Unit]
+Description=Emailer Light supervised update for %i
+After=network.target mariadb.service
+ConditionPathIsReadWrite=/srv/emailer-light/releases
+ConditionPathIsDirectory=/var/lib/emailer-light-candidate/verified-%i
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/var/lib/emailer-light-candidate/verified-%i
+EnvironmentFile=/etc/emailer-light/runtime.env
+EnvironmentFile=/etc/emailer-light/update.env
+RuntimeDirectory=emailer-light-update-%i
+RuntimeDirectoryMode=0700
+ExecStart=/usr/bin/env EMAILER_RUNTIME_DIR=/run/emailer-light-update-%i /usr/bin/php /var/lib/emailer-light-candidate/verified-%i/bin/console emailer:release:update /var/lib/emailer-light-candidate/emailer-light-%i.zip --source-package=/var/lib/emailer-light-candidate/emailer-light-${EMAILER_UPDATE_SOURCE_VERSION}.zip --no-interaction --approved-target=%i
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/srv/emailer-light/releases /var/lib/emailer-light/private /var/backups/emailer-light /run/emailer-light-update-%i
+ReadOnlyPaths=/var/lib/emailer-light-candidate /var/lib/emailer-light/keys /etc/emailer
+
+[Install]
+WantedBy=multi-user.target

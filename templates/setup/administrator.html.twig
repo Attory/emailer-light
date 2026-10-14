@@ -1,0 +1,15 @@
+{% extends 'setup/layout.html.twig' %}
+{% block title %}Initial administrator — Emailer Light{% endblock %}
+{% block body %}
+<main>
+    <h1>Create the administrator</h1>
+    <p>This installation permits exactly one administrator. The login is case-insensitive; passwords use Argon2id.</p>
+    <form method="post" action="{{ path('setup_administrator') }}" autocomplete="off">
+        <input type="hidden" name="_token" value="{{ csrf_token('setup-administrator') }}">
+        <label>Administrator email <input name="login_identifier" type="email" maxlength="254" required autocomplete="username"></label>
+        <label>Password <input name="password" type="password" minlength="15" maxlength="256" required autocomplete="new-password"></label>
+        <label>Confirm password <input name="password_confirmation" type="password" minlength="15" maxlength="256" required autocomplete="new-password"></label>
+        <button type="submit">Create administrator</button>
+    </form>
+</main>
+{% endblock %}

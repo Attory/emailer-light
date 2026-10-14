@@ -1,0 +1,28 @@
+{% extends 'admin/layout.html.twig' %}
+{% block title %}Retention · Emailer Light{% endblock %}
+{% block admin_body %}
+<h1>Bounded retention</h1>
+<p>Preview is the default. Every apply run processes at most 200 eligible records per category. Durable audit history, campaign evidence, templates, and suppression records are not deleted by this workflow.</p>
+
+<h2>Policy</h2>
+<form method="post" action="{{ path('admin_retention_policy') }}">
+    <input type="hidden" name="_token" value="{{ csrf_token('retention-policy') }}">
+    <label><input type="checkbox" name="retention_automation_enabled" value="1" {% if policy.retention_automation_enabled %}checked{% endif %}> Enable scheduled bounded retention</label>
+    <label>Run interval hours <input type="number" min="1" max="168" name="retention_interval_hours" value="{{ policy.retention_interval_hours }}" required></label>
+    <label>Revoked sessions days <input type="number" min="7" max="365" name="revoked_session_retention_days" value="{{ policy.revoked_session_retention_days }}" required></label>
+    <label>Completed queue days <input type="number" min="1" max="90" name="queue_retention_days" value="{{ policy.queue_retention_days }}" required></label>
+    <label>Dead-letter days <input type="number" min="30" max="730" name="dead_letter_retention_days" value="{{ policy.dead_letter_retention_days }}" required></label>
+    <label>Doctor-run days <input type="number" min="30" max="730" name="health_retention_days" value="{{ policy.health_retention_days }}" required></label>
+    <label>Delivery-attempt days <input type="number" min="30" max="730" name="delivery_attempt_retention_days" value="{{ policy.delivery_attempt_retention_days }}" required></label>
+    <label>Application and service log target days <input type="number" min="1" max="365" name="log_retention_days" value="{{ policy.log_retention_days }}" required></label>
+    <button>Save retention policy</button>
+</form>
+<p class="muted">Log rotation is enforced by the documented journald/Supervisor policy because application logs are emitted to standard error and are not deleted by PHP.</p>
+
+<h2>Run one bounded batch</h2>
+<form method="post" action="{{ path('admin_retention_run') }}">
+    <input type="hidden" name="_token" value="{{ csrf_token('retention-run') }}">
+    <button>Preview</button>
+    <button name="apply" value="1">Apply bounded batch</button>
+</form>
+{% endblock %}

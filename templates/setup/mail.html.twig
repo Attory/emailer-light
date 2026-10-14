@@ -1,0 +1,20 @@
+{% extends 'setup/layout.html.twig' %}
+{% block title %}Mail configuration{% endblock %}
+{% block body %}
+<main>
+    <h1>Mail transport and sender identity</h1>
+    <p>This setup step tests only the local Mailpit capture service installed on this server. It does not send mail to a real recipient. Use <code>127.0.0.1</code> and port <code>1025</code> for the root-installed acceptance environment.</p>
+    <p>The sender address is a test identity recorded for setup. After setup, configure the real provider, authenticated TLS, and production sender under <strong>Mail</strong> before attempting public delivery.</p>
+    <form method="post" action="{{ path('setup_mail') }}" autocomplete="off">
+        <input type="hidden" name="_token" value="{{ csrf_token('setup-mail') }}">
+        <label>Local Mailpit host <input name="host" value="127.0.0.1" required></label>
+        <label>Port <input name="port" type="number" value="1025" required></label>
+        <input name="encryption" type="hidden" value="none">
+        <label>Sender address <input name="sender_address" type="email" value="phase3-sender@example.test" required></label>
+        <label>Sender name <input name="sender_name" value="Emailer Light Test" maxlength="160" required></label>
+        <label>Reply-to address <input name="reply_to" type="email"></label>
+        <p>This local probe is plaintext and does not claim TLS verification. Production transport configuration remains unavailable.</p>
+        <button type="submit">Send one synthetic message to local Mailpit and save</button>
+    </form>
+</main>
+{% endblock %}

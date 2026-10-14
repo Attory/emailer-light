@@ -1,0 +1,33 @@
+{% extends 'base.html.twig' %}
+{% block body %}
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<header class="admin-header">
+    <a class="brand" href="{{ path('admin_dashboard') }}"><span class="brand-mark" aria-hidden="true">el</span>Emailer Light</a>
+    <nav aria-label="Administration">
+        {% set current_route = app.request.attributes.get('_route')|default('') %}
+        {% for label, route in {'Overview': 'admin_dashboard', 'Campaigns': 'admin_campaigns', 'Templates': 'admin_templates'} %}
+            <a href="{{ path(route) }}"{% if current_route == route or (route == 'admin_campaigns' and current_route starts with 'admin_campaign') or (route == 'admin_templates' and current_route starts with 'admin_template') %} aria-current="page"{% endif %}>{{ label }}</a>
+        {% endfor %}
+        <details><summary>Settings &amp; tools</summary><div class="tools-menu">
+            <a href="{{ path('admin_mail_settings') }}">Mail transport</a><a href="{{ path('admin_delivery_settings') }}">Delivery limits</a>
+            <a href="{{ path('admin_suppressions') }}">Suppressions</a><a href="{{ path('admin_analytics') }}">Analytics</a><a href="{{ path('admin_rsvp') }}">RSVP</a>
+            <a href="{{ path('admin_doctor') }}">Doctor</a><a href="{{ path('admin_audit') }}">Audit</a><a href="{{ path('admin_retention') }}">Retention</a>
+            <a href="{{ path('admin_backups') }}">Backups</a><a href="{{ path('admin_release') }}">Release</a>
+            <a href="{{ path('admin_campaign_guide') }}">Campaign guide</a><a href="{{ path('admin_profile') }}">Profile</a><a href="{{ path('admin_sessions') }}">Sessions</a>
+            <form method="post" action="{{ path('admin_logout') }}"><input type="hidden" name="_token" value="{{ csrf_token('admin-logout') }}"><button type="submit" class="secondary">Sign out</button></form>
+        </div></details>
+    </nav>
+</header>
+<main id="main-content" class="admin-content" tabindex="-1">
+    {% set doctor_findings = app.request.attributes.get('doctor_active_findings')|default([]) %}
+    {% if doctor_findings|filter(finding => finding.severity == 'critical')|length > 0 %}
+        <aside class="alert" role="alert"><strong>Critical operational finding.</strong>
+            {% for finding in doctor_findings|filter(finding => finding.severity == 'critical') %}{{ finding.summary }}{% if finding.sending_blocked %} Sending is blocked.{% endif %} {% endfor %}
+            <a href="{{ path('admin_doctor') }}">Open Doctor</a>
+        </aside>
+    {% endif %}
+    {% for message in app.flashes('error') %}<p class="alert" role="alert">{{ message }}</p>{% endfor %}
+    {% for message in app.flashes('success') %}<p class="alert success" role="status">{{ message }}</p>{% endfor %}
+    {% block admin_body %}{% endblock %}
+</main>
+{% endblock %}

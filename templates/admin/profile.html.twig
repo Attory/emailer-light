@@ -1,0 +1,14 @@
+{% extends 'admin/layout.html.twig' %}
+{% block title %}Profile — Emailer Light{% endblock %}
+{% block admin_body %}
+<h1>Administrator profile</h1>
+<p>Signed in as {{ user.userIdentifier }}.</p>
+<h2>Change password</h2>
+<form method="post" action="{{ path('admin_password_change') }}">
+    <input type="hidden" name="_token" value="{{ csrf_token('admin-password-change') }}">
+    <label>Current password <input type="password" name="current_password" autocomplete="current-password" required></label>
+    <label>New password <input type="password" name="new_password" autocomplete="new-password" minlength="15" maxlength="256" required></label>
+    <label>Confirm new password <input type="password" name="password_confirmation" autocomplete="new-password" minlength="15" maxlength="256" required></label>
+    <button type="submit">Change password</button>
+</form>
+{% endblock %}

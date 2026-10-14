@@ -1,0 +1,21 @@
+{% extends 'admin/layout.html.twig' %}
+{% block title %}Delivery limits · Emailer Light{% endblock %}
+{% block admin_body %}
+<div class="page-heading"><div><p class="eyebrow">Settings</p><h1>Delivery limits</h1><p class="muted">Control the pace of every newsletter from this installation.</p></div><a class="button secondary" href="{{ path('admin_campaigns') }}">Back to campaigns</a></div>
+<section class="panel">
+<p>The installation shares a budget of <strong>{{ policy.messages_per_minute }} messages per minute</strong> across campaigns. A single destination domain gets at most {{ (policy.messages_per_minute / 2)|round(0, 'ceil') }} per minute. Each campaign can use a lower rate.</p>
+
+<form method="post" action="{{ path('admin_delivery_settings_update') }}">
+<input type="hidden" name="_token" value="{{ csrf_token('delivery-settings-update') }}">
+<div class="form-grid">
+<label>Installation messages per minute<input type="number" name="messages_per_minute" min="1" max="600" value="{{ policy.messages_per_minute }}" required><span class="help">A ceiling, not a guaranteed throughput.</span></label>
+<label>Concurrent delivery workers<input type="number" name="worker_concurrency" min="1" max="16" value="{{ policy.worker_concurrency }}" required></label>
+<label>Maximum delivery attempts<input type="number" name="retry_limit" min="1" max="10" value="{{ policy.retry_limit }}" required></label>
+<label>Maximum recipients per campaign<input type="number" name="maximum_campaign_size" min="1" max="100000" value="{{ policy.maximum_campaign_size }}" required></label>
+</div>
+
+<button type="submit">Save delivery limits</button>
+</form>
+
+</section>
+{% endblock %}

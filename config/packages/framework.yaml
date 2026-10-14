@@ -1,0 +1,46 @@
+framework:
+    secret: '%env(APP_SECRET)%'
+    http_method_override: false
+    trusted_proxies: '%emailer.trusted_proxies%'
+    trusted_hosts: ['%emailer.trusted_hosts%']
+    trusted_headers: ['x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port']
+    session:
+        handler_id: App\Module\Identity\Infrastructure\HybridSessionHandler
+        name: EMAILERLIGHTSESSID
+        cookie_secure: true
+        cookie_httponly: true
+        cookie_samesite: lax
+        cookie_path: /
+        gc_probability: 1
+        gc_divisor: 100
+    php_errors:
+        log: true
+    rate_limiter:
+        setup_challenge:
+            policy: 'fixed_window'
+            limit: 6
+            interval: '15 minutes'
+        setup_proof:
+            policy: 'fixed_window'
+            limit: 10
+            interval: '15 minutes'
+        setup_wizard:
+            policy: 'fixed_window'
+            limit: 60
+            interval: '15 minutes'
+        identity_page:
+            policy: 'fixed_window'
+            limit: 120
+            interval: '15 minutes'
+        recipient_action_source:
+            policy: 'fixed_window'
+            limit: 60
+            interval: '1 hour'
+        recipient_action_token:
+            policy: 'fixed_window'
+            limit: 20
+            interval: '1 hour'
+
+when@test:
+    framework:
+        test: true

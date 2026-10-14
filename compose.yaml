@@ -1,0 +1,77 @@
+name: emailer-light
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        PHP_VERSION: ${PHP_VERSION:-8.4.24}
+    environment:
+      APP_ENV: dev
+      APP_DEBUG: "0"
+      APP_SECRET: phase1-container-only
+      DATABASE_URL: mysql://emailer:local-only@database:3306/emailer_test?serverVersion=${MARIADB_SERVER_VERSION:-10.11.19-MariaDB}&charset=utf8mb4
+      DEFAULT_URI: http://127.0.0.1:8080
+      EMAILER_PRIVATE_DIR: /app/var/private
+      EMAILER_SECRET_KEY_FILE: /emailer-secrets/master.key
+      TRUSTED_PROXIES: 127.0.0.1,::1
+      LOCK_DSN: flock
+      MAILER_DSN: smtp://mailpit:1025
+      MESSENGER_TRANSPORT_DSN: doctrine://default
+    depends_on:
+      database:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./:/app
+      - composer_vendor:/app/vendor
+      - runtime_data:/app/var
+      - secret_data:/emailer-secrets
+    networks:
+      - development
+
+  database:
+    image: ${MARIADB_IMAGE:-mariadb:10.11.19}
+    environment:
+      MARIADB_DATABASE: emailer_test
+      MARIADB_USER: emailer
+      MARIADB_PASSWORD: local-only
+      MARIADB_ROOT_PASSWORD: local-root-only
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - database_data:/var/lib/mysql
+    networks:
+      - development
+
+  mailpit:
+    image: axllent/mailpit:v1.30.5
+    environment:
+      MP_DATABASE: /tmp/mailpit.db
+      MP_DISABLE_VERSION_CHECK: "true"
+      MP_MAX_MESSAGES: "100"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "127.0.0.1:8025:8025"
+    networks:
+      - development
+
+networks:
+  development:
+    driver: bridge
+
+volumes:
+  composer_vendor:
+  database_data:
+  runtime_data:
+  secret_data:

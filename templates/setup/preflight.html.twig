@@ -1,0 +1,27 @@
+{% extends 'setup/layout.html.twig' %}
+
+{% block title %}Setup preflight{% endblock %}
+
+{% block body %}
+    <main>
+        <h1>Setup preflight</h1>
+        <p>Filesystem ownership is verified. Review every critical prerequisite before continuing.</p>
+        <table>
+            <thead><tr><th scope="col">Check</th><th scope="col">Result</th><th scope="col">Guidance</th></tr></thead>
+            <tbody>
+            {% for check in checks %}
+                <tr>
+                    <th scope="row">{{ check.name }}</th>
+                    <td>{{ check.passed ? 'Pass' : 'Needs attention' }}</td>
+                    <td>{{ check.message }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% if ready %}
+            <p><a href="{{ path('setup_database') }}">Continue to secure database setup</a></p>
+        {% else %}
+            <p>Correct every failed prerequisite before continuing. Setup remains unlocked and no secret has been collected.</p>
+        {% endif %}
+    </main>
+{% endblock %}

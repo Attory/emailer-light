@@ -1,0 +1,51 @@
+health:
+    resource: ../src/Module/Health/Presentation/Http/
+    type: attribute
+
+setup:
+    resource: ../src/Module/Setup/Presentation/Http/
+    type: attribute
+
+identity:
+    resource: ../src/Module/Identity/Presentation/Http/
+    type: attribute
+
+audit:
+    resource: ../src/Module/Audit/Presentation/Http/
+    type: attribute
+
+analytics:
+    resource: ../src/Module/Analytics/Presentation/Http/
+    type: attribute
+
+suppression:
+    resource: ../src/Module/Suppression/Presentation/Http/
+    type: attribute
+
+templates:
+    resource: ../src/Module/Templates/Presentation/Http/
+    type: attribute
+
+campaigns:
+    resource: ../src/Module/Campaigns/Presentation/Http/
+    type: attribute
+
+configuration:
+    resource: ../src/Module/Configuration/Presentation/Http/
+    type: attribute
+
+recipient_actions:
+    resource: ../src/Module/RecipientActions/Presentation/Http/
+    type: attribute
+
+backup:
+    resource: ../src/Module/Backup/Presentation/Http/
+    type: attribute
+
+housekeeping:
+    resource: ../src/Module/Housekeeping/Presentation/Http/
+    type: attribute
+
+release:
+    resource: ../src/Module/Release/Presentation/Http/
+    type: attribute

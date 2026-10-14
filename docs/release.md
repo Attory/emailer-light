@@ -1,0 +1,9 @@
+# Release verification and source
+
+Emailer Light 1.0.0 uses a distinct Ed25519 release key. Its public verification key is committed as `release/emailer-light-release.pub`; the private key is held outside Git with mode 0600 and has a separate protected backup. Never use an Emailer Ripe signing key for Light.
+
+Download `emailer-light-1.0.0.zip`, `emailer-light-1.0.0.zip.sha256`, `.manifest.json`, `.spdx.json`, `.sig`, and the public key from the same release. Check the checksum with `sha256sum -c emailer-light-1.0.0.zip.sha256`. The signed manifest, checksum and SBOM digest are verified together by `php tools/release/verify-package.php --archive=emailer-light-1.0.0.zip --public-key=release/emailer-light-release.pub --current-version=1.0.0 --expected-version=1.0.0 --expected-source=COMMIT`, using the exact published source commit. Keep the key fingerprint from an independent trusted channel. The manifest lists every file digest and supported platform range.
+
+The runtime archive includes first-party source, Composer lock, production dependencies with their own licenses, AGPL text, documentation, schema manifest and upgrade contract. The matching GitHub source archive includes tests and build scripts; retain it as corresponding source if distributing the runtime archive. Rebuild from the exact commit and `SOURCE_DATE_EPOCH` to compare archive bytes. The SPDX SBOM and [license inventory](../THIRD_PARTY_NOTICES.md) identify dependencies. Do not place secrets, runtime state, recipient data or private release records in artifacts.
+
+A Light-to-Light update must verify a signed package, quiesce delivery, back up and validate before atomic switch. A Light-to-Ripe edition transition is not available in Ripe 1.0.5. Light is only **upgrade-ready for Emailer Ripe** pending a signed compatible installer and successful rollback rehearsal.

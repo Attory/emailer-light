@@ -1,0 +1,12 @@
+{% extends 'setup/layout.html.twig' %}
+
+{% block title %}HTTPS required{% endblock %}
+
+{% block body %}
+    <main>
+        <h1>HTTPS is required to continue</h1>
+        <p>Configure TLS at the web server or an explicitly trusted reverse proxy, then return to this page over HTTPS.</p>
+        <p>Do not enter database, account, mail, recovery, or backup credentials over HTTP.</p>
+        <p>The CLI installer is available when HTTPS cannot be provided for web setup.</p>
+    </main>
+{% endblock %}

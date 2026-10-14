@@ -1,0 +1,32 @@
+monolog:
+    channels:
+        - deprecation
+    handlers:
+        main:
+            type: stream
+            path: php://stderr
+            level: info
+            formatter: monolog.formatter.json
+            channels: ["!event", "!deprecation"]
+        console:
+            type: console
+            process_psr_3_messages: false
+            channels: ["!event", "!doctrine", "!deprecation"]
+        deprecation:
+            type: stream
+            path: php://stderr
+            level: notice
+            formatter: monolog.formatter.json
+            channels: [deprecation]
+
+when@dev:
+    monolog:
+        handlers:
+            main:
+                level: debug
+
+when@test:
+    monolog:
+        handlers:
+            main:
+                level: warning

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Emailer Light bounded operations every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+Unit=emailer-light-operations.service
+
+[Install]
+WantedBy=timers.target

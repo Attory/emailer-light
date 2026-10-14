@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: PHP ${{ matrix.php }} / MariaDB ${{ matrix.mariadb }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: 8.4.24
+            mariadb: 10.11.19
+            server_version: 10.11.19-MariaDB
+          - php: 8.4.24
+            mariadb: 11.8.9
+            server_version: 11.8.9-MariaDB
+          - php: 8.5.9
+            mariadb: 10.11.19
+            server_version: 10.11.19-MariaDB
+    env:
+      COMPOSE_PROJECT_NAME: emailer_light_ci
+      PHP_VERSION: ${{ matrix.php }}
+      MARIADB_IMAGE: mariadb:${{ matrix.mariadb }}
+      MARIADB_SERVER_VERSION: ${{ matrix.server_version }}
+      DATABASE_URL: mysql://emailer:local-only@database:3306/emailer_test?serverVersion=${{ matrix.server_version }}&charset=utf8mb4
+
+    steps:
+      - name: Check out Emailer Light source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare writable generated-output directories
+        run: sudo install -d -o 1000 -g 1000 -m 0755 build .cache public/template-assets
+
+      - name: Build locked PHP application image
+        run: docker compose build --pull app
+
+      - name: Start MariaDB and Mailpit
+        run: docker compose up --detach --wait database mailpit
+
+      - name: Refresh vendor volume from clean image install
+        run: |
+          docker compose run --rm --no-deps app sh -euc '
+              find vendor -mindepth 1 -depth -delete
+              cp -a /opt/emailer-vendor/. vendor/
+          '
+
+      - name: Run Light quality, license, migration, test and artifact gates
+        run: docker compose run --rm app composer check
+
+      - name: Repeat test suite with external egress disabled
+        run: bash tools/ci/run-network-isolated-tests.sh
+
+      - name: Inspect resulting diff
+        run: git diff --check
+
+      - name: Stop ephemeral services
+        if: always()
+        run: docker compose down --volumes --remove-orphans

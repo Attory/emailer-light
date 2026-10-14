@@ -1,0 +1,16 @@
+{% extends 'admin/layout.html.twig' %}
+{% block title %}Sessions — Emailer Light{% endblock %}
+{% block admin_body %}
+<h1>Your active sessions</h1>
+<table><thead><tr><th>Session</th><th>Created</th><th>Last seen</th><th>Expiry</th><th>Action</th></tr></thead><tbody>
+{% for session in sessions %}
+<tr><td>{{ session.current ? 'Current session' : 'Other session' }}</td><td>{{ session.created_at }}</td><td>{{ session.last_seen_at }}</td><td>{{ session.absolute_expires_at }}</td><td>
+<form method="post" action="{{ path('admin_session_revoke') }}">
+    <input type="hidden" name="_token" value="{{ csrf_token('admin-session-revoke') }}">
+    <input type="hidden" name="session" value="{{ session.id_hash }}">
+    <label>Current password <input type="password" name="current_password" autocomplete="current-password" required></label>
+    <button type="submit">Revoke</button>
+</form></td></tr>
+{% else %}<tr><td colspan="5">No active sessions.</td></tr>{% endfor %}
+</tbody></table>
+{% endblock %}

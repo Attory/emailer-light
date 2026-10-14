@@ -1,0 +1,20 @@
+[Unit]
+Description=Emailer Light delivery worker
+After=network.target mariadb.service
+
+[Service]
+Type=simple
+User=emailer
+Group=emailer
+WorkingDirectory=/srv/emailer-light/releases/current
+EnvironmentFile=/etc/emailer-light/runtime.env
+ExecStart=/usr/bin/php /srv/emailer-light/releases/current/bin/console messenger:consume async --keepalive=5 --time-limit=3600 --memory-limit=256M --failure-limit=10
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/emailer-light/private /var/backups/emailer-light
+
+[Install]
+WantedBy=multi-user.target

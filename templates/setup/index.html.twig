@@ -1,0 +1,18 @@
+{% extends 'setup/layout.html.twig' %}
+
+{% block title %}Verify deployment ownership{% endblock %}
+
+{% block body %}
+    <main>
+        <h1>Verify deployment ownership</h1>
+        <p>The root installer provides a helper for this step. In the protected root terminal, run <code>emailer-setup-proof</code>, then paste the code shown below. Do not paste it into another browser or chat.</p>
+        <p>The helper securely creates the fixed proof file:</p>
+        <p><code>{{ proof_path }}</code></p>
+        <p><code>{{ challenge_code }}</code></p>
+        <p>Return to this same browser session and select the button only after the helper reports that the proof was installed. This challenge expires in 15 minutes and permits at most 10 verification attempts.</p>
+        <form method="post" action="{{ path('setup_proof_verify') }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('setup-proof') }}">
+            <button type="submit">I installed the proof; verify it</button>
+        </form>
+    </main>
+{% endblock %}

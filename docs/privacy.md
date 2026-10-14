@@ -1,0 +1,7 @@
+# Privacy, tracking and retention
+
+Campaign CSV addresses are used only for that campaign. Upload rows are normalized, deduplicated and stored in a campaign-owned snapshot; they never populate a reusable address book. An administrator can replace or delete the upload before approval. Approved audience, delivery, unsubscribe, bounce, tracking and audit evidence must be retained according to operational policy and legal requirements. Removing a campaign's delivery evidence by direct SQL is unsupported.
+
+Global suppression prevents sends to an address across campaigns. Unsubscribe links are scoped, signed and expire; a completed unsubscribe adds a global suppression. Hard bounces and complaints also suppress as the delivery policy requires. Open tracking is a request for a tiny image and may be inaccurate because of client blocking or proxying. Click tracking records requests for links. Administrators can control tracking under privacy settings and must provide recipients with an appropriate notice and lawful basis. CSV and RSVP exports must guard against spreadsheet formulas and should be stored only in protected locations.
+
+Backups contain personal data and encrypted secrets. They remain encrypted at rest, must be transferred only to an approved protected destination and need retention and restore-drill controls. Logs omit addresses and credentials by default. This project ships only reserved example domains and synthetic data.

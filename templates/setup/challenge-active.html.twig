@@ -1,0 +1,16 @@
+{% extends 'setup/layout.html.twig' %}
+
+{% block title %}Setup challenge active{% endblock %}
+
+{% block body %}
+    <main>
+        <h1>A setup challenge is already active</h1>
+        <p>A challenge created within the last 15 minutes is still active. Its code was displayed only in the original browser session and cannot be reconstructed or redisplayed.</p>
+        <p>If this is that original session and you already ran <code>emailer-setup-proof</code> with its code, verify the proof below. Otherwise wait for the 15-minute challenge window to expire, then reload <code>/setup</code> to receive a new challenge.</p>
+        <form method="post" action="{{ path('setup_proof_verify') }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('setup-proof') }}">
+            <button type="submit">Verify the proof from the original session</button>
+        </form>
+        <p>The CLI installer remains available as the non-HTTP alternative.</p>
+    </main>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends 'setup/layout.html.twig' %}
+{% block title %}Complete installation{% endblock %}
+{% block body %}
+<main>
+    <h1>Final critical preflight</h1>
+    <p>This final check does not send a campaign. It validates the database, external master key, active administrator, local Mailpit test, sender identity, privacy defaults, and CLI capabilities.</p>
+    <p>After the button succeeds, setup is permanently disabled and <code>/setup</code> will return Not Found by design. Continue at <code>/login</code>. Reopening setup later requires the protected CLI reset workflow and a verified backup.</p>
+    <form method="post" action="{{ path('setup_complete') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('setup-complete') }}">
+        <button type="submit">Complete installation and permanently close setup</button>
+    </form>
+</main>
+{% endblock %}

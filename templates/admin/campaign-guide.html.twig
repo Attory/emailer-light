@@ -1,0 +1,15 @@
+{% extends 'admin/layout.html.twig' %}
+{% block title %}Campaign guide · Emailer Light{% endblock %}
+{% block admin_body %}
+<h1>Campaign guide</h1>
+<p>Prepare a template, upload a campaign-specific CSV, test, approve, then send or schedule. Saving a draft sends nothing.</p>
+<ol>
+<li>Create or publish a template. Its subject, HTML and plain text are copied into the approved campaign snapshot.</li>
+<li>Create a campaign and upload UTF-8 CSV with an <code>email</code> column. Optional columns: <code>display_name</code>, <code>first_name</code>, <code>last_name</code>, <code>locale</code>, <code>time_zone</code>. Review imported, invalid, duplicate and suppressed counts.</li>
+<li>While Draft or Review, replace or delete this campaign's recipients. A change invalidates the earlier test. Recipient rows are never reusable lists.</li>
+<li>Send a test to the administrator address and review the current campaign revision. Approval freezes recipients and content. Later edits require a new campaign.</li>
+<li>Send now or schedule for the organisation time zone. Global suppression is checked again before delivery. Shared and destination-domain rate limits also apply.</li>
+</ol>
+<p>SMTP acceptance does not prove inbox delivery. Progress and reports distinguish accepted, retry, failed, ambiguous, suppressed and cancelled outcomes. Pausing stops new claims; a message already in progress may finish.</p>
+<p>Send only to recipients you have permission to email. Open and click tracking are configurable and may be inaccurate because of mail-client behavior.</p>
+{% endblock %}

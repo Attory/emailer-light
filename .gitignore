@@ -1,0 +1,89 @@
+# Runtime and local configuration. Only the placeholder example is tracked.
+**/.env
+**/.env.*
+!/.env.example
+/auth.json
+/.netrc
+/.npmrc
+/.pypirc
+/config/secrets/*/*.decrypt.private.php
+
+# Dependencies, generated state, and local tooling
+/vendor/
+/var/
+/.tools/
+/.cache/
+/.phpunit.cache/
+/.phpunit.result.cache
+/.phpstan.cache
+/.php-cs-fixer.cache
+/.deptrac.cache
+/coverage/
+/build/
+/dist/
+/artifacts/
+/assets/vendor/
+/public/assets/
+/config/reference.php
+
+# First-run proof, secret material, and credential containers
+/.emailer-install-proof
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.kdbx
+
+# Uploaded, private, and operational data
+*.log
+*.csv
+*.tsv
+*.sql
+*.sqlite
+*.sqlite3
+*.bak
+*.backup
+*.dump
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+**/backups/
+**/exports/
+**/uploads/
+**/private/
+
+# Editors and operating systems
+/.idea/
+/.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+###> symfony/framework-bundle ###
+/.env.local
+/.env.local.php
+/.env.*.local
+/config/secrets/prod/prod.decrypt.private.php
+/public/bundles/
+/var/
+/vendor/
+###< symfony/framework-bundle ###
+
+###> friendsofphp/php-cs-fixer ###
+/.php-cs-fixer.php
+/.php-cs-fixer.cache
+###< friendsofphp/php-cs-fixer ###
+
+###> phpunit/phpunit ###
+/phpunit.xml
+/.phpunit.cache/
+###< phpunit/phpunit ###
+
+###> symfony/asset-mapper ###
+/public/assets/
+/assets/vendor/
+###< symfony/asset-mapper ###

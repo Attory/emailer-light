@@ -1,0 +1,47 @@
+deptrac:
+  paths:
+    - ./src
+  layers:
+    - name: Kernel
+      collectors:
+        - type: classLike
+          value: ^App\\Kernel$
+    - name: Domain
+      collectors:
+        - type: classLike
+          value: ^App\\Module\\[^\\]+\\Domain\\
+    - name: Shared
+      collectors:
+        - type: classLike
+          value: ^App\\Shared\\
+    - name: Application
+      collectors:
+        - type: classLike
+          value: ^App\\Module\\[^\\]+\\Application\\
+    - name: ModuleInfrastructure
+      collectors:
+        - type: classLike
+          value: ^App\\Module\\[^\\]+\\Infrastructure\\
+    - name: SharedInfrastructure
+      collectors:
+        - type: classLike
+          value: ^App\\Infrastructure\\
+    - name: Presentation
+      collectors:
+        - type: classLike
+          value: ^App\\Module\\[^\\]+\\Presentation\\
+  ruleset:
+    Kernel:
+      - SharedInfrastructure
+    Domain:
+      - Shared
+    Application:
+      - Domain
+      - Shared
+    ModuleInfrastructure:
+      - Application
+      - Domain
+      - Shared
+    SharedInfrastructure: []
+    Presentation:
+      - Application

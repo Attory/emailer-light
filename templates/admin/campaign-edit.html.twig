@@ -1,0 +1,13 @@
+{% extends 'admin/layout.html.twig' %}
+{% block title %}Edit campaign — Emailer Light{% endblock %}
+{% block admin_body %}
+<h1>Edit {{ campaign.name }}</h1>
+<p>The recipient CSV can be replaced separately until approval. Editing the draft requires a new test.</p>
+<form class="panel" method="post" action="{{ path('admin_campaign_edit', {id: campaign.id}) }}">
+<input type="hidden" name="_token" value="{{ csrf_token('campaign-edit-' ~ campaign.id) }}">
+<label>Campaign name <input name="name" value="{{ campaign.name }}" maxlength="160" required></label>
+<label>Template <select name="template_version" required><option value="">Choose a template</option>{% for template in options.templates %}<option value="{{ template.id }}"{% if template.id == campaign.template_version_id %} selected{% endif %}>{{ template.name }} · version {{ template.version_number }}</option>{% endfor %}</select></label>
+<label>Messages per minute <input type="number" name="messages_per_minute" value="{{ campaign.messages_per_minute }}" min="1" max="600" placeholder="{{ campaign.delivery_limits.messages_per_minute }}"></label>
+<button type="submit">Save draft</button> <a href="{{ path('admin_campaign', {id: campaign.id}) }}">Cancel</a>
+</form>
+{% endblock %}

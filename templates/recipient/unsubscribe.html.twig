@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Unsubscribe</title>
+</head>
+<body>
+<main>
+    <h1>Unsubscribe</h1>
+    {% if completed %}
+        <p>Your request has been recorded. Future campaign delivery to this address is suppressed.</p>
+    {% else %}
+        <p>Confirm that you no longer want to receive campaign email from this organisation.</p>
+        <form method="post">
+            <input type="hidden" name="confirm" value="unsubscribe">
+            <button type="submit">Unsubscribe</button>
+        </form>
+    {% endif %}
+</main>
+</body>
+</html>

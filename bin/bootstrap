@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$project_root"
+
+if ! command -v docker >/dev/null 2>&1; then
+    printf 'Docker with the Compose plugin is required.\n' >&2
+    exit 1
+fi
+
+docker compose version >/dev/null
+docker compose build --pull app
+docker compose up --detach --wait database mailpit
+
+docker compose run --rm --no-deps app sh -euc '
+    find vendor -mindepth 1 -depth -delete
+    cp -a /opt/emailer-vendor/. vendor/
+'
+
+docker compose run --rm app composer install \
+    --no-interaction \
+    --no-progress \
+    --prefer-dist
+docker compose run --rm app composer check
+docker compose up --detach --wait app
+
+health_body="$(curl --fail --silent --show-error http://127.0.0.1:8080/health/live)"
+if [ '{"status":"ok"}' != "$health_body" ]; then
+    printf 'The liveness endpoint returned an unexpected response.\n' >&2
+    exit 1
+fi
+
+printf 'Emailer Light local development is ready at http://127.0.0.1:8080 (Mailpit UI: http://127.0.0.1:8025).\n'

@@ -1,0 +1,281 @@
+parameters:
+    emailer.default_private_dir: '%kernel.project_dir%/var/private'
+    emailer.private_dir: '%env(default:emailer.default_private_dir:EMAILER_PRIVATE_DIR)%'
+    emailer.setup_dir: '%emailer.private_dir%/setup'
+    emailer.setup_state_file: '%emailer.setup_dir%/challenge.json'
+    emailer.setup_cli_state_file: '%emailer.setup_dir%/cli-state.json'
+    emailer.default_proof_file: '%kernel.project_dir%/.emailer-install-proof'
+    emailer.proof_file: '%env(default:emailer.default_proof_file:EMAILER_INSTALL_PROOF_FILE)%'
+    emailer.install_lock_file: '%emailer.private_dir%/install.lock'
+    emailer.template_asset_dir: '%emailer.private_dir%/template-assets'
+    emailer.backup_dir: '%emailer.private_dir%/backups'
+    emailer.default_backup_destination_dir: ''
+    emailer.backup_destination_dir: '%env(default:emailer.default_backup_destination_dir:EMAILER_BACKUP_DESTINATION_DIR)%'
+    emailer.default_recovery_key_file: ''
+    emailer.recovery_key_file: '%env(default:emailer.default_recovery_key_file:EMAILER_RECOVERY_KEY_FILE)%'
+    emailer.default_release_public_key_file: ''
+    emailer.release_public_key_file: '%env(default:emailer.default_release_public_key_file:EMAILER_RELEASE_PUBLIC_KEY_FILE)%'
+    emailer.default_releases_dir: ''
+    emailer.releases_dir: '%env(default:emailer.default_releases_dir:EMAILER_RELEASES_DIR)%'
+    emailer.app_version: '1.0.0'
+    emailer.update_source_version: '%env(default:emailer.app_version:EMAILER_UPDATE_SOURCE_VERSION)%'
+    emailer.schema_version: '20261014000000'
+    emailer.default_uri: '%env(DEFAULT_URI)%'
+    emailer.default_master_key_file: ''
+    emailer.master_key_file: '%env(default:emailer.default_master_key_file:EMAILER_SECRET_KEY_FILE)%'
+    emailer.default_trusted_proxies: '127.0.0.1,::1'
+    emailer.trusted_proxies: '%env(default:emailer.default_trusted_proxies:TRUSTED_PROXIES)%'
+    emailer.default_trusted_hosts: '^(localhost|127\.0\.0\.1|\[::1\])$'
+    emailer.trusted_hosts: '%env(default:emailer.default_trusted_hosts:TRUSTED_HOSTS)%'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    _instanceof:
+        App\Module\Health\Application\Contract\ReadinessProbe:
+            tags: ['emailer.readiness_probe']
+        App\Module\Backup\Application\Contract\BackupContributor:
+            tags: ['emailer.backup_contributor']
+        App\Module\Operations\Application\Contract\OperationalStatusProvider:
+            tags: ['emailer.operational_status_provider']
+
+    App\:
+        resource: '../src/'
+
+    App\Infrastructure\Logging\RedactionProcessor:
+        tags:
+            - { name: monolog.processor }
+
+    App\Module\Setup\Application\Contract\ChallengeStore:
+        class: App\Module\Setup\Infrastructure\FilesystemChallengeStore
+        arguments:
+            $stateFile: '%emailer.setup_state_file%'
+
+    App\Module\Setup\Application\Contract\InstallationLock:
+        class: App\Module\Setup\Infrastructure\FilesystemInstallationLock
+        arguments:
+            $lockFile: '%emailer.install_lock_file%'
+
+    App\Module\Setup\Application\Contract\ProofFile:
+        class: App\Module\Setup\Infrastructure\FilesystemProofFile
+        arguments:
+            $proofFile: '%emailer.proof_file%'
+
+    App\Module\Setup\Application\Contract\Clock:
+        class: App\Module\Setup\Infrastructure\SystemClock
+
+    App\Module\Setup\Application\Contract\RandomBytes:
+        class: App\Module\Setup\Infrastructure\SecureRandomBytes
+
+    App\Module\Setup\Application\Contract\ProductionDataDetector:
+        class: App\Module\Setup\Infrastructure\DoctrineProductionDataDetector
+
+    App\Module\Setup\Application\ChallengeIssuer:
+        arguments:
+            $lockFactory: '@lock.factory'
+
+    App\Module\Setup\Application\ProofVerifier:
+        arguments:
+            $lockFactory: '@lock.factory'
+
+    App\Module\Setup\Infrastructure\CliSetupStateStore:
+        arguments:
+            $stateFile: '%emailer.setup_cli_state_file%'
+
+    App\Module\Setup\Application\Contract\CliSetupState: '@App\Module\Setup\Infrastructure\CliSetupStateStore'
+
+    App\Module\Setup\Application\Contract\BackupValidator: '@App\Module\Backup\Infrastructure\VerifiedBackupValidator'
+
+    App\Module\Setup\Infrastructure\SystemPreflight:
+        arguments:
+            $projectDirectory: '%kernel.project_dir%'
+            $privateDirectory: '%emailer.private_dir%'
+
+    App\Module\Setup\Application\Contract\Preflight: '@App\Module\Setup\Infrastructure\SystemPreflight'
+
+    App\Module\Setup\Application\DatabaseSetup:
+        arguments:
+            $migrations: '@doctrine.migrations.dependency_factory'
+
+    App\Module\Secrets\Infrastructure\FilesystemMasterKey:
+        arguments:
+            $keyFile: '%emailer.master_key_file%'
+            $publicDirectory: '%kernel.project_dir%/public'
+            $projectDirectory: '%kernel.project_dir%'
+            $environment: '%kernel.environment%'
+
+    App\Module\Secrets\Application\Contract\DirectoryDurability: '@App\Module\Secrets\Infrastructure\PosixDirectoryDurability'
+    App\Module\Secrets\Application\Contract\FileDurability: '@App\Module\Secrets\Infrastructure\PosixFileDurability'
+
+    App\Module\Secrets\Application\Contract\MasterKey: '@App\Module\Secrets\Infrastructure\CrashRecoveringMasterKey'
+    App\Module\Secrets\Application\Contract\TransactionalMasterKey: '@App\Module\Secrets\Infrastructure\CrashRecoveringMasterKey'
+    App\Module\Setup\Application\Contract\SetupLifecycle: '@App\Module\Setup\Infrastructure\LockedSetupLifecycle'
+    App\Module\Secrets\Application\Contract\SecretVault: '@App\Module\Secrets\Infrastructure\DoctrineSecretVault'
+    App\Module\Secrets\Application\Contract\RecoveryKeyVerifier: '@App\Module\Secrets\Application\RecoveryKeyExporter'
+    App\Module\Setup\Application\Contract\SetupState: '@App\Module\Setup\Infrastructure\DoctrineSetupState'
+    App\Module\Configuration\Application\Contract\ConfigurationSetup: '@App\Module\Configuration\Infrastructure\DoctrineConfigurationSetup'
+    App\Module\Identity\Application\Contract\AdministratorSetup: '@App\Module\Identity\Infrastructure\DoctrineAdministratorSetup'
+    App\Module\Identity\Application\Contract\AdministrativeUserLoader: '@App\Module\Identity\Infrastructure\DoctrineUserProvider'
+    App\Module\Health\Application\Contract\SetupDoctor: '@App\Module\Health\Infrastructure\Phase3SetupDoctor'
+    App\Module\Health\Application\Contract\ScheduledHealthOperations: '@App\Module\Health\Application\Doctor'
+    App\Module\Housekeeping\Application\Contract\RetentionOperations: '@App\Module\Housekeeping\Application\Housekeeper'
+    App\Module\Operations\Application\Contract\OperationsPolicyReader: '@App\Module\Operations\Application\OperationsPolicy'
+    App\Module\Operations\Application\Contract\OperationsPolicyWriter: '@App\Module\Operations\Application\OperationsPolicy'
+    App\Module\Setup\Application\Contract\InstallationFinalizer: '@App\Module\Setup\Infrastructure\DoctrineInstallationFinalizer'
+    App\Module\Audit\Application\Contract\AuditSink: '@App\Module\Audit\Infrastructure\DoctrineAuditSink'
+    App\Module\Identity\Application\Contract\AdministrativeAuthorization: '@App\Module\Identity\Application\AuthorizationService'
+    App\Module\Suppression\Application\Contract\SuppressionLookup: '@App\Module\Suppression\Application\SuppressionManager'
+    App\Module\Suppression\Application\Contract\RecipientSuppression: '@App\Module\Suppression\Application\SuppressionManager'
+    App\Module\Configuration\Application\Contract\RecipientRuntimeConfiguration: '@App\Module\Configuration\Infrastructure\DoctrineRecipientRuntimeConfiguration'
+    App\Module\RecipientActions\Application\Contract\RecipientUnsubscribeLinks: '@App\Module\RecipientActions\Application\RecipientTokenService'
+    App\Module\Analytics\Application\Contract\RecipientAnalyticsLinks: '@App\Module\RecipientActions\Application\RecipientAnalyticsService'
+    App\Module\Analytics\Application\Contract\RecipientRsvpLinks: '@App\Module\RecipientActions\Application\RecipientAnalyticsService'
+    App\Module\Templates\Application\Contract\TemplateAssetStorage: '@App\Module\Templates\Infrastructure\TemplateAssetStore'
+    App\Module\Templates\Application\Contract\PublishedTemplateProvider: '@App\Module\Templates\Infrastructure\DoctrinePublishedTemplateProvider'
+    App\Module\Configuration\Application\Contract\DeliveryConfiguration: '@App\Module\Configuration\Infrastructure\DoctrineDeliveryConfiguration'
+    App\Module\Delivery\Application\Contract\CampaignDeliveryGateway: '@App\Module\Delivery\Infrastructure\DoctrineCampaignDeliveryGateway'
+    App\Module\Delivery\Application\Contract\DeliveryTransport: '@App\Module\Delivery\Infrastructure\SymfonySmtpDeliveryTransport'
+    App\Module\Delivery\Application\Contract\InterruptedDeliveryRecovery: '@App\Module\Delivery\Application\InterruptedDeliveryRecoverer'
+    App\Module\Campaigns\Application\Contract\SendingGate: '@App\Module\Health\Infrastructure\CampaignSendingGate'
+    App\Module\Delivery\Application\Contract\SendingGate: '@App\Module\Health\Infrastructure\DeliverySendingGate'
+
+    App\Module\Health\Application\Doctor:
+        arguments:
+            $probes: !tagged_iterator emailer.readiness_probe
+
+    App\Module\Backup\Application\BackupEngine:
+        arguments:
+            $contributors: !tagged_iterator emailer.backup_contributor
+            $backupDirectory: '%emailer.backup_dir%'
+            $sourceVersion: '%emailer.app_version%'
+            $drillEvidence: '@App\Module\Backup\Application\RestoreDrillEvidence'
+            $audit: '@App\Module\Audit\Application\Contract\AuditSink'
+
+    App\Module\Operations\Application\OperationsDashboard:
+        arguments:
+            $providers: !tagged_iterator emailer.operational_status_provider
+
+    App\Module\Release\Infrastructure\OperationalReleaseStatus:
+        arguments:
+            $appVersion: '%emailer.app_version%'
+
+    App\Module\Backup\Infrastructure\FilesystemBackupDestination:
+        arguments:
+            $destinationDirectory: '%emailer.backup_destination_dir%'
+            $projectDirectory: '%kernel.project_dir%'
+            $privateDirectory: '%emailer.private_dir%'
+
+    App\Module\Backup\Application\Contract\BackupOperations: '@App\Module\Backup\Application\BackupEngine'
+    App\Module\Backup\Application\Contract\ExternalBackupDestination: '@App\Module\Backup\Infrastructure\FilesystemBackupDestination'
+    App\Module\Backup\Application\Contract\AutomatedBackupOperations: '@App\Module\Backup\Application\BackupAutomation'
+    App\Module\Backup\Application\Contract\BackupRetentionOperations: '@App\Module\Backup\Application\BackupAutomation'
+
+    App\Module\Backup\Application\BackupAutomation:
+        arguments:
+            $backupDirectory: '%emailer.backup_dir%'
+
+    App\Module\Health\Infrastructure\SystemReadinessProbe:
+        arguments:
+            $privateDirectory: '%emailer.private_dir%'
+            $projectDirectory: '%kernel.project_dir%'
+            $canonicalUri: '%emailer.default_uri%'
+            $environment: '%kernel.environment%'
+            $trustedProxies: '%emailer.trusted_proxies%'
+            $trustedHosts: '%emailer.trusted_hosts%'
+            $expectedSchemaVersion: '%emailer.schema_version%'
+            $releasesDirectory: '%emailer.releases_dir%'
+            $releasePublicKeyFile: '%emailer.release_public_key_file%'
+
+    App\Module\Configuration\Infrastructure\ConfigurationReadinessProbe:
+        arguments:
+            $canonicalUri: '%emailer.default_uri%'
+            $environment: '%kernel.environment%'
+
+    App\Module\Delivery\Infrastructure\DeliveryReadinessProbe:
+        arguments:
+            $environment: '%kernel.environment%'
+
+    App\Module\Delivery\Infrastructure\OutboundMimeMessageFactory:
+        arguments:
+            $canonicalUri: '%emailer.default_uri%'
+
+    App\Module\Backup\Infrastructure\BackupReadinessProbe:
+        arguments:
+            $backupDirectory: '%emailer.backup_dir%'
+            $recoveryKeyFile: '%emailer.recovery_key_file%'
+            $environment: '%kernel.environment%'
+
+    App\Module\Identity\Infrastructure\IdentityReadinessProbe:
+        arguments:
+            $environment: '%kernel.environment%'
+
+    App\Module\Secrets\Application\RecoveryKeyExporter:
+        arguments:
+            $outputFile: '%emailer.recovery_key_file%'
+
+    App\Module\Templates\Infrastructure\TemplatesBackupContributor:
+        arguments:
+            $assetDirectory: '%emailer.template_asset_dir%'
+
+    App\Module\Release\Application\PackageInspector:
+        arguments:
+            $publicKeyFile: '%emailer.release_public_key_file%'
+            $currentVersion: '%emailer.update_source_version%'
+
+    App\Module\Release\Application\ReleaseManager:
+        arguments:
+            $releasesDirectory: '%emailer.releases_dir%'
+            $currentVersion: '%emailer.update_source_version%'
+            $environment: '%kernel.environment%'
+
+    App\Module\Release\Presentation\Cli\CheckReleaseCommand:
+        arguments:
+            $releasesDirectory: '%emailer.releases_dir%'
+            $version: '%emailer.app_version%'
+
+    App\Module\Release\Presentation\Http\ReleaseController:
+        arguments:
+            $releasesDirectory: '%emailer.releases_dir%'
+            $version: '%emailer.app_version%'
+
+    App\Module\Delivery\Infrastructure\SymfonySmtpDeliveryTransport:
+        arguments:
+            $environment: '%kernel.environment%'
+
+    App\Module\Templates\Infrastructure\TemplateAssetStore:
+        arguments:
+            $directory: '%emailer.template_asset_dir%'
+
+    App\Module\Identity\Application\SensitiveValueHasher:
+        arguments:
+            $key: '%env(APP_SECRET)%'
+
+    App\Module\RecipientActions\Presentation\Http\RecipientActionLimiterSubscriber:
+        arguments:
+            $key: '%env(APP_SECRET)%'
+
+    App\Module\Identity\Infrastructure\HybridSessionHandler:
+        arguments:
+            $setupSessionDirectory: '%emailer.private_dir%/sessions'
+
+    App\Module\Configuration\Infrastructure\DoctrineConfigurationSetup:
+        arguments:
+            $projectDirectory: '%kernel.project_dir%'
+
+    App\Module\Setup\Presentation\Http\SetupController:
+        arguments:
+            $proofPath: '%emailer.proof_file%'
+
+    App\Module\Setup\Presentation\Cli\SetupInstallCommand:
+        arguments:
+            $publicDirectory: '%kernel.project_dir%/public'
+
+    App\Module\Templates\Application\Contract\CampaignTemplatePreparation: '@App\Module\Templates\Application\TemplateManager'
+
+    App\Module\Upgrade\Presentation\Cli\RipePreflightCommand:
+        arguments:
+            $projectDirectory: '%kernel.project_dir%'
+            $privateDirectory: '%emailer.private_dir%'
+            $masterKeyFile: '%emailer.master_key_file%'

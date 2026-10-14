@@ -1,0 +1,25 @@
+<VirtualHost *:443>
+    ServerName light.example.test
+    DocumentRoot /srv/emailer-light/releases/current/public
+
+    <Directory /srv/emailer-light/releases/current/public>
+        Options -Indexes -ExecCGI -Includes
+        AllowOverride None
+        Require all granted
+        FallbackResource /index.php
+    </Directory>
+
+    <Files "index.php">
+        SetHandler "proxy:unix:/run/php/emailer-light.sock|fcgi://localhost/"
+    </Files>
+
+    <FilesMatch "^(?!index\.php$).+\.php$">
+        Require all denied
+    </FilesMatch>
+    <FilesMatch "^\.">
+        Require all denied
+    </FilesMatch>
+    <DirectoryMatch "/\.">
+        Require all denied
+    </DirectoryMatch>
+</VirtualHost>

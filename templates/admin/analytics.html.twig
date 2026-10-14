@@ -1,0 +1,23 @@
+{% extends 'admin/layout.html.twig' %}
+{% block title %}Analytics · Emailer Light{% endblock %}
+{% block admin_body %}
+<h1>Privacy-minimized analytics</h1>
+<p>Open and click figures are approximate. Email addresses, IP addresses, user agents, and raw destination URLs are not stored in analytics records.</p>
+{% if is_granted('ROLE_ADMIN') %}
+<form method="post" action="{{ path('admin_analytics_policy') }}">
+    <input type="hidden" name="_token" value="{{ csrf_token('analytics-policy') }}">
+    <label><input type="checkbox" name="open_tracking" value="1"{% if policy.open_tracking %} checked{% endif %}> Enable open tracking for future campaign approvals</label>
+    <label><input type="checkbox" name="click_tracking" value="1"{% if policy.click_tracking %} checked{% endif %}> Enable click tracking for future campaign approvals</label>
+    <label>Analytics retention days <input type="number" name="retention_days" min="1" max="365" value="{{ policy.tracking_retention_days }}" required></label>
+    <fieldset><legend>RSVP policy</legend>
+        <label><input type="checkbox" name="rsvp_enabled" value="1"{% if policy.rsvp_enabled %} checked{% endif %}> Allow RSVP to be enabled on future campaigns</label>
+        <label>RSVP retention days <input type="number" name="rsvp_retention_days" min="1" max="365" value="{{ policy.rsvp_retention_days }}" required></label>
+        <label>Repeated response policy <select name="rsvp_repeat_policy"><option value="first"{% if policy.rsvp_repeat_policy == 'first' %} selected{% endif %}>Keep first response</option><option value="replace"{% if policy.rsvp_repeat_policy == 'replace' %} selected{% endif %}>Replace with latest response</option></select></label>
+    </fieldset>
+    <button>Save policy</button>
+</form>
+{% endif %}
+<table><thead><tr><th scope="col">Campaign</th><th scope="col">Open policy</th><th scope="col">Click policy</th><th scope="col">Approximate opens</th><th scope="col">Approximate clicks</th></tr></thead><tbody>
+{% for campaign in campaigns %}<tr><td>{{ campaign.name }}</td><td>{{ campaign.open_tracking ? 'On' : 'Off' }}</td><td>{{ campaign.click_tracking ? 'On' : 'Off' }}</td><td>{{ campaign.approximate_opens }}</td><td>{{ campaign.approximate_clicks }}</td></tr>{% else %}<tr><td colspan="5">No approved campaigns.</td></tr>{% endfor %}
+</tbody></table>
+{% endblock %}

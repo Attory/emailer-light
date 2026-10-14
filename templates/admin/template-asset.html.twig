@@ -1,0 +1,3 @@
+{% extends 'admin/layout.html.twig' %}
+{% block title %}Template image — Emailer Light{% endblock %}
+{% block admin_body %}<h1>Sanitized image asset</h1><p>The image was content-checked, bounded, and re-encoded to strip metadata. Use this relative URL in template HTML:</p><p><code>{{ asset.url }}</code></p><img src="{{ asset.url }}" alt="Uploaded template asset preview" width="{{ asset.width }}" height="{{ asset.height }}">{% endblock %}

@@ -1,0 +1,3224 @@
+{
+  "product": "emailer-light",
+  "version": "1.0.0",
+  "schema_version": "20261014000000",
+  "tables": {
+    "analytics_aggregate": [
+      {
+        "name": "campaign_recipient_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "event_type",
+        "type": "varchar(8)",
+        "nullable": false
+      },
+      {
+        "name": "link_index",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "event_count",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "first_seen_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "last_seen_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "app_user": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "singleton_key",
+        "type": "char(1)",
+        "nullable": false
+      },
+      {
+        "name": "login_identifier",
+        "type": "varchar(254)",
+        "nullable": false
+      },
+      {
+        "name": "password_hash",
+        "type": "varchar(255)",
+        "nullable": false
+      },
+      {
+        "name": "active",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "password_changed_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "last_login_at",
+        "type": "datetime(6)",
+        "nullable": true
+      }
+    ],
+    "audit_event": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "actor_user_id",
+        "type": "char(36)",
+        "nullable": true
+      },
+      {
+        "name": "action",
+        "type": "varchar(96)",
+        "nullable": false
+      },
+      {
+        "name": "target_id",
+        "type": "char(64)",
+        "nullable": true
+      },
+      {
+        "name": "occurred_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "source_hash",
+        "type": "char(64)",
+        "nullable": true
+      },
+      {
+        "name": "result",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "summary_json",
+        "type": "longtext",
+        "nullable": false
+      }
+    ],
+    "backup_record": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "format_version",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "filename",
+        "type": "varchar(120)",
+        "nullable": false
+      },
+      {
+        "name": "ciphertext_sha256",
+        "type": "char(64)",
+        "nullable": false
+      },
+      {
+        "name": "byte_size",
+        "type": "bigint(20) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "schema_version",
+        "type": "varchar(32)",
+        "nullable": false
+      },
+      {
+        "name": "source_version",
+        "type": "varchar(32)",
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "verified_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "restored_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "deleted_at",
+        "type": "datetime(6)",
+        "nullable": true
+      }
+    ],
+    "backup_transfer": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "backup_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "destination_type",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "object_name",
+        "type": "varchar(120)",
+        "nullable": false
+      },
+      {
+        "name": "ciphertext_sha256",
+        "type": "char(64)",
+        "nullable": false
+      },
+      {
+        "name": "byte_size",
+        "type": "bigint(20) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "detail_code",
+        "type": "varchar(64)",
+        "nullable": false
+      },
+      {
+        "name": "attempted_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "completed_at",
+        "type": "datetime(6)",
+        "nullable": true
+      }
+    ],
+    "campaign": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "varchar(160)",
+        "nullable": false
+      },
+      {
+        "name": "template_version_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "state",
+        "type": "varchar(24)",
+        "nullable": false
+      },
+      {
+        "name": "scheduled_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "approved_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "approved_by",
+        "type": "char(36)",
+        "nullable": true
+      },
+      {
+        "name": "approval_waived_test",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "rsvp_enabled",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "operation_version",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "created_by",
+        "type": "char(36)",
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "messages_per_minute",
+        "type": "smallint(5) unsigned",
+        "nullable": true
+      },
+      {
+        "name": "rate_window_started_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "rate_window_count",
+        "type": "int(10) unsigned",
+        "nullable": false
+      }
+    ],
+    "campaign_audience_recipient": [
+      {
+        "name": "campaign_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "recipient_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "email_canonical",
+        "type": "varchar(254)",
+        "nullable": false
+      },
+      {
+        "name": "profile_json",
+        "type": "longtext",
+        "nullable": false
+      }
+    ],
+    "campaign_audience_snapshot": [
+      {
+        "name": "campaign_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "recipient_count",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "audience_sha256",
+        "type": "char(64)",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "campaign_content_snapshot": [
+      {
+        "name": "campaign_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "template_version_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "subject",
+        "type": "varchar(200)",
+        "nullable": false
+      },
+      {
+        "name": "preheader",
+        "type": "varchar(200)",
+        "nullable": true
+      },
+      {
+        "name": "html_body",
+        "type": "mediumtext",
+        "nullable": false
+      },
+      {
+        "name": "text_body",
+        "type": "mediumtext",
+        "nullable": false
+      },
+      {
+        "name": "unsubscribe_footer",
+        "type": "varchar(500)",
+        "nullable": false
+      },
+      {
+        "name": "one_click_dkim_confirmed",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "merge_fields_json",
+        "type": "longtext",
+        "nullable": false
+      },
+      {
+        "name": "link_manifest_json",
+        "type": "longtext",
+        "nullable": false
+      },
+      {
+        "name": "open_tracking",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "click_tracking",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "rsvp_enabled",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "rsvp_repeat_policy",
+        "type": "varchar(8)",
+        "nullable": false
+      },
+      {
+        "name": "rsvp_form_schema_json",
+        "type": "longtext",
+        "nullable": false
+      },
+      {
+        "name": "content_sha256",
+        "type": "char(64)",
+        "nullable": false
+      },
+      {
+        "name": "sender_address",
+        "type": "varchar(254)",
+        "nullable": false
+      },
+      {
+        "name": "sender_name",
+        "type": "varchar(160)",
+        "nullable": false
+      },
+      {
+        "name": "reply_to_address",
+        "type": "varchar(254)",
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "campaign_recipient": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "campaign_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "recipient_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "state",
+        "type": "varchar(24)",
+        "nullable": false
+      },
+      {
+        "name": "attempt_count",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "next_attempt_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "claimed_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "accepted_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "terminal_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "message_id",
+        "type": "varchar(190)",
+        "nullable": false
+      },
+      {
+        "name": "operation_version",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "last_failure_class",
+        "type": "varchar(16)",
+        "nullable": true
+      },
+      {
+        "name": "updated_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "campaign_test_delivery": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "campaign_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "requested_by",
+        "type": "char(36)",
+        "nullable": true
+      },
+      {
+        "name": "recipient_address",
+        "type": "varchar(254)",
+        "nullable": false
+      },
+      {
+        "name": "state",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "failure_class",
+        "type": "varchar(16)",
+        "nullable": true
+      },
+      {
+        "name": "requested_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "accepted_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "draft_version",
+        "type": "int(10) unsigned",
+        "nullable": false
+      }
+    ],
+    "delivery_attempt": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "campaign_recipient_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "attempt_number",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "state",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "failure_class",
+        "type": "varchar(16)",
+        "nullable": true
+      },
+      {
+        "name": "provider_reference_hash",
+        "type": "char(64)",
+        "nullable": true
+      },
+      {
+        "name": "started_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "finished_at",
+        "type": "datetime(6)",
+        "nullable": true
+      }
+    ],
+    "delivery_domain_rate": [
+      {
+        "name": "domain_hash",
+        "type": "char(64)",
+        "nullable": false
+      },
+      {
+        "name": "window_started_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "message_count",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "delivery_policy": [
+      {
+        "name": "singleton_key",
+        "type": "char(1)",
+        "nullable": false
+      },
+      {
+        "name": "messages_per_minute",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "worker_concurrency",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "retry_limit",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "maximum_campaign_size",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "maximum_csv_bytes",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "maximum_csv_rows",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "worker_mode",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "worker_available",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "scheduler_available",
+        "type": "tinyint(1)",
+        "nullable": false
+      }
+    ],
+    "delivery_runtime": [
+      {
+        "name": "singleton_key",
+        "type": "char(1)",
+        "nullable": false
+      },
+      {
+        "name": "schema_version",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "accepting_work",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "active_claims",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "rate_window_started_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "rate_window_count",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "circuit_state",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "circuit_failures",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "circuit_open_until",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "updated_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "doctrine_migration_versions": [
+      {
+        "name": "version",
+        "type": "varchar(191)",
+        "nullable": false
+      },
+      {
+        "name": "executed_at",
+        "type": "datetime",
+        "nullable": true
+      },
+      {
+        "name": "execution_time",
+        "type": "int(11)",
+        "nullable": true
+      }
+    ],
+    "email_template": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "varchar(160)",
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "published_version_id",
+        "type": "char(36)",
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "archived_at",
+        "type": "datetime(6)",
+        "nullable": true
+      }
+    ],
+    "encrypted_secret": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "record_type",
+        "type": "varchar(64)",
+        "nullable": false
+      },
+      {
+        "name": "envelope",
+        "type": "longtext",
+        "nullable": false
+      },
+      {
+        "name": "key_version",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "schema_version",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "rotated_at",
+        "type": "datetime(6)",
+        "nullable": true
+      }
+    ],
+    "health_check_run": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "run_type",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "trigger_source",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "critical_count",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "warning_count",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "findings_json",
+        "type": "longtext",
+        "nullable": false
+      },
+      {
+        "name": "started_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "finished_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "health_finding_state": [
+      {
+        "name": "code",
+        "type": "varchar(64)",
+        "nullable": false
+      },
+      {
+        "name": "severity",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "summary",
+        "type": "varchar(240)",
+        "nullable": false
+      },
+      {
+        "name": "risk",
+        "type": "varchar(240)",
+        "nullable": false
+      },
+      {
+        "name": "evidence",
+        "type": "varchar(240)",
+        "nullable": false
+      },
+      {
+        "name": "remediation",
+        "type": "varchar(240)",
+        "nullable": false
+      },
+      {
+        "name": "sending_blocked",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "active",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "first_observed_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "last_observed_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "last_run_id",
+        "type": "char(36)",
+        "nullable": true
+      },
+      {
+        "name": "acknowledged_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "acknowledged_by",
+        "type": "char(36)",
+        "nullable": true
+      }
+    ],
+    "housekeeping_run": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "dry_run",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "deleted_sessions",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "deleted_queue_rows",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "deleted_dead_letter_rows",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "deleted_delivery_attempt_rows",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "deleted_health_runs",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "deleted_analytics_rows",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "deleted_rsvp_rows",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "deleted_backup_files",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "started_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "finished_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "installation_state": [
+      {
+        "name": "singleton_key",
+        "type": "char(1)",
+        "nullable": false
+      },
+      {
+        "name": "installation_uuid",
+        "type": "char(36)",
+        "nullable": true
+      },
+      {
+        "name": "database_ready_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "key_ready_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "organisation_ready_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "administrator_ready_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "mail_ready_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "policy_ready_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "capability_ready_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "completed_at",
+        "type": "datetime(6)",
+        "nullable": true
+      }
+    ],
+    "login_throttle": [
+      {
+        "name": "scope_hash",
+        "type": "char(64)",
+        "nullable": false
+      },
+      {
+        "name": "scope_type",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "failure_count",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "pending_count",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "pending_updated_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "first_failed_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "last_failed_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "not_before",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "locked_until",
+        "type": "datetime(6)",
+        "nullable": true
+      }
+    ],
+    "messenger_messages": [
+      {
+        "name": "id",
+        "type": "bigint(20)",
+        "nullable": false
+      },
+      {
+        "name": "body",
+        "type": "longtext",
+        "nullable": false
+      },
+      {
+        "name": "headers",
+        "type": "longtext",
+        "nullable": false
+      },
+      {
+        "name": "queue_name",
+        "type": "varchar(190)",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "datetime",
+        "nullable": false
+      },
+      {
+        "name": "available_at",
+        "type": "datetime",
+        "nullable": false
+      },
+      {
+        "name": "delivered_at",
+        "type": "datetime",
+        "nullable": true
+      }
+    ],
+    "operations_policy": [
+      {
+        "name": "singleton_key",
+        "type": "char(1)",
+        "nullable": false
+      },
+      {
+        "name": "doctor_interval_hours",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "retention_automation_enabled",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "retention_interval_hours",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "revoked_session_retention_days",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "queue_retention_days",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "dead_letter_retention_days",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "health_retention_days",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "delivery_attempt_retention_days",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "log_retention_days",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "backup_automation_enabled",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "backup_interval_hours",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "backup_retention_days",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "restore_drill_interval_days",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "backup_destination_type",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "operations_run": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "operation",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "detail_code",
+        "type": "varchar(64)",
+        "nullable": false
+      },
+      {
+        "name": "started_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "finished_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "organisation_settings": [
+      {
+        "name": "singleton_key",
+        "type": "char(1)",
+        "nullable": false
+      },
+      {
+        "name": "installation_uuid",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "display_name",
+        "type": "varchar(160)",
+        "nullable": false
+      },
+      {
+        "name": "canonical_base_url",
+        "type": "varchar(2048)",
+        "nullable": false
+      },
+      {
+        "name": "locale",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "time_zone",
+        "type": "varchar(64)",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "privacy_policy": [
+      {
+        "name": "singleton_key",
+        "type": "char(1)",
+        "nullable": false
+      },
+      {
+        "name": "open_tracking",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "click_tracking",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "rsvp_enabled",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "operational_retention_days",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "delivery_retention_days",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "tracking_retention_days",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "rsvp_retention_days",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "rsvp_repeat_policy",
+        "type": "varchar(8)",
+        "nullable": false
+      },
+      {
+        "name": "suppression_mode",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "unsubscribe_footer",
+        "type": "varchar(500)",
+        "nullable": false
+      }
+    ],
+    "product_identity": [
+      {
+        "name": "singleton_key",
+        "type": "char(1)",
+        "nullable": false
+      },
+      {
+        "name": "product_id",
+        "type": "varchar(32)",
+        "nullable": false
+      },
+      {
+        "name": "product_version",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "schema_version",
+        "type": "varchar(14)",
+        "nullable": false
+      },
+      {
+        "name": "upgrade_contract_version",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "installation_uuid",
+        "type": "char(36)",
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "recipient_token": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "handle",
+        "type": "char(43)",
+        "nullable": false
+      },
+      {
+        "name": "campaign_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "campaign_recipient_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "recipient_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "email_canonical",
+        "type": "varchar(254)",
+        "nullable": true
+      },
+      {
+        "name": "purpose",
+        "type": "varchar(32)",
+        "nullable": false
+      },
+      {
+        "name": "key_version",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "issued_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "expires_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "revoked_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "last_used_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "use_count",
+        "type": "int(10) unsigned",
+        "nullable": false
+      }
+    ],
+    "recipient_token_key": [
+      {
+        "name": "key_version",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "secret_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "active",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "verify_until",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "recipient_token_key_state": [
+      {
+        "name": "singleton_key",
+        "type": "char(1)",
+        "nullable": false
+      },
+      {
+        "name": "current_version",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "release_operation": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "operation",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "source_version",
+        "type": "varchar(32)",
+        "nullable": true
+      },
+      {
+        "name": "target_version",
+        "type": "varchar(32)",
+        "nullable": true
+      },
+      {
+        "name": "package_sha256",
+        "type": "char(64)",
+        "nullable": true
+      },
+      {
+        "name": "status",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "detail_code",
+        "type": "varchar(64)",
+        "nullable": false
+      },
+      {
+        "name": "started_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "finished_at",
+        "type": "datetime(6)",
+        "nullable": true
+      }
+    ],
+    "rsvp_response": [
+      {
+        "name": "campaign_recipient_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "response_choice",
+        "type": "varchar(5)",
+        "nullable": false
+      },
+      {
+        "name": "guest_count",
+        "type": "tinyint(3) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "note",
+        "type": "varchar(500)",
+        "nullable": true
+      },
+      {
+        "name": "submission_count",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "first_submitted_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "last_submitted_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "sender_identity": [
+      {
+        "name": "singleton_key",
+        "type": "char(1)",
+        "nullable": false
+      },
+      {
+        "name": "transport_type",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "smtp_host",
+        "type": "varchar(255)",
+        "nullable": false
+      },
+      {
+        "name": "smtp_port",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "encryption_mode",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "smtp_username",
+        "type": "varchar(254)",
+        "nullable": true
+      },
+      {
+        "name": "credential_secret_id",
+        "type": "char(36)",
+        "nullable": true
+      },
+      {
+        "name": "sender_address",
+        "type": "varchar(254)",
+        "nullable": false
+      },
+      {
+        "name": "sender_name",
+        "type": "varchar(160)",
+        "nullable": false
+      },
+      {
+        "name": "reply_to_address",
+        "type": "varchar(254)",
+        "nullable": true
+      },
+      {
+        "name": "tls_peer_verification",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "one_click_dkim_confirmed",
+        "type": "tinyint(1)",
+        "nullable": false
+      },
+      {
+        "name": "test_message_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "setup_installation_event": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "administrator_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "action",
+        "type": "varchar(64)",
+        "nullable": false
+      },
+      {
+        "name": "occurred_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "result",
+        "type": "varchar(16)",
+        "nullable": false
+      }
+    ],
+    "suppression": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "email_canonical",
+        "type": "varchar(254)",
+        "nullable": false
+      },
+      {
+        "name": "reason",
+        "type": "varchar(32)",
+        "nullable": false
+      },
+      {
+        "name": "source",
+        "type": "varchar(64)",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "template_asset": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "filename",
+        "type": "varchar(80)",
+        "nullable": false
+      },
+      {
+        "name": "media_type",
+        "type": "varchar(32)",
+        "nullable": false
+      },
+      {
+        "name": "byte_size",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "width",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "height",
+        "type": "smallint(5) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "content_sha256",
+        "type": "char(64)",
+        "nullable": false
+      },
+      {
+        "name": "created_by",
+        "type": "char(36)",
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "datetime(6)",
+        "nullable": false
+      }
+    ],
+    "template_version": [
+      {
+        "name": "id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "template_id",
+        "type": "char(36)",
+        "nullable": false
+      },
+      {
+        "name": "version_number",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "subject",
+        "type": "varchar(200)",
+        "nullable": false
+      },
+      {
+        "name": "preheader",
+        "type": "varchar(200)",
+        "nullable": true
+      },
+      {
+        "name": "html_body",
+        "type": "mediumtext",
+        "nullable": false
+      },
+      {
+        "name": "text_body",
+        "type": "mediumtext",
+        "nullable": false
+      },
+      {
+        "name": "merge_fields_json",
+        "type": "longtext",
+        "nullable": false
+      },
+      {
+        "name": "link_manifest_json",
+        "type": "longtext",
+        "nullable": false
+      },
+      {
+        "name": "content_sha256",
+        "type": "char(64)",
+        "nullable": false
+      },
+      {
+        "name": "created_by",
+        "type": "char(36)",
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "published_at",
+        "type": "datetime(6)",
+        "nullable": true
+      }
+    ],
+    "user_session": [
+      {
+        "name": "id_hash",
+        "type": "char(64)",
+        "nullable": false
+      },
+      {
+        "name": "user_id",
+        "type": "char(36)",
+        "nullable": true
+      },
+      {
+        "name": "payload",
+        "type": "mediumblob",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "last_seen_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "idle_expires_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "absolute_expires_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "revoked_at",
+        "type": "datetime(6)",
+        "nullable": true
+      },
+      {
+        "name": "source_hash",
+        "type": "char(64)",
+        "nullable": true
+      },
+      {
+        "name": "user_agent_hash",
+        "type": "char(64)",
+        "nullable": true
+      }
+    ],
+    "worker_heartbeat": [
+      {
+        "name": "worker_id",
+        "type": "varchar(100)",
+        "nullable": false
+      },
+      {
+        "name": "worker_kind",
+        "type": "varchar(16)",
+        "nullable": false
+      },
+      {
+        "name": "schema_version",
+        "type": "int(10) unsigned",
+        "nullable": false
+      },
+      {
+        "name": "started_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "heartbeat_at",
+        "type": "datetime(6)",
+        "nullable": false
+      },
+      {
+        "name": "stopped_at",
+        "type": "datetime(6)",
+        "nullable": true
+      }
+    ]
+  },
+  "foreign_keys": [
+    {
+      "table": "analytics_aggregate",
+      "constraint": "fk_analytics_recipient",
+      "column": "campaign_recipient_id",
+      "position": 1,
+      "referenced_table": "campaign_recipient",
+      "referenced_column": "id"
+    },
+    {
+      "table": "backup_transfer",
+      "constraint": "fk_backup_transfer_record",
+      "column": "backup_id",
+      "position": 1,
+      "referenced_table": "backup_record",
+      "referenced_column": "id"
+    },
+    {
+      "table": "campaign",
+      "constraint": "fk_campaign_approver",
+      "column": "approved_by",
+      "position": 1,
+      "referenced_table": "app_user",
+      "referenced_column": "id"
+    },
+    {
+      "table": "campaign",
+      "constraint": "fk_campaign_creator",
+      "column": "created_by",
+      "position": 1,
+      "referenced_table": "app_user",
+      "referenced_column": "id"
+    },
+    {
+      "table": "campaign",
+      "constraint": "fk_campaign_template",
+      "column": "template_version_id",
+      "position": 1,
+      "referenced_table": "template_version",
+      "referenced_column": "id"
+    },
+    {
+      "table": "campaign_audience_recipient",
+      "constraint": "fk_campaign_audience_recipient_campaign",
+      "column": "campaign_id",
+      "position": 1,
+      "referenced_table": "campaign",
+      "referenced_column": "id"
+    },
+    {
+      "table": "campaign_audience_snapshot",
+      "constraint": "fk_campaign_audience_campaign",
+      "column": "campaign_id",
+      "position": 1,
+      "referenced_table": "campaign",
+      "referenced_column": "id"
+    },
+    {
+      "table": "campaign_content_snapshot",
+      "constraint": "fk_campaign_content_campaign",
+      "column": "campaign_id",
+      "position": 1,
+      "referenced_table": "campaign",
+      "referenced_column": "id"
+    },
+    {
+      "table": "campaign_content_snapshot",
+      "constraint": "fk_campaign_content_version",
+      "column": "template_version_id",
+      "position": 1,
+      "referenced_table": "template_version",
+      "referenced_column": "id"
+    },
+    {
+      "table": "campaign_recipient",
+      "constraint": "fk_delivery_audience",
+      "column": "campaign_id",
+      "position": 1,
+      "referenced_table": "campaign_audience_recipient",
+      "referenced_column": "campaign_id"
+    },
+    {
+      "table": "campaign_recipient",
+      "constraint": "fk_delivery_audience",
+      "column": "recipient_id",
+      "position": 2,
+      "referenced_table": "campaign_audience_recipient",
+      "referenced_column": "recipient_id"
+    },
+    {
+      "table": "campaign_recipient",
+      "constraint": "fk_delivery_campaign",
+      "column": "campaign_id",
+      "position": 1,
+      "referenced_table": "campaign",
+      "referenced_column": "id"
+    },
+    {
+      "table": "campaign_test_delivery",
+      "constraint": "fk_campaign_test_actor",
+      "column": "requested_by",
+      "position": 1,
+      "referenced_table": "app_user",
+      "referenced_column": "id"
+    },
+    {
+      "table": "campaign_test_delivery",
+      "constraint": "fk_campaign_test_campaign",
+      "column": "campaign_id",
+      "position": 1,
+      "referenced_table": "campaign",
+      "referenced_column": "id"
+    },
+    {
+      "table": "delivery_attempt",
+      "constraint": "fk_attempt_recipient",
+      "column": "campaign_recipient_id",
+      "position": 1,
+      "referenced_table": "campaign_recipient",
+      "referenced_column": "id"
+    },
+    {
+      "table": "email_template",
+      "constraint": "fk_template_published_version",
+      "column": "published_version_id",
+      "position": 1,
+      "referenced_table": "template_version",
+      "referenced_column": "id"
+    },
+    {
+      "table": "health_finding_state",
+      "constraint": "fk_health_finding_actor",
+      "column": "acknowledged_by",
+      "position": 1,
+      "referenced_table": "app_user",
+      "referenced_column": "id"
+    },
+    {
+      "table": "health_finding_state",
+      "constraint": "fk_health_finding_run",
+      "column": "last_run_id",
+      "position": 1,
+      "referenced_table": "health_check_run",
+      "referenced_column": "id"
+    },
+    {
+      "table": "recipient_token",
+      "constraint": "fk_recipient_token_campaign",
+      "column": "campaign_id",
+      "position": 1,
+      "referenced_table": "campaign",
+      "referenced_column": "id"
+    },
+    {
+      "table": "recipient_token",
+      "constraint": "fk_recipient_token_delivery",
+      "column": "campaign_recipient_id",
+      "position": 1,
+      "referenced_table": "campaign_recipient",
+      "referenced_column": "id"
+    },
+    {
+      "table": "recipient_token",
+      "constraint": "fk_recipient_token_key",
+      "column": "key_version",
+      "position": 1,
+      "referenced_table": "recipient_token_key",
+      "referenced_column": "key_version"
+    },
+    {
+      "table": "recipient_token",
+      "constraint": "fk_token_audience",
+      "column": "campaign_id",
+      "position": 1,
+      "referenced_table": "campaign_audience_recipient",
+      "referenced_column": "campaign_id"
+    },
+    {
+      "table": "recipient_token",
+      "constraint": "fk_token_audience",
+      "column": "recipient_id",
+      "position": 2,
+      "referenced_table": "campaign_audience_recipient",
+      "referenced_column": "recipient_id"
+    },
+    {
+      "table": "recipient_token_key",
+      "constraint": "fk_recipient_token_key_secret",
+      "column": "secret_id",
+      "position": 1,
+      "referenced_table": "encrypted_secret",
+      "referenced_column": "id"
+    },
+    {
+      "table": "rsvp_response",
+      "constraint": "fk_rsvp_recipient",
+      "column": "campaign_recipient_id",
+      "position": 1,
+      "referenced_table": "campaign_recipient",
+      "referenced_column": "id"
+    },
+    {
+      "table": "sender_identity",
+      "constraint": "fk_sender_secret",
+      "column": "credential_secret_id",
+      "position": 1,
+      "referenced_table": "encrypted_secret",
+      "referenced_column": "id"
+    },
+    {
+      "table": "setup_installation_event",
+      "constraint": "fk_setup_event_administrator",
+      "column": "administrator_id",
+      "position": 1,
+      "referenced_table": "app_user",
+      "referenced_column": "id"
+    },
+    {
+      "table": "template_asset",
+      "constraint": "fk_template_asset_actor",
+      "column": "created_by",
+      "position": 1,
+      "referenced_table": "app_user",
+      "referenced_column": "id"
+    },
+    {
+      "table": "template_version",
+      "constraint": "fk_template_version_actor",
+      "column": "created_by",
+      "position": 1,
+      "referenced_table": "app_user",
+      "referenced_column": "id"
+    },
+    {
+      "table": "template_version",
+      "constraint": "fk_template_version_template",
+      "column": "template_id",
+      "position": 1,
+      "referenced_table": "email_template",
+      "referenced_column": "id"
+    },
+    {
+      "table": "user_session",
+      "constraint": "fk_user_session_user",
+      "column": "user_id",
+      "position": 1,
+      "referenced_table": "app_user",
+      "referenced_column": "id"
+    }
+  ],
+  "indexes": [
+    {
+      "table": "analytics_aggregate",
+      "index": "idx_analytics_retention",
+      "position": 1,
+      "column": "last_seen_at",
+      "unique": false
+    },
+    {
+      "table": "analytics_aggregate",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "campaign_recipient_id",
+      "unique": true
+    },
+    {
+      "table": "analytics_aggregate",
+      "index": "PRIMARY",
+      "position": 2,
+      "column": "event_type",
+      "unique": true
+    },
+    {
+      "table": "analytics_aggregate",
+      "index": "PRIMARY",
+      "position": 3,
+      "column": "link_index",
+      "unique": true
+    },
+    {
+      "table": "app_user",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "app_user",
+      "index": "uniq_administrator_singleton",
+      "position": 1,
+      "column": "singleton_key",
+      "unique": true
+    },
+    {
+      "table": "app_user",
+      "index": "uniq_user_login",
+      "position": 1,
+      "column": "login_identifier",
+      "unique": true
+    },
+    {
+      "table": "audit_event",
+      "index": "idx_audit_action",
+      "position": 1,
+      "column": "action",
+      "unique": false
+    },
+    {
+      "table": "audit_event",
+      "index": "idx_audit_action",
+      "position": 2,
+      "column": "occurred_at",
+      "unique": false
+    },
+    {
+      "table": "audit_event",
+      "index": "idx_audit_actor",
+      "position": 1,
+      "column": "actor_user_id",
+      "unique": false
+    },
+    {
+      "table": "audit_event",
+      "index": "idx_audit_actor",
+      "position": 2,
+      "column": "occurred_at",
+      "unique": false
+    },
+    {
+      "table": "audit_event",
+      "index": "idx_audit_occurred",
+      "position": 1,
+      "column": "occurred_at",
+      "unique": false
+    },
+    {
+      "table": "audit_event",
+      "index": "idx_audit_occurred",
+      "position": 2,
+      "column": "id",
+      "unique": false
+    },
+    {
+      "table": "audit_event",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "backup_record",
+      "index": "idx_backup_verified",
+      "position": 1,
+      "column": "verified_at",
+      "unique": false
+    },
+    {
+      "table": "backup_record",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "backup_record",
+      "index": "uniq_backup_filename",
+      "position": 1,
+      "column": "filename",
+      "unique": true
+    },
+    {
+      "table": "backup_transfer",
+      "index": "idx_backup_transfer_status",
+      "position": 1,
+      "column": "status",
+      "unique": false
+    },
+    {
+      "table": "backup_transfer",
+      "index": "idx_backup_transfer_status",
+      "position": 2,
+      "column": "attempted_at",
+      "unique": false
+    },
+    {
+      "table": "backup_transfer",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "backup_transfer",
+      "index": "uniq_backup_transfer",
+      "position": 1,
+      "column": "backup_id",
+      "unique": true
+    },
+    {
+      "table": "backup_transfer",
+      "index": "uniq_backup_transfer",
+      "position": 2,
+      "column": "destination_type",
+      "unique": true
+    },
+    {
+      "table": "campaign",
+      "index": "fk_campaign_approver",
+      "position": 1,
+      "column": "approved_by",
+      "unique": false
+    },
+    {
+      "table": "campaign",
+      "index": "fk_campaign_creator",
+      "position": 1,
+      "column": "created_by",
+      "unique": false
+    },
+    {
+      "table": "campaign",
+      "index": "fk_campaign_template",
+      "position": 1,
+      "column": "template_version_id",
+      "unique": false
+    },
+    {
+      "table": "campaign",
+      "index": "idx_campaign_state_schedule",
+      "position": 1,
+      "column": "state",
+      "unique": false
+    },
+    {
+      "table": "campaign",
+      "index": "idx_campaign_state_schedule",
+      "position": 2,
+      "column": "scheduled_at",
+      "unique": false
+    },
+    {
+      "table": "campaign",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "campaign_audience_recipient",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "campaign_id",
+      "unique": true
+    },
+    {
+      "table": "campaign_audience_recipient",
+      "index": "PRIMARY",
+      "position": 2,
+      "column": "recipient_id",
+      "unique": true
+    },
+    {
+      "table": "campaign_audience_recipient",
+      "index": "uniq_campaign_audience_email",
+      "position": 1,
+      "column": "campaign_id",
+      "unique": true
+    },
+    {
+      "table": "campaign_audience_recipient",
+      "index": "uniq_campaign_audience_email",
+      "position": 2,
+      "column": "email_canonical",
+      "unique": true
+    },
+    {
+      "table": "campaign_audience_snapshot",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "campaign_id",
+      "unique": true
+    },
+    {
+      "table": "campaign_content_snapshot",
+      "index": "fk_campaign_content_version",
+      "position": 1,
+      "column": "template_version_id",
+      "unique": false
+    },
+    {
+      "table": "campaign_content_snapshot",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "campaign_id",
+      "unique": true
+    },
+    {
+      "table": "campaign_recipient",
+      "index": "idx_delivery_campaign_state",
+      "position": 1,
+      "column": "campaign_id",
+      "unique": false
+    },
+    {
+      "table": "campaign_recipient",
+      "index": "idx_delivery_campaign_state",
+      "position": 2,
+      "column": "state",
+      "unique": false
+    },
+    {
+      "table": "campaign_recipient",
+      "index": "idx_delivery_due",
+      "position": 1,
+      "column": "state",
+      "unique": false
+    },
+    {
+      "table": "campaign_recipient",
+      "index": "idx_delivery_due",
+      "position": 2,
+      "column": "next_attempt_at",
+      "unique": false
+    },
+    {
+      "table": "campaign_recipient",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "campaign_recipient",
+      "index": "uniq_campaign_recipient_delivery",
+      "position": 1,
+      "column": "campaign_id",
+      "unique": true
+    },
+    {
+      "table": "campaign_recipient",
+      "index": "uniq_campaign_recipient_delivery",
+      "position": 2,
+      "column": "recipient_id",
+      "unique": true
+    },
+    {
+      "table": "campaign_recipient",
+      "index": "uniq_delivery_message_id",
+      "position": 1,
+      "column": "message_id",
+      "unique": true
+    },
+    {
+      "table": "campaign_test_delivery",
+      "index": "fk_campaign_test_actor",
+      "position": 1,
+      "column": "requested_by",
+      "unique": false
+    },
+    {
+      "table": "campaign_test_delivery",
+      "index": "idx_campaign_test_campaign",
+      "position": 1,
+      "column": "campaign_id",
+      "unique": false
+    },
+    {
+      "table": "campaign_test_delivery",
+      "index": "idx_campaign_test_campaign",
+      "position": 2,
+      "column": "requested_at",
+      "unique": false
+    },
+    {
+      "table": "campaign_test_delivery",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "delivery_attempt",
+      "index": "idx_delivery_attempt_open",
+      "position": 1,
+      "column": "state",
+      "unique": false
+    },
+    {
+      "table": "delivery_attempt",
+      "index": "idx_delivery_attempt_open",
+      "position": 2,
+      "column": "started_at",
+      "unique": false
+    },
+    {
+      "table": "delivery_attempt",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "delivery_attempt",
+      "index": "uniq_delivery_attempt_number",
+      "position": 1,
+      "column": "campaign_recipient_id",
+      "unique": true
+    },
+    {
+      "table": "delivery_attempt",
+      "index": "uniq_delivery_attempt_number",
+      "position": 2,
+      "column": "attempt_number",
+      "unique": true
+    },
+    {
+      "table": "delivery_domain_rate",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "domain_hash",
+      "unique": true
+    },
+    {
+      "table": "delivery_policy",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "singleton_key",
+      "unique": true
+    },
+    {
+      "table": "delivery_runtime",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "singleton_key",
+      "unique": true
+    },
+    {
+      "table": "doctrine_migration_versions",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "version",
+      "unique": true
+    },
+    {
+      "table": "email_template",
+      "index": "fk_template_published_version",
+      "position": 1,
+      "column": "published_version_id",
+      "unique": false
+    },
+    {
+      "table": "email_template",
+      "index": "idx_email_template_status",
+      "position": 1,
+      "column": "status",
+      "unique": false
+    },
+    {
+      "table": "email_template",
+      "index": "idx_email_template_status",
+      "position": 2,
+      "column": "updated_at",
+      "unique": false
+    },
+    {
+      "table": "email_template",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "email_template",
+      "index": "uniq_email_template_name",
+      "position": 1,
+      "column": "name",
+      "unique": true
+    },
+    {
+      "table": "encrypted_secret",
+      "index": "idx_encrypted_secret_type",
+      "position": 1,
+      "column": "record_type",
+      "unique": false
+    },
+    {
+      "table": "encrypted_secret",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "health_check_run",
+      "index": "idx_health_run_finished",
+      "position": 1,
+      "column": "finished_at",
+      "unique": false
+    },
+    {
+      "table": "health_check_run",
+      "index": "idx_health_run_type_finished",
+      "position": 1,
+      "column": "run_type",
+      "unique": false
+    },
+    {
+      "table": "health_check_run",
+      "index": "idx_health_run_type_finished",
+      "position": 2,
+      "column": "finished_at",
+      "unique": false
+    },
+    {
+      "table": "health_check_run",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "health_finding_state",
+      "index": "fk_health_finding_actor",
+      "position": 1,
+      "column": "acknowledged_by",
+      "unique": false
+    },
+    {
+      "table": "health_finding_state",
+      "index": "fk_health_finding_run",
+      "position": 1,
+      "column": "last_run_id",
+      "unique": false
+    },
+    {
+      "table": "health_finding_state",
+      "index": "idx_health_finding_active",
+      "position": 1,
+      "column": "active",
+      "unique": false
+    },
+    {
+      "table": "health_finding_state",
+      "index": "idx_health_finding_active",
+      "position": 2,
+      "column": "severity",
+      "unique": false
+    },
+    {
+      "table": "health_finding_state",
+      "index": "idx_health_finding_active",
+      "position": 3,
+      "column": "last_observed_at",
+      "unique": false
+    },
+    {
+      "table": "health_finding_state",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "code",
+      "unique": true
+    },
+    {
+      "table": "housekeeping_run",
+      "index": "idx_housekeeping_finished",
+      "position": 1,
+      "column": "finished_at",
+      "unique": false
+    },
+    {
+      "table": "housekeeping_run",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "installation_state",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "singleton_key",
+      "unique": true
+    },
+    {
+      "table": "installation_state",
+      "index": "uniq_installation_uuid",
+      "position": 1,
+      "column": "installation_uuid",
+      "unique": true
+    },
+    {
+      "table": "login_throttle",
+      "index": "idx_login_throttle_expiry",
+      "position": 1,
+      "column": "locked_until",
+      "unique": false
+    },
+    {
+      "table": "login_throttle",
+      "index": "idx_login_throttle_expiry",
+      "position": 2,
+      "column": "last_failed_at",
+      "unique": false
+    },
+    {
+      "table": "login_throttle",
+      "index": "idx_throttle_reclaim",
+      "position": 1,
+      "column": "pending_count",
+      "unique": false
+    },
+    {
+      "table": "login_throttle",
+      "index": "idx_throttle_reclaim",
+      "position": 2,
+      "column": "last_failed_at",
+      "unique": false
+    },
+    {
+      "table": "login_throttle",
+      "index": "idx_throttle_reclaim",
+      "position": 3,
+      "column": "locked_until",
+      "unique": false
+    },
+    {
+      "table": "login_throttle",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "scope_hash",
+      "unique": true
+    },
+    {
+      "table": "messenger_messages",
+      "index": "idx_messenger_queue",
+      "position": 1,
+      "column": "queue_name",
+      "unique": false
+    },
+    {
+      "table": "messenger_messages",
+      "index": "idx_messenger_queue",
+      "position": 2,
+      "column": "available_at",
+      "unique": false
+    },
+    {
+      "table": "messenger_messages",
+      "index": "idx_messenger_queue",
+      "position": 3,
+      "column": "delivered_at",
+      "unique": false
+    },
+    {
+      "table": "messenger_messages",
+      "index": "idx_messenger_queue",
+      "position": 4,
+      "column": "id",
+      "unique": false
+    },
+    {
+      "table": "messenger_messages",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "operations_policy",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "singleton_key",
+      "unique": true
+    },
+    {
+      "table": "operations_run",
+      "index": "idx_operations_run_due",
+      "position": 1,
+      "column": "operation",
+      "unique": false
+    },
+    {
+      "table": "operations_run",
+      "index": "idx_operations_run_due",
+      "position": 2,
+      "column": "status",
+      "unique": false
+    },
+    {
+      "table": "operations_run",
+      "index": "idx_operations_run_due",
+      "position": 3,
+      "column": "finished_at",
+      "unique": false
+    },
+    {
+      "table": "operations_run",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "organisation_settings",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "singleton_key",
+      "unique": true
+    },
+    {
+      "table": "organisation_settings",
+      "index": "uniq_organisation_installation",
+      "position": 1,
+      "column": "installation_uuid",
+      "unique": true
+    },
+    {
+      "table": "privacy_policy",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "singleton_key",
+      "unique": true
+    },
+    {
+      "table": "product_identity",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "singleton_key",
+      "unique": true
+    },
+    {
+      "table": "recipient_token",
+      "index": "fk_recipient_token_campaign",
+      "position": 1,
+      "column": "campaign_id",
+      "unique": false
+    },
+    {
+      "table": "recipient_token",
+      "index": "fk_recipient_token_key",
+      "position": 1,
+      "column": "key_version",
+      "unique": false
+    },
+    {
+      "table": "recipient_token",
+      "index": "fk_token_audience",
+      "position": 1,
+      "column": "campaign_id",
+      "unique": false
+    },
+    {
+      "table": "recipient_token",
+      "index": "fk_token_audience",
+      "position": 2,
+      "column": "recipient_id",
+      "unique": false
+    },
+    {
+      "table": "recipient_token",
+      "index": "idx_recipient_token_retention",
+      "position": 1,
+      "column": "expires_at",
+      "unique": false
+    },
+    {
+      "table": "recipient_token",
+      "index": "idx_recipient_token_retention",
+      "position": 2,
+      "column": "revoked_at",
+      "unique": false
+    },
+    {
+      "table": "recipient_token",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "recipient_token",
+      "index": "uniq_recipient_token_handle",
+      "position": 1,
+      "column": "handle",
+      "unique": true
+    },
+    {
+      "table": "recipient_token",
+      "index": "uniq_recipient_token_scope",
+      "position": 1,
+      "column": "campaign_recipient_id",
+      "unique": true
+    },
+    {
+      "table": "recipient_token",
+      "index": "uniq_recipient_token_scope",
+      "position": 2,
+      "column": "purpose",
+      "unique": true
+    },
+    {
+      "table": "recipient_token_key",
+      "index": "idx_recipient_token_key_retention",
+      "position": 1,
+      "column": "active",
+      "unique": false
+    },
+    {
+      "table": "recipient_token_key",
+      "index": "idx_recipient_token_key_retention",
+      "position": 2,
+      "column": "verify_until",
+      "unique": false
+    },
+    {
+      "table": "recipient_token_key",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "key_version",
+      "unique": true
+    },
+    {
+      "table": "recipient_token_key",
+      "index": "uniq_recipient_token_secret",
+      "position": 1,
+      "column": "secret_id",
+      "unique": true
+    },
+    {
+      "table": "recipient_token_key_state",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "singleton_key",
+      "unique": true
+    },
+    {
+      "table": "release_operation",
+      "index": "idx_release_operation_started",
+      "position": 1,
+      "column": "started_at",
+      "unique": false
+    },
+    {
+      "table": "release_operation",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "rsvp_response",
+      "index": "idx_rsvp_retention",
+      "position": 1,
+      "column": "last_submitted_at",
+      "unique": false
+    },
+    {
+      "table": "rsvp_response",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "campaign_recipient_id",
+      "unique": true
+    },
+    {
+      "table": "sender_identity",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "singleton_key",
+      "unique": true
+    },
+    {
+      "table": "sender_identity",
+      "index": "uniq_sender_credential",
+      "position": 1,
+      "column": "credential_secret_id",
+      "unique": true
+    },
+    {
+      "table": "setup_installation_event",
+      "index": "fk_setup_event_administrator",
+      "position": 1,
+      "column": "administrator_id",
+      "unique": false
+    },
+    {
+      "table": "setup_installation_event",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "setup_installation_event",
+      "index": "uniq_setup_completion_action",
+      "position": 1,
+      "column": "action",
+      "unique": true
+    },
+    {
+      "table": "suppression",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "suppression",
+      "index": "uniq_suppression_email",
+      "position": 1,
+      "column": "email_canonical",
+      "unique": true
+    },
+    {
+      "table": "template_asset",
+      "index": "fk_template_asset_actor",
+      "position": 1,
+      "column": "created_by",
+      "unique": false
+    },
+    {
+      "table": "template_asset",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "template_asset",
+      "index": "uniq_template_asset_filename",
+      "position": 1,
+      "column": "filename",
+      "unique": true
+    },
+    {
+      "table": "template_version",
+      "index": "fk_template_version_actor",
+      "position": 1,
+      "column": "created_by",
+      "unique": false
+    },
+    {
+      "table": "template_version",
+      "index": "idx_template_version_created",
+      "position": 1,
+      "column": "template_id",
+      "unique": false
+    },
+    {
+      "table": "template_version",
+      "index": "idx_template_version_created",
+      "position": 2,
+      "column": "created_at",
+      "unique": false
+    },
+    {
+      "table": "template_version",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id",
+      "unique": true
+    },
+    {
+      "table": "template_version",
+      "index": "uniq_template_version",
+      "position": 1,
+      "column": "template_id",
+      "unique": true
+    },
+    {
+      "table": "template_version",
+      "index": "uniq_template_version",
+      "position": 2,
+      "column": "version_number",
+      "unique": true
+    },
+    {
+      "table": "user_session",
+      "index": "idx_session_reclaim",
+      "position": 1,
+      "column": "revoked_at",
+      "unique": false
+    },
+    {
+      "table": "user_session",
+      "index": "idx_session_reclaim",
+      "position": 2,
+      "column": "absolute_expires_at",
+      "unique": false
+    },
+    {
+      "table": "user_session",
+      "index": "idx_user_session_expiry",
+      "position": 1,
+      "column": "idle_expires_at",
+      "unique": false
+    },
+    {
+      "table": "user_session",
+      "index": "idx_user_session_expiry",
+      "position": 2,
+      "column": "absolute_expires_at",
+      "unique": false
+    },
+    {
+      "table": "user_session",
+      "index": "idx_user_session_user_active",
+      "position": 1,
+      "column": "user_id",
+      "unique": false
+    },
+    {
+      "table": "user_session",
+      "index": "idx_user_session_user_active",
+      "position": 2,
+      "column": "revoked_at",
+      "unique": false
+    },
+    {
+      "table": "user_session",
+      "index": "idx_user_session_user_active",
+      "position": 3,
+      "column": "last_seen_at",
+      "unique": false
+    },
+    {
+      "table": "user_session",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "id_hash",
+      "unique": true
+    },
+    {
+      "table": "worker_heartbeat",
+      "index": "idx_worker_heartbeat",
+      "position": 1,
+      "column": "worker_kind",
+      "unique": false
+    },
+    {
+      "table": "worker_heartbeat",
+      "index": "idx_worker_heartbeat",
+      "position": 2,
+      "column": "heartbeat_at",
+      "unique": false
+    },
+    {
+      "table": "worker_heartbeat",
+      "index": "PRIMARY",
+      "position": 1,
+      "column": "worker_id",
+      "unique": true
+    }
+  ],
+  "triggers": [
+    {
+      "name": "audience_no_delete_after_snapshot",
+      "event": "DELETE",
+      "table": "campaign_audience_recipient",
+      "timing": "BEFORE"
+    },
+    {
+      "name": "audience_no_insert_after_snapshot",
+      "event": "INSERT",
+      "table": "campaign_audience_recipient",
+      "timing": "BEFORE"
+    },
+    {
+      "name": "audience_no_update_after_snapshot",
+      "event": "UPDATE",
+      "table": "campaign_audience_recipient",
+      "timing": "BEFORE"
+    },
+    {
+      "name": "audit_event_no_delete",
+      "event": "DELETE",
+      "table": "audit_event",
+      "timing": "BEFORE"
+    },
+    {
+      "name": "audit_event_no_update",
+      "event": "UPDATE",
+      "table": "audit_event",
+      "timing": "BEFORE"
+    }
+  ]
+}
