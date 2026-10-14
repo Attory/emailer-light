@@ -73,8 +73,8 @@ final class CampaignRecipientCsvTest extends KernelTestCase
         $path = tempnam(sys_get_temp_dir(), 'light-csv-');
         self::assertIsString($path);
         try {
-            file_put_contents($path, "email,first_name\none@EXAMPLE.TEST,Ada\none@example.test,Duplicate\nblocked@example.test,Blocked\ninvalid-address,Bad\n");
-            self::assertSame(['total' => 4, 'imported' => 2, 'duplicate' => 1, 'invalid' => 1, 'suppressed' => 1], $csv->replace($administrator, $this->campaignId, $path));
+            file_put_contents($path, "email,first_name\nOne@EXAMPLE.TEST,Ada\none@example.test,Duplicate\nBlocked@example.test,Blocked\ninvalid-address,Bad\ndanger@example.test,\"line\nbreak\"\n");
+            self::assertSame(['total' => 5, 'imported' => 2, 'duplicate' => 1, 'invalid' => 2, 'suppressed' => 1], $csv->replace($administrator, $this->campaignId, $path));
             self::assertSame(2, $this->recipientCount());
             file_put_contents($path, "email\nnew@example.test\n");
             self::assertSame(1, $csv->replace($administrator, $this->campaignId, $path)['imported']);

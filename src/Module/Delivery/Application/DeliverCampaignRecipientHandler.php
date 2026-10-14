@@ -248,7 +248,7 @@ final readonly class DeliverCampaignRecipientHandler
     {
         foreach ($values as $field => $value) {
             $replacement = $html ? htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8') : $value;
-            $body = preg_replace('/\{\{\s*'.preg_quote($field, '/').'\s*\}\}/', $replacement, $body) ?? $body;
+            $body = preg_replace_callback('/\{\{\s*'.preg_quote($field, '/').'\s*\}\}/', static fn (array $_match): string => $replacement, $body) ?? $body;
         }
 
         return $body;

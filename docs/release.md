@@ -1,6 +1,6 @@
 # Release verification and source
 
-Emailer Light 1.0.0 uses a distinct Ed25519 release key. Its public verification key is committed as `release/emailer-light-release.pub`; the private key is held outside Git with mode 0600 and has a separate protected backup. Never use an Emailer Ripe signing key for Light.
+Emailer Light 1.0.0 uses a distinct Ed25519 release key. Its public verification key is committed as `release/emailer-light-release.pub`; the private key is held outside Git with mode 0600. The release operator must keep a separately protected backup of that key and test recovery before relying on it for future Light updates. Never use an Emailer Ripe signing key for Light.
 
 Download `emailer-light-1.0.0.zip`, `emailer-light-1.0.0.zip.sha256`, `.manifest.json`, `.spdx.json`, `.sig`, and the public key from the same release. Check the checksum with `sha256sum -c emailer-light-1.0.0.zip.sha256`. The signed manifest, checksum and SBOM digest are verified together by `php tools/release/verify-package.php --archive=emailer-light-1.0.0.zip --public-key=release/emailer-light-release.pub --current-version=1.0.0 --expected-version=1.0.0 --expected-source=COMMIT`, using the exact published source commit. Keep the key fingerprint from an independent trusted channel. The manifest lists every file digest and supported platform range.
 

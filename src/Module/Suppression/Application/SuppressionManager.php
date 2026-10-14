@@ -26,7 +26,7 @@ final readonly class SuppressionManager implements SuppressionLookup, RecipientS
 
     public function isSuppressed(string $canonicalEmail): bool
     {
-        return false !== $this->connection->fetchOne('SELECT 1 FROM suppression WHERE email_canonical = ?', [$canonicalEmail]);
+        return false !== $this->connection->fetchOne('SELECT 1 FROM suppression WHERE email_match_key = LOWER(?)', [$canonicalEmail]);
     }
 
     public function add(AdministrativeActor $actor, string $email, string $reason = 'manual', string $source = 'administration'): string
@@ -43,7 +43,7 @@ final readonly class SuppressionManager implements SuppressionLookup, RecipientS
         $id = Identity::uuidV7();
         $this->connection->transactional(function () use ($actor, $address, $reason, $source, &$id): void {
             $this->connection->executeStatement('INSERT IGNORE INTO suppression (id, email_canonical, reason, source, created_at) VALUES (?, ?, ?, ?, ?)', [$id, $address->canonical, $reason, $source, Identity::now()]);
-            $storedId = $this->connection->fetchOne('SELECT id FROM suppression WHERE email_canonical = ? FOR UPDATE', [$address->canonical]);
+            $storedId = $this->connection->fetchOne('SELECT id FROM suppression WHERE email_match_key = LOWER(?) FOR UPDATE', [$address->canonical]);
             if (!\is_string($storedId)) {
                 throw new \UnexpectedValueException('Suppression identity is invalid.');
             }
@@ -60,7 +60,7 @@ final readonly class SuppressionManager implements SuppressionLookup, RecipientS
         $id = Identity::uuidV7();
         $this->connection->transactional(function () use ($address, &$id): void {
             $this->connection->executeStatement('INSERT IGNORE INTO suppression (id, email_canonical, reason, source, created_at) VALUES (?, ?, ?, ?, ?)', [$id, $address->canonical, 'unsubscribe', 'recipient_action', Identity::now()]);
-            $storedId = $this->connection->fetchOne('SELECT id FROM suppression WHERE email_canonical = ? FOR UPDATE', [$address->canonical]);
+            $storedId = $this->connection->fetchOne('SELECT id FROM suppression WHERE email_match_key = LOWER(?) FOR UPDATE', [$address->canonical]);
             if (!\is_string($storedId)) {
                 throw new \UnexpectedValueException('Suppression identity is invalid.');
             }

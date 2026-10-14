@@ -72,9 +72,12 @@ final readonly class DoctrineInstallationFinalizer implements InstallationFinali
             try {
                 $this->installationLock->create([
                     'version' => 1,
+                    'product_id' => 'emailer-light',
+                    'product_version' => '1.0.0',
                     'installation_uuid' => $installationId,
                     'completed_at' => $completedAt,
-                    'schema_version' => 1,
+                    'schema_version' => '20261014000000',
+                    'upgrade_contract_version' => '1.0',
                 ]);
             } catch (\Throwable $exception) {
                 $this->connection->transactional(function (Connection $connection): void {

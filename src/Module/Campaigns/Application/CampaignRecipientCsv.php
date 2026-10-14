@@ -81,11 +81,12 @@ final readonly class CampaignRecipientCsv
                         }
                         $profile[$field] = '' === $value ? null : $value;
                     }
-                    if (isset($recipients[$address->canonical])) {
+                    $matchKey = mb_strtolower($address->canonical, 'UTF-8');
+                    if (isset($recipients[$matchKey])) {
                         ++$counts['duplicate'];
                         continue;
                     }
-                    $recipients[$address->canonical] = $profile;
+                    $recipients[$matchKey] = ['email' => $address->canonical, 'profile' => $profile];
                 } catch (\InvalidArgumentException) {
                     ++$counts['invalid'];
                 }
@@ -103,15 +104,15 @@ final readonly class CampaignRecipientCsv
         $this->connection->transactional(function (Connection $connection) use ($actor, $campaignId, $recipients, &$counts): void {
             $this->assertEditable($campaignId);
             $connection->delete('campaign_audience_recipient', ['campaign_id' => $campaignId]);
-            foreach ($recipients as $email => $profile) {
+            foreach ($recipients as $recipient) {
                 $connection->insert('campaign_audience_recipient', [
                     'campaign_id' => $campaignId,
                     'recipient_id' => Identity::uuidV7(),
-                    'email_canonical' => $email,
-                    'profile_json' => json_encode($profile, JSON_THROW_ON_ERROR),
+                    'email_canonical' => $recipient['email'],
+                    'profile_json' => json_encode($recipient['profile'], JSON_THROW_ON_ERROR),
                 ]);
             }
-            $suppressed = $connection->fetchOne('SELECT COUNT(*) FROM campaign_audience_recipient a INNER JOIN suppression s ON s.email_canonical = a.email_canonical WHERE a.campaign_id = ?', [$campaignId]);
+            $suppressed = $connection->fetchOne('SELECT COUNT(*) FROM campaign_audience_recipient a INNER JOIN suppression s ON s.email_match_key = LOWER(a.email_canonical) WHERE a.campaign_id = ?', [$campaignId]);
             $counts['suppressed'] = is_numeric($suppressed) ? (int) $suppressed : 0;
             $connection->executeStatement("UPDATE campaign SET state = 'draft', operation_version = operation_version + 1, updated_at = ? WHERE id = ?", [Identity::now(), $campaignId]);
             $this->audit->append(new AuditRecord($actor->id(), 'campaign.recipients.replaced', $campaignId, 'success', $counts));
@@ -145,7 +146,7 @@ final readonly class CampaignRecipientCsv
     {
         foreach ($row as $value) {
             if (!\is_string($value) || \strlen($value) > 500 || !mb_check_encoding($value, 'UTF-8')
-                || 1 === preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $value)) {
+                || 1 === preg_match('/[\x00-\x1F\x7F]/', $value)) {
                 return false;
             }
         }

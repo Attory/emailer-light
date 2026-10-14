@@ -11,13 +11,31 @@
       "engine": "MariaDB",
       "minimum": "10.11"
     },
-    "schema_manifest": "config/upgrade/schema-1.0.0.json"
+    "schema_manifest": "config/upgrade/schema-1.0.0.json",
+    "installation_lock": {
+      "path": "EMAILER_PRIVATE_DIR/install.lock",
+      "format_version": 1,
+      "required_fields": [
+        "product_id",
+        "product_version",
+        "schema_version",
+        "upgrade_contract_version",
+        "installation_uuid"
+      ],
+      "installation_uuid_rule": "must equal product_identity and installation_state",
+      "permissions": "regular file, one link, owner-only"
+    }
   },
   "target": {
     "minimum_product_version": "1.0.6",
     "initial_owner_role": "owner",
     "initial_security_level": "high",
-    "mfa_enrollment": "unconfigured"
+    "mfa_enrollment": "unconfigured",
+    "required_capabilities": [
+      "campaign_owned_recipient_id",
+      "case_insensitive_global_suppression_match_key",
+      "light_token_context_read_or_transform"
+    ]
   },
   "identifiers": {
     "installation_uuid": "preserve",
@@ -31,7 +49,19 @@
     {
       "source": "product_identity",
       "target": "ripe_edition_transition",
-      "rule": "record source identity and one-way transition receipt"
+      "rule": "record source identity and one-way transition receipt",
+      "fields": {
+        "product_id": "source_product_id",
+        "product_version": "source_product_version",
+        "schema_version": "source_schema_version",
+        "upgrade_contract_version": "source_contract_version",
+        "installation_uuid": "installation_uuid",
+        "created_at": "source_created_at",
+        "updated_at": "source_updated_at"
+      },
+      "source_only_fields": [
+        "singleton_key"
+      ]
     },
     {
       "source": "app_user",
@@ -51,12 +81,15 @@
         "mfa_changed_at": null,
         "disabled_at": null
       },
-      "rule": "one row only; retain Argon2id hash byte for byte"
+      "rule": "one row only; retain Argon2id hash byte for byte",
+      "source_only_fields": [
+        "singleton_key"
+      ]
     },
     {
       "source": "organisation_settings",
       "target": "organisation_settings",
-      "fields": "same-name-except-security-level",
+      "fields": "identity",
       "target_defaults": {
         "security_level": "high"
       }
@@ -102,7 +135,13 @@
         "handle": "handle",
         "purpose": "purpose",
         "key_version": "key_version",
-        "expires_at": "expires_at"
+        "expires_at": "expires_at",
+        "id": "id",
+        "email_canonical": "email_canonical",
+        "issued_at": "issued_at",
+        "revoked_at": "revoked_at",
+        "last_used_at": "last_used_at",
+        "use_count": "use_count"
       },
       "rule": "preserve token history and either preserve Light token codec/key context or issue compatible redirect tokens without sending"
     },
@@ -170,7 +209,7 @@
       "source": "suppression",
       "target": "suppression",
       "fields": "identity",
-      "rule": "preserve all rows and referential integrity"
+      "rule": "Ripe target must preserve the generated case-insensitive email_match_key or an equivalent unique suppression match key."
     },
     {
       "source": "audit_event",
@@ -303,6 +342,22 @@
       "target": "messenger_messages",
       "fields": "identity",
       "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "release_operation",
+      "target": "release_operation",
+      "fields": "identity",
+      "rule": "preserve Light update and rollback history"
+    },
+    {
+      "source": "doctrine_migration_versions",
+      "target": "ripe_edition_transition",
+      "fields": {
+        "version": "source_migration_version",
+        "executed_at": "source_migration_executed_at",
+        "execution_time": "source_migration_execution_time"
+      },
+      "rule": "verify exactly one Light migration row; record it in the one-way transition receipt and initialize Ripe migration ledger forward-only"
     }
   ],
   "empty_target_tables": [

@@ -1722,6 +1722,11 @@
         "nullable": false
       },
       {
+        "name": "email_match_key",
+        "type": "varchar(254)",
+        "nullable": true
+      },
+      {
         "name": "reason",
         "type": "varchar(32)",
         "nullable": false
@@ -3046,6 +3051,13 @@
       "index": "uniq_suppression_email",
       "position": 1,
       "column": "email_canonical",
+      "unique": true
+    },
+    {
+      "table": "suppression",
+      "index": "uniq_suppression_match_key",
+      "position": 1,
+      "column": "email_match_key",
       "unique": true
     },
     {

@@ -27,9 +27,9 @@ reader@example.test,Sample
 second@example.test,Demo
 ```
 
-The canonical address preserves local-part case and normalizes the domain. Invalid rows are counted and skipped, duplicates within that campaign are counted, and global suppressions remain enforced at claim time. Replace or delete a campaign upload while the campaign is a draft or review. Approval creates an immutable recipient snapshot; database triggers prevent later audience changes. No campaign CSV is added to a reusable list.
+The delivery address preserves local-part case and normalizes the domain. Deduplication and global suppression matching ignore address case conservatively, so case variants are treated as one recipient while the first uploaded spelling is retained for delivery. Invalid rows are counted and skipped. Suppressions remain enforced at claim time. Replace or delete a campaign upload while the campaign is a draft or review. Approval creates an immutable recipient snapshot; database triggers prevent later audience changes. No campaign CSV is added to a reusable list.
 
-Unsubscribe links create global suppression records. Failed and bounced recipients follow the existing delivery policy and ledger. Open and click tracking are configurable; open pixels can be blocked by mail clients and are not proof of a human read. See [privacy](docs/privacy.md).
+Unsubscribe links create global suppression records. SMTP failures enter the delivery ledger; Light does not ingest provider bounce or complaint feeds automatically. Open and click tracking are configurable; open pixels can be blocked by mail clients and are not proof of a human read. See [privacy](docs/privacy.md).
 
 ## Documentation
 

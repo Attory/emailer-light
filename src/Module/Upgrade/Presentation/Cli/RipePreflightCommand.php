@@ -71,7 +71,7 @@ final class RipePreflightCommand extends Command
             $findings[] = 'installation_incomplete';
         }
         $migration = $this->connection->fetchOne('SELECT version FROM doctrine_migration_versions ORDER BY version DESC LIMIT 1');
-        if ('DoctrineMigrations\\Version20261014000000' !== $migration) {
+        if ('DoctrineMigrations\\Version20261014000000' !== $migration || 1 !== $this->count('SELECT COUNT(*) FROM doctrine_migration_versions')) {
             $findings[] = 'schema_version_mismatch';
         }
         $this->checkSchema($findings);
@@ -83,8 +83,11 @@ final class RipePreflightCommand extends Command
         if (false === $runtime || !is_numeric($runtime['accepting_work']) || 0 !== (int) $runtime['accepting_work'] || !is_numeric($runtime['active_claims']) || 0 !== (int) $runtime['active_claims']) {
             $findings[] = 'delivery_not_quiesced';
         }
-        if ($this->count("SELECT COUNT(*) FROM campaign WHERE state IN ('sending','queueing')") > 0 || $this->count("SELECT COUNT(*) FROM campaign_recipient WHERE state = 'processing'") > 0 || $this->count('SELECT COUNT(*) FROM messenger_messages') > 0) {
+        if ($this->count("SELECT COUNT(*) FROM campaign WHERE state IN ('sending','queueing')") > 0 || $this->count("SELECT COUNT(*) FROM campaign_recipient WHERE state = 'processing'") > 0 || $this->count("SELECT COUNT(*) FROM delivery_attempt WHERE state = 'started'") > 0 || $this->count('SELECT COUNT(*) FROM messenger_messages') > 0) {
             $findings[] = 'active_or_queued_work';
+        }
+        if ($this->count("SELECT COUNT(*) FROM release_operation WHERE status = 'started'") > 0) {
+            $findings[] = 'maintenance_operation_in_progress';
         }
         if ($this->count('SELECT COUNT(*) FROM worker_heartbeat WHERE stopped_at IS NULL AND heartbeat_at > UTC_TIMESTAMP(6) - INTERVAL 5 MINUTE') > 0) {
             $findings[] = 'active_worker_or_scheduler';
@@ -108,9 +111,18 @@ final class RipePreflightCommand extends Command
                 $findings[] = 'audience_snapshot_corrupt';
             }
         }
-        if ($this->count("SELECT COUNT(*) FROM suppression WHERE email_canonical <> LOWER(TRIM(email_canonical)) OR email_canonical = ''") > 0
-            || $this->count("SELECT COUNT(*) FROM suppression WHERE reason = 'unsubscribe' AND source = ''") > 0) {
-            $findings[] = 'suppression_inconsistent';
+        foreach ($this->connection->iterateAssociative('SELECT email_canonical, reason, source FROM suppression') as $suppression) {
+            $email = $suppression['email_canonical'] ?? null;
+            $separator = \is_string($email) ? strrpos($email, '@') : false;
+            if (!\is_string($email) || false === filter_var($email, FILTER_VALIDATE_EMAIL) || false === $separator
+                || trim($email) !== $email || substr($email, $separator + 1) !== strtolower(substr($email, $separator + 1))) {
+                $findings[] = 'suppression_inconsistent';
+                break;
+            }
+            if ('unsubscribe' === ($suppression['reason'] ?? null) && '' === ($suppression['source'] ?? null)) {
+                $findings[] = 'suppression_inconsistent';
+                break;
+            }
         }
     }
 
@@ -157,10 +169,26 @@ final class RipePreflightCommand extends Command
     /** @param list<string> $findings */
     private function checkFilesystem(array &$findings): void
     {
+        $lockFile = $this->privateDirectory.'/install.lock';
         if (!is_dir($this->privateDirectory) || is_link($this->privateDirectory) || !is_readable($this->privateDirectory) || !is_writable($this->privateDirectory)
-            || !is_file($this->privateDirectory.'/install.lock') || is_link($this->privateDirectory.'/install.lock')
+            || !is_file($lockFile) || is_link($lockFile)
             || '' === $this->masterKeyFile || !is_file($this->masterKeyFile) || is_link($this->masterKeyFile) || (fileperms($this->masterKeyFile) & 0o077) !== 0) {
             $findings[] = 'filesystem_prerequisite_failed';
+
+            return;
+        }
+        $lockStat = lstat($lockFile);
+        if (false === $lockStat || 1 !== $lockStat['nlink'] || 0 !== ($lockStat['mode'] & 0o077) || $lockStat['size'] > 4096) {
+            $findings[] = 'installation_lock_invalid';
+
+            return;
+        }
+        $lock = json_decode((string) file_get_contents($lockFile), true);
+        $databaseId = $this->connection->fetchOne("SELECT installation_uuid FROM product_identity WHERE singleton_key = '1'");
+        if (!\is_array($lock) || 'emailer-light' !== ($lock['product_id'] ?? null) || '1.0.0' !== ($lock['product_version'] ?? null)
+            || '20261014000000' !== ($lock['schema_version'] ?? null) || '1.0' !== ($lock['upgrade_contract_version'] ?? null)
+            || !\is_string($databaseId) || $databaseId !== ($lock['installation_uuid'] ?? null)) {
+            $findings[] = 'installation_lock_identity_mismatch';
         }
     }
 

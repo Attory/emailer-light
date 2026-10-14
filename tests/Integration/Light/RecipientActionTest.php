@@ -41,7 +41,7 @@ final class RecipientActionTest extends KernelTestCase
         $database->insert('campaign_recipient', ['id' => self::id(5), 'campaign_id' => self::id(3), 'recipient_id' => self::id(4), 'state' => 'accepted', 'attempt_count' => 1, 'message_id' => 'synthetic@example.invalid', 'operation_version' => 2, 'updated_at' => $now]);
         $database->insert('encrypted_secret', ['id' => self::id(6), 'record_type' => 'recipient.token.key', 'envelope' => 'synthetic', 'key_version' => 1, 'schema_version' => 1, 'created_at' => $now]);
         $database->insert('recipient_token_key', ['key_version' => 1, 'secret_id' => self::id(6), 'active' => 1, 'created_at' => $now]);
-        $database->insert('recipient_token_key_state', ['singleton_key' => '1', 'current_version' => 1, 'updated_at' => $now]);
+        $database->update('recipient_token_key_state', ['current_version' => 1, 'updated_at' => $now], ['singleton_key' => '1']);
     }
 
     protected function tearDown(): void
@@ -70,6 +70,7 @@ final class RecipientActionTest extends KernelTestCase
         $unsubscribe->inspect($token);
         $unsubscribe->unsubscribe($token);
         self::assertTrue($suppressions->isSuppressed('recipient@example.test'));
+        self::assertTrue($suppressions->isSuppressed('Recipient@example.test'));
         self::assertSame('unsubscribe', $this->database->fetchOne("SELECT reason FROM suppression WHERE email_canonical = 'recipient@example.test'"));
 
         $links = $analytics->issue(self::id(3), self::id(5), self::id(4), 'recipient@example.test', true, true);
@@ -78,6 +79,33 @@ final class RecipientActionTest extends KernelTestCase
         self::assertSame(self::id(4), $analytics->verify($openToken, 'open')['recipient_id']);
         $analytics->record(self::id(5), 'open');
         self::assertSame(1, self::numeric($this->database->fetchOne("SELECT event_count FROM analytics_aggregate WHERE campaign_recipient_id = ? AND event_type = 'open'", [self::id(5)])));
+    }
+
+    public function testFirstRecipientLinkInitializesSeededTokenKeyState(): void
+    {
+        $this->database->delete('recipient_token_key', ['key_version' => 1]);
+        $this->database->update('recipient_token_key_state', ['current_version' => 0], ['singleton_key' => '1']);
+        $runtime = self::createStub(RecipientRuntimeConfiguration::class);
+        $runtime->method('current')->willReturn(['installation_id' => self::id(9), 'canonical_origin' => 'https://light.example.test']);
+        $vault = self::createStub(SecretVault::class);
+        $storedSecret = '';
+        $vault->method('store')->willReturnCallback(function (string $recordType, string $plaintext, string $installationId) use (&$storedSecret): string {
+            $storedSecret = $plaintext;
+
+            return self::id(6);
+        });
+        $vault->method('reveal')->willReturnCallback(function () use (&$storedSecret): string {
+            return $storedSecret;
+        });
+        $audit = self::createStub(AuditSink::class);
+        $audit->method('append')->willReturn(self::id(10));
+        $suppressions = new SuppressionManager($this->database, self::createStub(AdministrativeAuthorization::class), $audit);
+        $service = new RecipientTokenService($this->database, $runtime, $vault, $suppressions, new RecipientTokenCodec(), self::createStub(AdministrativeAuthorization::class), $audit);
+
+        $link = $service->issue(self::id(3), self::id(5), self::id(4), 'recipient@example.test');
+        self::assertStringContainsString('/unsubscribe', $link);
+        self::assertSame(1, self::numeric($this->database->fetchOne("SELECT current_version FROM recipient_token_key_state WHERE singleton_key = '1'")));
+        self::assertSame(1, self::numeric($this->database->fetchOne('SELECT COUNT(*) FROM recipient_token_key WHERE key_version = 1')));
     }
 
     private static function id(int $suffix): string

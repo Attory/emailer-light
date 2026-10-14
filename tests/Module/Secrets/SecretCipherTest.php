@@ -64,7 +64,7 @@ final class SecretCipherTest extends TestCase
         $envelope = $this->cipher->encrypt('synthetic-secret', $this->key, $this->context);
         $wrongContexts = [
             new SecretContext('018f6f4b-03d2-7aaa-8aaa-000000000099', $this->context->recordType, $this->context->recordId),
-            new SecretContext($this->context->installationId, 'identity.totp-seed', $this->context->recordId),
+            new SecretContext($this->context->installationId, 'recipient.token.key', $this->context->recordId),
             new SecretContext($this->context->installationId, $this->context->recordType, '018f6f4b-03d2-7bbb-8bbb-000000000099'),
             new SecretContext($this->context->installationId, $this->context->recordType, $this->context->recordId, 2),
         ];

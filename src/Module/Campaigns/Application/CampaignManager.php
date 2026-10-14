@@ -63,7 +63,7 @@ final readonly class CampaignManager
         if (\is_array($row['latest_test'])) {
             $row['latest_test']['current_revision'] = !\in_array($row['state'], ['draft', 'review'], true) || $this->intValue($row['latest_test']['draft_version']) === $this->intValue($row['operation_version']);
         }
-        $audience = $this->connection->fetchAssociative('SELECT COUNT(*) selected_count, COALESCE(SUM(s.id IS NOT NULL), 0) suppressed_count FROM campaign_audience_recipient a LEFT JOIN suppression s ON s.email_canonical = a.email_canonical WHERE a.campaign_id = ?', [$id]);
+        $audience = $this->connection->fetchAssociative('SELECT COUNT(*) selected_count, COALESCE(SUM(s.id IS NOT NULL), 0) suppressed_count FROM campaign_audience_recipient a LEFT JOIN suppression s ON s.email_match_key = LOWER(a.email_canonical) WHERE a.campaign_id = ?', [$id]);
         $selected = false === $audience ? 0 : $this->intValue($audience['selected_count']);
         $suppressed = false === $audience ? 0 : $this->intValue($audience['suppressed_count']);
         $configuration = $this->configuration->current();

@@ -645,11 +645,13 @@ SQL);
 CREATE TABLE `suppression` (
   `id` char(36) NOT NULL,
   `email_canonical` varchar(254) NOT NULL,
+  `email_match_key` varchar(254) GENERATED ALWAYS AS (lower(`email_canonical`)) STORED,
   `reason` varchar(32) NOT NULL,
   `source` varchar(64) NOT NULL,
   `created_at` datetime(6) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_suppression_email` (`email_canonical`),
+  UNIQUE KEY `uniq_suppression_match_key` (`email_match_key`),
   CONSTRAINT `chk_suppression_reason` CHECK (`reason` in ('manual','unsubscribe','complaint','hard_bounce','imported'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 SQL);
@@ -727,6 +729,9 @@ CREATE TABLE `worker_heartbeat` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 SQL);
         $this->addSql('SET FOREIGN_KEY_CHECKS = 1');
+        $this->addSql("INSERT INTO installation_state (singleton_key, database_ready_at) VALUES ('1', UTC_TIMESTAMP(6))");
+        $this->addSql("INSERT INTO operations_policy VALUES ('1', 24, 0, 24, 30, 7, 90, 90, 90, 30, 0, 24, 30, 90, 'none', UTC_TIMESTAMP(6))");
+        $this->addSql("INSERT INTO recipient_token_key_state (singleton_key, current_version, updated_at) VALUES ('1', 0, UTC_TIMESTAMP(6))");
         $this->addSql("INSERT INTO delivery_runtime (singleton_key, schema_version, accepting_work, active_claims, rate_window_started_at, rate_window_count, circuit_state, circuit_failures, updated_at) VALUES ('1', 1, 1, 0, UTC_TIMESTAMP(6), 0, 'closed', 0, UTC_TIMESTAMP(6))");
         $this->addSql(<<<'SQL'
 CREATE TABLE product_identity (

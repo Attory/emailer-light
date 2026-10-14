@@ -719,6 +719,12 @@ final readonly class BackupEngine implements BackupOperations
                 throw new \RuntimeException('Restore archive is invalid.');
             }
             $tables = $this->tables();
+            $generatedColumns = [];
+            foreach ($this->connection->fetchAllAssociative("SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND EXTRA LIKE '%GENERATED%'") as $column) {
+                if (\is_string($column['TABLE_NAME'] ?? null) && \is_string($column['COLUMN_NAME'] ?? null)) {
+                    $generatedColumns[$column['TABLE_NAME']][] = $column['COLUMN_NAME'];
+                }
+            }
             foreach ($tables as $table) {
                 foreach ($this->rows($zip, $table) as $row) {
                     unset($row);
@@ -731,6 +737,9 @@ final readonly class BackupEngine implements BackupOperations
                 }
                 foreach ($tables as $table) {
                     foreach ($this->rows($zip, $table) as $row) {
+                        foreach ($generatedColumns[$table] ?? [] as $column) {
+                            unset($row[$column]);
+                        }
                         $this->connection->insert($table, $row);
                     }
                 }
