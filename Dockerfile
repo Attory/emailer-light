@@ -37,8 +37,8 @@ COPY --from=composer_binary /usr/bin/composer /usr/local/bin/composer
 RUN git config --system safe.directory /app \
     && groupadd --gid 1000 emailer \
     && useradd --create-home --uid 1000 --gid emailer emailer \
-    && mkdir -p /app /emailer-secrets /opt/emailer-assets-vendor /opt/emailer-vendor \
-    && chown -R emailer:emailer /app /emailer-secrets /opt/emailer-assets-vendor /opt/emailer-vendor
+    && mkdir -p /app /emailer-secrets /opt/emailer-vendor \
+    && chown -R emailer:emailer /app /emailer-secrets /opt/emailer-vendor
 
 WORKDIR /app
 
@@ -68,8 +68,7 @@ COPY --chown=emailer:emailer . .
 RUN composer dump-autoload --classmap-authoritative --no-interaction \
     && composer run auto-scripts \
     && mkdir -p var \
-    && cp -a vendor/. /opt/emailer-vendor/ \
-    && cp -a assets/vendor/. /opt/emailer-assets-vendor/
+    && cp -a vendor/. /opt/emailer-vendor/
 
 EXPOSE 8080
 
