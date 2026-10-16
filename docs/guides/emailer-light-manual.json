@@ -48,7 +48,7 @@
     {
       "type": "ol",
       "items": [
-        "Open Templates and create a template with a recognizable name, email subject, HTML and plain text. Preview and save/publish the version you intend to use.",
+        "Open Templates and create a template with a recognizable name, email subject and HTML. Plain text is optional; leave it blank to generate it automatically. Preview and save/publish the version you intend to use.",
         "Upload images through the template asset controls and use the returned asset address. Unsafe HTML and remote image sources are removed.",
         "Use the supported fields shown by the editor, such as <code>{{ contact.first_name }}</code> and <code>{{ unsubscribe_url }}</code>. Older <code>{{name}}</code> and <code>{{email}}</code> forms are unsupported."
       ]

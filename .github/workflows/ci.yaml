@@ -47,8 +47,8 @@ jobs:
 
       - name: Verify installer configuration and hosting isolation contracts
         run: |
-          python3 -m unittest discover -s tests/Installer
-          sudo python3 -m unittest discover -s tests/Installer
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/Installer
+          sudo env PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/Installer
           python3 tools/docs/check-guides.py
 
       - name: Prepare writable generated-output directories
