@@ -228,7 +228,7 @@ class Manager:
             dsn = protected(self.directory / 'maintenance-url').read_text().strip()
         def environment(url):
             return {'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8', **values, 'DATABASE_URL': url}
-        check = ['/usr/bin/php8.4', str(self.bootstrap / 'bin/console'), 'doctrine:query:sql', 'SELECT 1', '--no-interaction']
+        check = ['/usr/bin/php8.4', str(self.bootstrap / 'bin/console'), 'dbal:run-sql', 'SELECT 1', '--no-interaction']
         if not dsn or subprocess.run(check, env=environment(dsn), capture_output=True).returncode:
             print('The database needs separate permission for a safe backup and update. Your application password is kept unchanged.')
             username = input('Database administrator name: ').strip()
@@ -241,7 +241,7 @@ class Manager:
             self.record['maintenance_credentials'] = True
             self.save()
         self.environment = environment(dsn)
-        server = self.console(['doctrine:query:sql', 'SELECT VERSION()', '--no-interaction'])
+        server = self.console(['dbal:run-sql', 'SELECT VERSION()', '--no-interaction'])
         if not re.search(r'\b(?:10\.11|11\.8)\.\d+[-\w ]*MariaDB', server):
             raise ManagementError('This database server is outside the tested MariaDB 10.11 and 11.8 versions. It was not upgraded or replaced.')
         return database
