@@ -300,10 +300,10 @@ class Installer:
             evidence = catalogue.stdout + catalogue.stderr
             if re.search(r'Could not get lock|Unable to acquire.*lock', evidence, re.I):
                 reason = 'Another operating-system package task is running. Let it finish before starting setup again.'
+            elif re.search(r'expired|not valid yet|created after.*not-after|not live until', evidence, re.I):
+                reason = 'The signed operating-system package catalogue is expired or not yet valid. Check the server clock and Debian mirror freshness.'
             elif re.search(r'NO_PUBKEY|EXPKEYSIG|not signed|signatures.*verified', evidence, re.I):
                 reason = 'The operating system could not authenticate its package catalogue. Restore the Debian repository signing configuration; setup will not bypass signature checks.'
-            elif re.search(r'expired|not valid yet', evidence, re.I):
-                reason = 'The signed operating-system package catalogue is expired or not yet valid. Check the server clock and Debian mirror freshness.'
             elif re.search(r'Could not resolve|Temporary failure resolving', evidence, re.I):
                 reason = 'The server could not resolve its Debian package server. Restore working DNS for the configured Debian repositories.'
             else:

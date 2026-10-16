@@ -140,6 +140,13 @@ class PackageFailureGuidance(unittest.TestCase):
                 instance.preserve_php_selection('/run/php/php-fpm.sock', ['php8.4-fpm'], name='php-fpm.sock', package='php8.4-fpm')
             commands.assert_not_called()
 
+    def test_future_catalogue_signature_reports_clock_before_generic_signing_error(self):
+        instance = object.__new__(Installer)
+        evidence = 'OpenPGP signature verification failed: Signature was created after the --not-after date.'
+        with patch('provision.subprocess.run', return_value=types.SimpleNamespace(returncode=100, stdout='', stderr=evidence)) as calls, self.assertRaisesRegex(SetupError, 'server clock'):
+            instance.install_missing_packages(['php8.4-cli'])
+        self.assertEqual(1, calls.call_count)
+
     def test_missing_matching_php_patch_is_actionable_without_relaxing_pin(self):
         instance = object.__new__(Installer)
         calls = []
