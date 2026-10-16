@@ -311,7 +311,8 @@ server {{
                     identity = ('device', 'inode', 'directory', 'sha256')
                     original_mode = (original['uid'], original['gid'], original['mode'])
                     repaired_mode = (m.account.pw_uid, m.account.pw_gid, 0o700 if original['directory'] else 0o600)
-                    if any(current[key] != original[key] for key in identity) or (current['uid'], current['gid'], current['mode']) not in (original_mode, repaired_mode):
+                    intermediate_mode = (m.account.pw_uid, m.account.pw_gid, original['mode'])
+                    if any(current[key] != original[key] for key in identity) or (current['uid'], current['gid'], current['mode']) not in (original_mode, intermediate_mode, repaired_mode):
                         self.fail('A saved runtime file drifted after interrupted permission preparation. Choose Recover; the old receipt was retained unchanged.')
             else:
                 self.state['runtime_metadata_before'] = entries
@@ -332,7 +333,7 @@ server {{
                 descriptor = open_relative(private, Path(name).parts)
                 try:
                     current = inspect(descriptor)
-                    if any(current[key] != recorded[key] for key in ('device', 'inode', 'directory', 'sha256')):
+                    if any(current[key] != recorded[key] for key in ('device', 'inode', 'directory', 'sha256')) or (current['uid'], current['gid'], current['mode']) != (m.account.pw_uid, m.account.pw_gid, 0o700 if current['directory'] else 0o600):
                         self.fail('The generated runtime inventory moved or changed during preparation.')
                     if current['directory']:
                         expected_children = {Path(other).name for other in entries if Path(other).parent == Path(name)}
