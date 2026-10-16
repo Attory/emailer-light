@@ -51,14 +51,25 @@ final class ProxyEnvironmentTest extends TestCase
         $container->setParameter('env(TRUSTED_PROXIES)', $parameters['env(TRUSTED_PROXIES)']);
         $processor = new EnvVarProcessor($container);
         $previous = getenv('TRUSTED_PROXIES');
+        $previousEnv = $_ENV['TRUSTED_PROXIES'] ?? null;
+        $previousServer = $_SERVER['TRUSTED_PROXIES'] ?? null;
         try {
             putenv('TRUSTED_PROXIES=');
+            $_ENV['TRUSTED_PROXIES'] = $_SERVER['TRUSTED_PROXIES'] = '';
             self::assertSame('%env(TRUSTED_PROXIES)%', $parameters['emailer.trusted_proxies']);
             self::assertSame('', $processor->getEnv('string', 'TRUSTED_PROXIES', static fn () => null));
             putenv('TRUSTED_PROXIES');
+            unset($_ENV['TRUSTED_PROXIES'], $_SERVER['TRUSTED_PROXIES']);
             self::assertSame('127.0.0.1,::1', $processor->getEnv('string', 'TRUSTED_PROXIES', static fn () => null));
         } finally {
             putenv(false === $previous ? 'TRUSTED_PROXIES' : 'TRUSTED_PROXIES='.$previous);
+            unset($_ENV['TRUSTED_PROXIES'], $_SERVER['TRUSTED_PROXIES']);
+            if (null !== $previousEnv) {
+                $_ENV['TRUSTED_PROXIES'] = $previousEnv;
+            }
+            if (null !== $previousServer) {
+                $_SERVER['TRUSTED_PROXIES'] = $previousServer;
+            }
         }
     }
 }
