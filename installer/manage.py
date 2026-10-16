@@ -12,6 +12,7 @@ import stat
 import subprocess
 import urllib.parse
 import zipfile
+from runtime_env import parse_environment_text, RuntimeEnvironmentError
 
 
 class ManagementError(Exception):
@@ -24,42 +25,36 @@ def protected(path, public=False):
     if path.is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != 0 or info.st_mode & (0o022 if public else 0o027):
         raise ManagementError('The installation configuration is not a protected, root-owned regular file. It was not used.')
     for parent in path.parents:
-        if parent.is_symlink():
+        metadata = parent.lstat()
+        if parent.is_symlink() or metadata.st_uid != 0 or metadata.st_mode & 0o022:
             raise ManagementError('The selected installation has a linked configuration parent. It was not used.')
     return path
 
 
 def read_environment(path):
-    result = {}
-    for line in protected(path).read_text().splitlines():
-        if not line.strip() or line.lstrip().startswith('#'):
-            continue
-        if '=' not in line:
-            raise ManagementError('The saved hosting settings have an unsupported line. No settings were changed.')
-        key, value = line.split('=', 1)
-        if not re.fullmatch(r'[A-Z][A-Z0-9_]*', key) or key in result:
-            raise ManagementError('The saved hosting settings contain duplicate or invalid names.')
-        if value.startswith("'") and value.endswith("'"):
-            value = value[1:-1]
-            if "'" in value:
-                raise ManagementError('The saved hosting settings use an unsupported quoted value.')
-        elif value.startswith('"'):
-            try:
-                value = json.loads(value)
-            except ValueError:
-                raise ManagementError('The saved hosting settings use an unsupported quoted value.') from None
-        elif any(character.isspace() for character in value):
-            raise ManagementError('The saved hosting settings contain an ambiguous unquoted value.')
-        if not isinstance(value, str) or '\x00' in value:
-            raise ManagementError('The saved hosting settings contain an invalid value.')
-        result[key] = value
-    return result
+    try:
+        return parse_environment_text(protected(path).read_text())
+    except RuntimeEnvironmentError as error:
+        raise ManagementError(str(error)) from None
 
 
 class Manager:
     def __init__(self, installer, configuration):
         self.installer = installer
-        self.configuration = Path(configuration)
+        self.error = ManagementError
+        self.root = Path(configuration).parent
+        self.original_configuration = Path(configuration)
+        self.configuration = self.original_configuration
+        pointer = self.root / 'active-installation.json'
+        if pointer.exists():
+            selected = json.loads(protected(pointer).read_text())
+            product = selected.get('product', '')
+            if not re.fullmatch(r'emailer-[a-z]+', product):
+                raise ManagementError('The active installation edition is invalid.')
+            expected = Path('/etc') / (self.root.name + '-' + product.removeprefix('emailer-') + '-110') / 'runtime.env'
+            if selected.get('format') != 'emailer-active-installation-v1' or selected.get('runtime') != str(expected):
+                raise ManagementError('The active installation pointer is invalid. It was preserved.')
+            self.configuration = expected
         self.values = read_environment(self.configuration)
         self.releases = Path(self.values['EMAILER_RELEASES_DIR'])
         self.private = Path(self.values['EMAILER_PRIVATE_DIR'])
@@ -73,19 +68,26 @@ class Manager:
         identity = json.loads(lock_path.read_text())
         self.product = identity.get('product_id')
         if self.product is None:
-            self.product = 'emailer-light' if (self.current / 'release/emailer-light-release.pub').is_file() else 'emailer-ripe'
+            self.product = 'emailer-light'
+        if self.product != 'emailer-light':
+            raise ManagementError('Use the official installation package for the installed edition.')
         self.source_version = self.current.name.removeprefix('ripe-')
-        self.prefix = self.configuration.parent.name
+        self.prefix = self.root.name
         if not re.fullmatch(r'emailer(?:-light)?', self.prefix):
             raise ManagementError('This hosting profile requires the standard protected Emailer settings folder.')
-        self.directory = self.configuration.parent / 'installer'
-        self.directory.mkdir(mode=0o700, exist_ok=True)
+        self.directory = self.root / 'installer' / installer.product / installer.version
+        self.directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         info = self.directory.lstat()
         if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o077 or self.directory.is_symlink():
             raise ManagementError('The installer recovery folder is unsafe.')
         self.record_file = self.directory / 'management.json'
         self.record = json.loads(protected(self.record_file).read_text()) if self.record_file.exists() else {}
-        self.account = pwd.getpwuid(Path(self.values['EMAILER_SECRET_KEY_FILE']).stat().st_uid)
+        self.record.setdefault('source_configuration', str(self.configuration))
+        self.original_configuration = protected(self.record['source_configuration'])
+        self.source_values = read_environment(self.original_configuration)
+        self.source_service_prefix = self.original_configuration.parent.name
+        self.save()
+        self.account = pwd.getpwuid(Path(self.source_values['EMAILER_SECRET_KEY_FILE']).stat().st_uid)
         if self.account.pw_uid == 0:
             raise ManagementError('The application key belongs to root. A non-root application service identity is required.')
         self.active_units = []
@@ -115,7 +117,7 @@ class Manager:
     def stage(self):
         host = self.installer
         version = host.version
-        package_dir = self.directory / 'packages' / version
+        package_dir = self.directory / 'packages' / host.product / version
         package_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         for name, digest in host.meta['files'].items():
             destination = package_dir / name
@@ -130,13 +132,38 @@ class Manager:
         self.bootstrap = package_dir / 'runtime'
         manifest = json.loads((package_dir / (host.meta['archive'] + '.manifest.json')).read_text())
         if not self.bootstrap.exists():
-            self.bootstrap.mkdir(mode=0o700)
+            staging = package_dir / '.runtime-staging'
+            if staging.exists():
+                if self.record.get('staging_runtime') != str(staging) or self.record.get('staging_package') != host.meta['files'][host.meta['archive']]:
+                    raise ManagementError('An unrecorded staging folder was preserved. Use the troubleshooting reference for retained package evidence.')
+                metadata = staging.lstat()
+                if staging.is_symlink() or not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != 0:
+                    raise ManagementError('The interrupted staging root is unsafe. It was preserved.')
+                for directory, directories, files in os.walk(staging):
+                    for path in [Path(directory), *(Path(directory) / name for name in directories + files)]:
+                        info = path.lstat()
+                        if path.is_symlink() or info.st_uid != 0 or not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)):
+                            raise ManagementError('The interrupted staging folder has unsafe ownership or entries. It was preserved.')
+                shutil.rmtree(staging)
+            self.record['staging_runtime'] = str(staging)
+            self.record['staging_package'] = host.meta['files'][host.meta['archive']]
+            self.save()
+            staging.mkdir(mode=0o700)
             with zipfile.ZipFile(self.package) as archive:
-                archive.extractall(self.bootstrap)
-            for directory, _, files in os.walk(self.bootstrap):
+                archive.extractall(staging)
+            for directory, _, files in os.walk(staging):
                 for name in files:
                     os.chmod(Path(directory) / name, 0o444)
                 os.chmod(directory, 0o555)
+            os.rename(staging, self.bootstrap)
+            descriptor = os.open(package_dir, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            self.record.pop('staging_runtime', None)
+            self.record.pop('staging_package', None)
+            self.save()
         observed = []
         for directory, directories, files in os.walk(self.bootstrap):
             for name in directories + files:
@@ -162,12 +189,12 @@ class Manager:
             dsn = 'mysql://root@localhost/' + database + '?' + urllib.parse.urlencode({'unix_socket': str(socket_path), 'charset': 'utf8mb4'})
         else:
             dsn = ''
-        runtime_dir = self.directory / 'console'
-        runtime_dir.mkdir(mode=0o700, exist_ok=True)
-        pin = Path(self.values['EMAILER_RELEASE_PUBLIC_KEY_FILE'])
+        runtime_dir = self.directory / 'console' / self.installer.product / self.installer.version / self.source_version
+        runtime_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        pin = Path(self.source_values['EMAILER_RELEASE_PUBLIC_KEY_FILE'])
         if self.product == self.installer.product and protected(pin, public=True).read_text().strip() != (self.package.parent / 'release.pub').read_text().strip():
             raise ManagementError('The installed signing identity differs from the official setup package. It was not replaced.')
-        values = {**self.values, 'EMAILER_RUNTIME_CONFIGURATION_FILE': str(self.configuration), 'EMAILER_RUNTIME_DIR': str(runtime_dir),
+        values = {**self.source_values, 'EMAILER_INSTALLER_SOURCE_SERVICE_PREFIX': self.source_service_prefix, 'EMAILER_RUNTIME_CONFIGURATION_FILE': str(self.original_configuration), 'EMAILER_RUNTIME_DIR': str(runtime_dir),
                   'EMAILER_RELEASE_PUBLIC_KEY_FILE': str(pin), 'EMAILER_UPDATE_SOURCE_VERSION': self.source_version}
         if self.record.get('maintenance_credentials'):
             dsn = protected(self.directory / 'maintenance-url').read_text().strip()
@@ -186,6 +213,9 @@ class Manager:
             self.record['maintenance_credentials'] = True
             self.save()
         self.environment = environment(dsn)
+        server = self.console(['doctrine:query:sql', 'SELECT VERSION()', '--no-interaction'])
+        if not re.search(r'\b(?:10\.11|11\.8)\.\d+[-\w ]*MariaDB', server):
+            raise ManagementError('This database server is outside the tested MariaDB 10.11 and 11.8 versions. It was not upgraded or replaced.')
         return database
 
     def console(self, arguments, *, data=None):
@@ -194,22 +224,23 @@ class Manager:
     def stop_services(self):
         units = []
         for suffix in ('scheduler.timer', 'operations.timer', 'scheduler.service', 'operations.service', 'worker.service', 'fpm.service'):
-            unit = self.prefix + '-' + suffix
+            unit = self.source_service_prefix + '-' + suffix
             text = subprocess.run(['systemctl', 'show', unit, '--property=LoadState', '--property=ExecStart', '--property=EnvironmentFiles', '--property=WorkingDirectory'], capture_output=True, text=True).stdout
             if 'LoadState=not-found' in text:
                 continue
             if suffix.endswith('.timer'):
                 service = unit.removesuffix('.timer') + '.service'
                 service_text = subprocess.run(['systemctl', 'show', service, '--property=EnvironmentFiles', '--property=WorkingDirectory'], capture_output=True, text=True).stdout
-                if str(self.configuration) not in service_text or str(self.releases / 'current') not in service_text:
+                if str(self.original_configuration) not in service_text or str(self.releases / 'current') not in service_text:
                     raise ManagementError('A scheduled service belongs to another website. It was not stopped.')
-            elif str(self.configuration) not in text or (str(self.releases / 'current') not in text and '--fpm-config ' + str(self.configuration.parent / 'fpm.conf') not in text):
+            elif str(self.original_configuration) not in text or (str(self.releases / 'current') not in text and '--fpm-config ' + str(self.original_configuration.parent / 'fpm.conf') not in text):
                 raise ManagementError('An Emailer service name is used by another installation. It was not stopped.')
             units.append(unit)
         for unit in units:
             if subprocess.run(['systemctl', 'is-active', '--quiet', unit]).returncode == 0:
                 self.active_units.append(unit)
         self.record.setdefault('active_units', self.active_units)
+        self.record.setdefault('source_units', units)
         self.save()
         for unit in units:
             self.call(['systemctl', 'stop', unit])
@@ -228,20 +259,21 @@ class Manager:
         self.stage()
         self.maintenance_environment()
         if choice == '4':
-            report = json.loads(self.console(['emailer:health:verify-runtime']))
+            report = json.loads(self.call(['/usr/local/sbin/' + self.prefix, 'emailer:health:verify-runtime', '--allow-operational-hold']))
             print('Application runtime verified. Delivery ' + ('is ready.' if report['delivery_ready'] else 'is held or needs configuration; open Doctor in the application.'))
             return
         if choice == '5':
             print('This removes the operational delivery hold only if the normal sending checks pass. It does not approve a campaign.')
             if input('Resume delivery now? [y/N]: ').strip().lower() != 'y':
                 return
-            self.console(['emailer:delivery:resume', '--no-interaction'])
+            self.call(['/usr/local/sbin/' + self.prefix, 'emailer:delivery:resume', '--no-interaction'])
             print('Delivery readiness passed and the operational hold was lifted.')
             return
         if choice not in ('1', '2', '3'):
             raise ManagementError('Choose one of the displayed actions.')
         result = self.native_action(choice)
-        self.restore_services()
+        if choice == '2':
+            self.restore_services()
         self.record.pop('active_units', None)
         self.save()
         print('Operation verified. Sign in: ' + self.values['DEFAULT_URI'] + '/login')
@@ -250,17 +282,33 @@ class Manager:
     def native_action(self, choice):
         source = self.package.parent / ('emailer-light-' + self.source_version + '.zip')
         if self.product != 'emailer-light' or self.installer.product != 'emailer-light':
-            raise ManagementError('This edition action requires the private edition management extension.')
-        operation = self.configuration.parent / 'native-updates/light-1.0.0-to-1.1.0.json'
+            raise ManagementError('Use the installation package for the installed edition.')
+        operation = self.root / 'native-updates/light-1.0.0-to-1.1.0.json'
         if self.source_version == '1.1.0' and choice == '1' and not operation.exists():
             raise ManagementError('This release is already installed. Choose Check the installation.')
         if self.source_version == '1.1.0' and operation.exists():
             source = self.package.parent / 'emailer-light-1.0.0.zip'
             self.environment['EMAILER_UPDATE_SOURCE_VERSION'] = '1.0.0'
+        if choice == '2' and operation.exists() and json.loads(protected(operation).read_text()).get('phase') == 'completed':
+            raise ManagementError('This update already succeeded. Choose Check; recovery cannot downgrade it.')
         if choice == '3' and not operation.exists():
             raise ManagementError('There is no retained native operation to finish.')
-        self.stop_services()
-        result = json.loads(self.console(['emailer:release:update-native', str(self.package), str(source), *(['--recover'] if choice == '2' else []), '--no-interaction']))
+        from host import HostHandoff
+        handoff = HostHandoff(self)
+        handoff.prepare()
+        arguments = ['emailer:release:update-native', str(self.package), str(source), '--no-interaction']
+        if choice == '2':
+            handoff.stop_target()
+            self.stop_services()
+            result = json.loads(self.console([*arguments, '--recover']))
+            handoff.recover_host()
+            return result
+        if choice == '1':
+            handoff.drain()
+            self.console(arguments)
+        handoff.adopt()
+        result = json.loads(self.console(arguments))
+        handoff.complete()
         return result
 
 
@@ -284,6 +332,7 @@ def dispatch(installer, error_type, manager_type=Manager, paths=None):
             raise ManagementError('Several installations were found. Select a separate supported hosting profile.')
         # The same OS, architecture, web-server and storage checks apply to management.
         installer.preflight(managing=True)
+        installer.dependencies(runtime_only=True)
         manager = manager_type(installer, candidates[0])
         descriptor = os.open(manager.directory / 'operation.lock', os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         with os.fdopen(descriptor, 'a') as lock:

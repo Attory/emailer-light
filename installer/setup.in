@@ -76,7 +76,7 @@ try:
         raise ValueError()
     if contract.get('test_only') is True:
         print('TEST ONLY: this is an unofficial acceptance package. Do not use it for a customer installation.', flush=True)
-    required = {'provision.py', 'command.py', 'manage.py', 'verify-package.php', 'PackageInspector.php', 'release.pub', contract['archive']}
+    required = {'provision.py', 'command.py', 'manage.py', 'runtime_env.py', 'verify-package.php', 'PackageInspector.php', 'release.pub', contract['archive']}
     if not required.issubset(contract['files']):
         raise ValueError()
     for relative, digest in contract['files'].items():

@@ -134,7 +134,7 @@ final readonly class Doctor implements ScheduledHealthOperations, Contract\Runti
     }
 
     /** @return array<string, mixed> */
-    public function verifyRuntime(bool $offlineMaintenance = false): array
+    public function verifyRuntime(bool $offlineMaintenance = false, bool $allowOperationalHold = false): array
     {
         // Preserve every original severity and sending gate in the report.
         $result = $this->run(false);
@@ -147,14 +147,14 @@ final readonly class Doctor implements ScheduledHealthOperations, Contract\Runti
                 }
                 $codes = $probe->maintenanceFindings();
                 foreach ($codes as $code) {
-                    if ($offlineMaintenance || \in_array($code, ['sender_identity', 'smtp_transport_security'], true)) {
+                    if ($offlineMaintenance || \in_array($code, ['sender_identity', 'smtp_transport_security'], true) || ($allowOperationalHold && $probe->offlineVerificationReady() && 'delivery_quiesced' === $code)) {
                         $expected[] = $code;
                     }
                 }
             }
         }
         foreach ($result['findings'] as $finding) {
-            if ('critical' === $finding['severity'] && !\in_array($finding['code'], $expected, true) && !('owner_mfa' === $finding['code'] && false === $finding['sending_blocked'])) {
+            if ('critical' === $finding['severity'] && !\in_array($finding['code'], $expected, true)) {
                 $blocking[] = $finding['code'];
             }
         }

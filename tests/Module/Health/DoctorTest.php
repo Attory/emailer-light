@@ -44,6 +44,10 @@ final class DoctorTest extends TestCase
         };
         $doctor = new Doctor([$probe], self::createStub(Connection::class));
         self::assertFalse($doctor->verifyRuntime()['runtime_verified']);
+        self::assertTrue($doctor->verifyRuntime(false, true)['runtime_verified']);
+        $probe->idle = false;
+        self::assertFalse($doctor->verifyRuntime(false, true)['runtime_verified']);
+        $probe->idle = true;
         $report = $doctor->verifyRuntime(true);
         self::assertTrue($report['runtime_verified']);
         self::assertFalse($report['delivery_ready']);

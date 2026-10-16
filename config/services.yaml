@@ -25,6 +25,12 @@ parameters:
     emailer.default_uri: '%env(DEFAULT_URI)%'
     emailer.default_master_key_file: ''
     emailer.master_key_file: '%env(default:emailer.default_master_key_file:EMAILER_SECRET_KEY_FILE)%'
+    emailer.default_installer_hold: ''
+    emailer.installer_hold: '%env(default:emailer.default_installer_hold:EMAILER_INSTALLER_HOLD_FILE)%'
+    emailer.default_replacement_runtime: ''
+    emailer.replacement_runtime: '%env(default:emailer.default_replacement_runtime:EMAILER_INSTALLER_REPLACEMENT_RUNTIME)%'
+    emailer.default_installer_fence: '0'
+    emailer.installer_fence: '%env(bool:default:emailer.default_installer_fence:EMAILER_INSTALLER_RETAIN_SOURCE_FENCE)%'
     emailer.default_http_mode: 'proxy'
     emailer.http_mode: '%env(default:emailer.default_http_mode:EMAILER_HTTP_MODE)%'
     emailer.default_trusted_proxies: '127.0.0.1,::1'
@@ -233,10 +239,12 @@ services:
 
     App\Module\Release\Application\NativeWriterFence:
         arguments:
+            $replacementRuntimeFile: '%emailer.replacement_runtime%'
             $runtimeConfigurationFile: '%emailer.runtime_configuration_file%'
 
     App\Module\Release\Application\NativeSchemaUpdate:
         arguments:
+            $retainSourceFence: '%emailer.installer_fence%'
             $projectDirectory: '%kernel.project_dir%'
             $contributors: !tagged_iterator emailer.backup_contributor
             $runtimeConfigurationFile: '%emailer.runtime_configuration_file%'
@@ -311,3 +319,7 @@ services:
     App\Module\Setup\Infrastructure\DoctrineInstallationFinalizer:
         arguments:
             $productVersion: '%emailer.app_version%'
+
+    App\Shared\InstallerDeliveryHold:
+        arguments:
+            $holdFile: '%emailer.installer_hold%'

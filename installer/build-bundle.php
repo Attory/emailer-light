@@ -55,7 +55,7 @@ try {
             $contents[$prior.$suffix] = $bytes;
         }
     }
-    foreach (['provision.py', 'command.py', 'manage.py'] as $file) {
+    foreach (['provision.py', 'command.py', 'manage.py', 'runtime_env.py', 'host.py', 'host-database.php'] as $file) {
         $contents[$file] = (string) file_get_contents(__DIR__.'/'.$file);
     }
     $contents['verify-package.php'] = (string) file_get_contents($root.'/tools/release/verify-package.php');

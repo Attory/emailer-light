@@ -45,6 +45,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Verify installer configuration and hosting isolation contracts
+        run: python3 -m unittest discover -s tests/Installer
+
       - name: Prepare writable generated-output directories
         run: sudo install -d -o 1000 -g 1000 -m 0755 build .cache public/template-assets
 

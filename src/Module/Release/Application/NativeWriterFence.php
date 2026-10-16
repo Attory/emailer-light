@@ -12,7 +12,7 @@ use Symfony\Component\Dotenv\Dotenv;
 /** Fence only this application's dedicated database identity, including shared-FPM writers. */
 final readonly class NativeWriterFence
 {
-    public function __construct(private Connection $connection, private string $runtimeConfigurationFile)
+    public function __construct(private Connection $connection, private string $runtimeConfigurationFile, private string $replacementRuntimeFile = '')
     {
     }
 
@@ -77,6 +77,33 @@ final readonly class NativeWriterFence
     public function restore(array $account): void
     {
         $this->connection->executeStatement('ALTER USER '.$this->quoted($account).($account['locked'] ? ' ACCOUNT LOCK' : ' ACCOUNT UNLOCK'));
+    }
+
+    /** @param array{name: string, host: string, locked: bool} $source
+     * @return array{name: string, host: string, locked: bool}
+     */
+    public function replacement(array $source): array
+    {
+        $metadata = @lstat($this->replacementRuntimeFile);
+        if (!\is_array($metadata) || 0 !== $metadata['uid']) {
+            throw new \RuntimeException('Replacement runtime must be root controlled.');
+        }
+        for ($parent = \dirname($this->replacementRuntimeFile);; $parent = \dirname($parent)) {
+            $metadata = @lstat($parent);
+            if (!\is_array($metadata) || is_link($parent) || 0 !== $metadata['uid'] || 0 !== ($metadata['mode'] & 0o022)) {
+                throw new \RuntimeException('Replacement runtime has an unsafe ancestor.');
+            }
+            if ('/' === $parent) {
+                break;
+            }
+        }
+        $replacement = (new self($this->connection, $this->replacementRuntimeFile))->identify();
+        $definition = $this->connection->fetchAssociative('SHOW CREATE USER '.$this->quoted($source));
+        if ($replacement['name'] === $source['name'] || $replacement['locked'] || false === $definition || !str_contains(NativeUpdateJournal::text(reset($definition)), 'ACCOUNT LOCK')) {
+            throw new \RuntimeException('Finish host provisioning with a new dedicated application database identity while retaining the original writer fence.');
+        }
+
+        return $replacement;
     }
 
     /** @param array{name: string, host: string, locked: bool} $account */

@@ -14,7 +14,7 @@ use Doctrine\DBAL\Connection;
 final readonly class NativeSchemaUpdate
 {
     /** @param iterable<\App\Module\Backup\Application\Contract\BackupContributor> $contributors */
-    public function __construct(private Connection $connection, private PackageInspector $packages, private ReleaseManager $releases, private BackupOperations $backups, private RuntimeVerification $runtime, private MaintenanceOperationLock $maintenance, private NativeWriterFence $fence, private string $runtimeConfigurationFile, private string $privateDirectory, private string $masterKeyFile, private string $releasesDirectory, private iterable $contributors, private string $projectDirectory)
+    public function __construct(private Connection $connection, private PackageInspector $packages, private ReleaseManager $releases, private BackupOperations $backups, private RuntimeVerification $runtime, private MaintenanceOperationLock $maintenance, private NativeWriterFence $fence, private string $runtimeConfigurationFile, private string $privateDirectory, private string $masterKeyFile, private string $releasesDirectory, private iterable $contributors, private string $projectDirectory, private bool $retainSourceFence = false)
     {
     }
 
@@ -104,7 +104,11 @@ final readonly class NativeSchemaUpdate
                 }
                 $this->installed($targetRoot, $target);
                 if (true !== ($record['fence_restored'] ?? false)) {
-                    $this->restoreFence($record);
+                    if (true === ($record['retain_source_fence'] ?? false)) {
+                        $record['writer_replacement'] = $this->fence->replacement($this->account($record));
+                    } else {
+                        $this->restoreFence($record);
+                    }
                     $this->save($journalPath, array_replace($record, ['phase' => 'completed', 'fence_restored' => true]));
                 }
 
@@ -162,7 +166,7 @@ final readonly class NativeSchemaUpdate
             throw new \RuntimeException('The source installation identity is inconsistent.');
         }
         $id = Identity::uuidV7();
-        $record = ['format' => 'emailer-light-native-update-v1', 'id' => $id, 'phase' => 'preparing', 'binding' => $binding, 'source_sha256' => hash_file('sha256', $sourceArchive), 'target_sha256' => hash_file('sha256', $targetArchive), 'schema' => $this->schema(), 'account' => $this->fence->identify(), 'files' => $this->captureFiles($base.'/'.$id), 'identity' => $identity];
+        $record = ['format' => 'emailer-light-native-update-v1', 'id' => $id, 'phase' => 'preparing', 'retain_source_fence' => $this->retainSourceFence, 'binding' => $binding, 'source_sha256' => hash_file('sha256', $sourceArchive), 'target_sha256' => hash_file('sha256', $targetArchive), 'schema' => $this->schema(), 'account' => $this->fence->identify(), 'files' => $this->captureFiles($base.'/'.$id), 'identity' => $identity];
         $this->save($journalPath, $record);
         $this->connection->insert('release_operation', ['id' => $id, 'operation' => 'update', 'source_version' => '1.0.0', 'target_version' => '1.1.0', 'package_sha256' => $record['target_sha256'], 'status' => 'started', 'detail_code' => 'verified', 'started_at' => Identity::now(), 'finished_at' => null]);
         $this->connection->executeStatement("UPDATE delivery_runtime SET accepting_work=0 WHERE singleton_key='1'");
@@ -201,11 +205,13 @@ final readonly class NativeSchemaUpdate
         $this->connection->update('release_operation', ['status' => 'succeeded', 'detail_code' => 'health_passed', 'finished_at' => Identity::now()], ['id' => $id]);
         $record['phase'] = 'completed';
         $this->save($journalPath, $record);
-        $this->restoreFence($record);
-        $record['fence_restored'] = true;
-        $this->save($journalPath, $record);
+        if (!$this->retainSourceFence) {
+            $this->restoreFence($record);
+            $record['fence_restored'] = true;
+            $this->save($journalPath, $record);
+        }
 
-        return 'updated';
+        return $this->retainSourceFence ? 'committed_with_source_fenced' : 'updated';
     }
 
     /** @param array<string, mixed> $record

@@ -165,13 +165,15 @@ class Installer:
         self.site = Path('/etc/nginx/sites-available') / (self.name + '.conf')
         print(f"\nInstalling {self.product} {self.version} at https://{self.state['hostname']}\nApplication files: {self.base}\nAn existing website, if present, will retain its PHP runtime and settings.")
 
-    def dependencies(self):
+    def dependencies(self, runtime_only=False):
         packages = ['ca-certificates', 'curl', 'unzip', 'openssl', 'certbot', 'php8.4-cli', 'php8.4-fpm', 'php8.4-curl',
                     'php8.4-gd', 'php8.4-intl', 'php8.4-mbstring', 'php8.4-mysql', 'php8.4-xml', 'php8.4-zip']
-        if not shutil.which('nginx'):
+        if not runtime_only and not shutil.which('nginx'):
             packages.append('nginx')
-        if not shutil.which('mariadb'):
+        if not runtime_only and not shutil.which('mariadb'):
             packages.append('mariadb-server')
+        if runtime_only:
+            packages = [package for package in packages if package.startswith('php8.4-') or package in ('ca-certificates', 'openssl', 'curl', 'unzip')]
         # No global PHP alternatives switch; no automatic unrelated service restart.
         missing = []
         for package in packages:
@@ -420,8 +422,26 @@ WantedBy=multi-user.target
             run(['systemctl', 'enable', '--now', self.name + '-' + unit])
         run(['systemctl', 'start', self.name + '-scheduler.service'])
         # Self-contained least-privilege command launcher, no shell expansion of runtime secrets.
-        launcher = (self.bundle / 'command.py').read_text().replace('@NAME@', self.name).replace('@USER@', self.user)
+        command = (self.bundle / 'command.py').read_text().replace('@NAME@', self.name).replace('@USER@', self.user).replace('@RUNTIME_FILE@', str(runtime)).replace('@CURRENT_RELEASE@', str(self.base / 'releases/current'))
+        launcher = '#!/usr/bin/python3\n' + (self.bundle / 'runtime_env.py').read_text() + '\n' + command.partition('\n')[2]
         durable('/usr/local/sbin/' + self.name, launcher, 0o755)
+
+    def validated_site(self, text, enabled=None):
+        previous = self.site.read_bytes() if self.site.exists() else None
+        linked = enabled is not None and not enabled.exists()
+        durable(self.site, text, 0o644)
+        if linked:
+            enabled.symlink_to(self.site)
+        try:
+            run(['nginx', '-t'])
+        except SetupError:
+            if previous is None:
+                self.site.unlink(missing_ok=True)
+            else:
+                durable(self.site, previous, 0o644)
+            if linked:
+                enabled.unlink(missing_ok=True)
+            raise SetupError('The proposed Emailer website failed Nginx validation. Its previous file was restored; Nginx was not reloaded. Correct the reported website conflict and start setup again.') from None
 
     def website(self):
         host = self.state['hostname']
@@ -436,15 +456,8 @@ WantedBy=multi-user.target
     location / {{ return 503; }}
 }}
 '''
-        durable(self.site, base, 0o644)
         enabled = Path('/etc/nginx/sites-enabled') / ('zzzz-' + self.site.name)
-        if not enabled.exists():
-            enabled.symlink_to(self.site)
-        try:
-            run(['nginx', '-t'])
-        except SetupError:
-            enabled.unlink(missing_ok=True)
-            raise SetupError('The proposed website failed Nginx validation. It was not reloaded. Existing sites are unchanged; the setup can be retried.') from None
+        self.validated_site(base, enabled)
         run(['systemctl', 'enable', '--now', 'nginx'])
         run(['systemctl', 'reload', 'nginx'])
         try:
@@ -476,8 +489,7 @@ WantedBy=multi-user.target
     location ~* \\.(?:env|log|sql|dump|backup|bak|key|pem|p12|pfx)$ {{ return 404; }}
 }}
 '''
-        durable(self.site, base.replace('return 503;', 'return 301 https://' + host + '$request_uri;') + https, 0o644)
-        run(['nginx', '-t'])
+        self.validated_site(base.replace('return 503;', 'return 301 https://' + host + '$request_uri;') + https)
         run(['systemctl', 'reload', 'nginx'])
         durable('/etc/letsencrypt/renewal-hooks/deploy/' + self.name, '#!/bin/sh\nnginx -t && systemctl reload nginx\n', 0o755)
         run(['systemctl', 'enable', '--now', 'certbot.timer'])
@@ -503,7 +515,10 @@ WantedBy=multi-user.target
         if path.is_symlink() or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != backup['sha256']:
             raise SetupError('The initial backup is missing or has changed. It was not replaced. Restore its saved copy or use the backup recovery reference before continuing.')
         self.console(['emailer:backup:verify', str(path)])
-        self.console(['emailer:health:verify-runtime'])
+        report = json.loads(self.console(['emailer:health:verify-runtime']))
+        codes = {finding['code'] for finding in report['findings']}
+        self.state['mail_status'] = 'not configured; open Mail settings when ready' if 'sender_identity' in codes else ('configured; complete the connection check in Mail settings' if 'smtp_transport_security' in codes else 'configured')
+        self.save()
         phrase = (self.state_dir / 'recovery-password').read_text().strip()
         self.console(['emailer:secrets:export-recovery-key', '--passphrase-stdin', '--verify-existing'], data=phrase + '\n' + phrase + '\n')
         for unit in ('fpm.service', 'worker.service', 'scheduler.timer', 'operations.timer'):
@@ -534,7 +549,7 @@ WantedBy=multi-user.target
                              ('Installing background services', self.services), ('Creating recovery material and initial backup', self.recovery), ('Setting up trusted HTTPS', self.website),
                              ('Checking application health and initial backup', self.health)]:
             self.phase(name, action)
-        print(f"\nInstallation successful. Sign in: https://{self.state['hostname']}/login\nEmail delivery: not configured. Open Mail settings when ready.\nVerified backups: {self.private}/backups\nRecovery package: {self.keys}/recovery-key.enxkey\nRecovery password file (keep separately): {self.state_dir}/recovery-password\nLocal backup destination: {self.backups}\nServer command: sudo {self.name}\nKeep this package to resume or recover the installation.")
+        print(f"\nInstallation successful. Sign in: https://{self.state['hostname']}/login\nEmail delivery: {self.state.get('mail_status', 'not configured') }.\nVerified backups: {self.private}/backups\nRecovery package: {self.keys}/recovery-key.enxkey\nRecovery password file (keep separately): {self.state_dir}/recovery-password\nLocal backup destination: {self.backups}\nServer command: sudo {self.name}\nKeep this package to resume or recover the installation.")
 
 
 def main():
