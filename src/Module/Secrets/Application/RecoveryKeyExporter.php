@@ -84,6 +84,18 @@ final readonly class RecoveryKeyExporter implements RecoveryKeyVerifier
         return $this->outputFile;
     }
 
+    public function verifyCurrent(string $passphrase): void
+    {
+        $master = $this->masterKey->load();
+        try {
+            if (!$this->verifiesKey($passphrase, $master)) {
+                throw new \RuntimeException('The recovery package does not authenticate the current installation key. Keep the existing material and investigate before continuing.');
+            }
+        } finally {
+            sodium_memzero($master);
+        }
+    }
+
     public function recover(string $passphrase): void
     {
         $master = $this->decryptPackage($passphrase);

@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 // Release tooling only. The existing edition signing identity is supplied externally.
-$options = getopt('', ['candidate:', 'source:', 'version:', 'public-key:', 'signing-key:', 'output:', 'test-only']);
+$options = getopt('', ['candidate:', 'source:', 'version:', 'public-key:', 'signing-key:', 'output:', 'test-only', 'predecessors:']);
 foreach (['candidate', 'source', 'version', 'public-key', 'signing-key', 'output'] as $name) {
     if (!is_string($options[$name] ?? null)) {
         throw new RuntimeException('Missing bundle input.');
@@ -36,7 +36,26 @@ try {
     foreach (['', '.manifest.json', '.sha256', '.spdx.json', '.sig'] as $suffix) {
         $contents[$archive.$suffix] = (string) file_get_contents($options['candidate'].'/'.$archive.$suffix);
     }
-    foreach (['provision.py', 'command.py'] as $file) {
+    if (!is_string($options['predecessors'] ?? null)) {
+        throw new RuntimeException('The self-contained installer requires its authenticated predecessor package set.');
+    }
+    $priorArchives = ['emailer-light-1.0.0.zip'];
+    (new App\Module\Release\Application\PackageInspector($options['public-key'], '1.0.0'))->inspectInstalledSource($options['predecessors'].'/'.$priorArchives[0]);
+    foreach ($priorArchives as $prior) {
+        foreach (['', '.manifest.json', '.sha256', '.spdx.json', '.sig'] as $suffix) {
+            $path = $options['predecessors'].'/'.$prior.$suffix;
+            $info = lstat($path);
+            if (!is_array($info) || 0o100000 !== ($info['mode'] & 0o170000) || 1 !== $info['nlink']) {
+                throw new RuntimeException('Predecessor evidence is missing or unsafe.');
+            }
+            $bytes = file_get_contents($path);
+            if (false === $bytes) {
+                throw new RuntimeException('Predecessor evidence cannot be read.');
+            }
+            $contents[$prior.$suffix] = $bytes;
+        }
+    }
+    foreach (['provision.py', 'command.py', 'manage.py'] as $file) {
         $contents[$file] = (string) file_get_contents(__DIR__.'/'.$file);
     }
     $contents['verify-package.php'] = (string) file_get_contents($root.'/tools/release/verify-package.php');

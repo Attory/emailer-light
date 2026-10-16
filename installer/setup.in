@@ -74,7 +74,9 @@ try:
     contract = json.loads(manifest)
     if contract.get('format') != 'emailer-installer-v1' or contract.get('product') != PRODUCT:
         raise ValueError()
-    required = {'provision.py', 'command.py', 'verify-package.php', 'PackageInspector.php', 'release.pub', contract['archive']}
+    if contract.get('test_only') is True:
+        print('TEST ONLY: this is an unofficial acceptance package. Do not use it for a customer installation.', flush=True)
+    required = {'provision.py', 'command.py', 'manage.py', 'verify-package.php', 'PackageInspector.php', 'release.pub', contract['archive']}
     if not required.issubset(contract['files']):
         raise ValueError()
     for relative, digest in contract['files'].items():

@@ -40,7 +40,7 @@ def durable(path, content, mode=0o600):
     fd, temporary = tempfile.mkstemp(prefix='.' + path.name, dir=path.parent)
     try:
         os.fchmod(fd, mode)
-        with os.fdopen(fd, 'w') as stream:
+        with os.fdopen(fd, 'wb' if isinstance(content, bytes) else 'w') as stream:
             stream.write(content)
             stream.flush()
             os.fsync(stream.fileno())
@@ -69,9 +69,9 @@ class Installer:
         self.bundle = Path(bundle)
         self.meta = json.loads((self.bundle / 'installer.json').read_text())
         self.product = self.meta['product']
-        if self.product not in ('emailer-light', 'emailer-ripe'):
+        if self.product != 'emailer-light':
             raise SetupError('This package has an unknown edition.')
-        self.name = 'emailer-light' if self.product == 'emailer-light' else 'emailer'
+        self.name = 'emailer-light'
         self.version = self.meta['version']
         self.base = Path('/srv') / self.name
         self.state_dir = Path('/var/lib') / (self.name + '-installer')
@@ -83,6 +83,7 @@ class Installer:
         self.user = self.name
         self.state = {}
         self.step = 'Checking this server'
+        self.durable = durable
 
     def save(self):
         durable(self.journal, json.dumps(self.state, indent=2) + '\n')
@@ -98,7 +99,7 @@ class Installer:
         self.save()
         print('Done.', flush=True)
 
-    def preflight(self):
+    def preflight(self, managing=False):
         if os.geteuid() != 0:
             raise SetupError('Start setup with sudo. This grants permission once for server provisioning; Emailer itself runs as a dedicated account.')
         values = dict(line.split('=', 1) for line in Path('/etc/os-release').read_text().splitlines() if '=' in line)
@@ -109,7 +110,7 @@ class Installer:
             raise SetupError('Setup needs an amd64 Debian 13 VPS booted with systemd. File-upload hosting cannot run the required background services.')
         if shutil.disk_usage('/').free < 2 * 1024 ** 3:
             raise SetupError('At least 2 GiB of free disk space is needed before setup can continue.')
-        if not self.journal.exists():
+        if not self.journal.exists() and not managing:
             for path in (self.base, self.private.parent, self.backups, self.config):
                 if path.exists() or path.is_symlink():
                     raise SetupError('An existing Emailer location was found. It needs the guided update or edition-upgrade action; fresh setup will not change it.')
@@ -121,12 +122,13 @@ class Installer:
                 raise SetupError('The dedicated service account already exists. Setup will not reuse an unrelated account.')
         if shutil.which('apache2') or shutil.which('caddy'):
             raise SetupError('This installation path supports Nginx. Apache or Caddy was detected; no website has been changed. Use a separate supported VPS until that coexistence profile is verified.')
-        if shutil.which('mariadb'):
-            version = run(['mariadb', '--batch', '--skip-column-names', '-e', 'SELECT VERSION()']).strip()
-            if not re.match(r'(10\.11\.|11\.8\.)', version) or 'MariaDB' not in version:
-                raise SetupError('The existing database is not a supported MariaDB 10.11 or 11.8 server. It will not be replaced or upgraded.')
-        elif shutil.which('mysqld') or shutil.which('mysql'):
-            raise SetupError('An unrecognised database server already exists. Setup will not replace shared database software.')
+        if not managing:
+            if shutil.which('mariadb'):
+                version = run(['mariadb', '--batch', '--skip-column-names', '-e', 'SELECT VERSION()']).strip()
+                if not re.match(r'(10\.11\.|11\.8\.)', version) or 'MariaDB' not in version:
+                    raise SetupError('The existing database is not a supported MariaDB 10.11 or 11.8 server. It will not be replaced or upgraded.')
+            elif shutil.which('mysqld') or shutil.which('mysql'):
+                raise SetupError('An unrecognised database server already exists. Setup will not replace shared database software.')
         if shutil.which('nginx'):
             result = run(['nginx', '-T'])
             if re.search(r'listen\s+[^;]*(?:\b80\b|\b443\b)', result):
@@ -240,11 +242,11 @@ class Installer:
                 raise SetupError('The database version is unsupported. It has not been changed.')
             dsn = f'mysql://{db}:{password}@127.0.0.1:3306/{db}?serverVersion={version.group(1)}-MariaDB&charset=utf8mb4'
             values = {'APP_ENV': 'prod', 'APP_DEBUG': '0', 'APP_SECRET': secrets.token_hex(32), 'DEFAULT_URI': 'https://' + self.state['hostname'],
-                      'DATABASE_URL': dsn, 'EMAILER_PRIVATE_DIR': str(self.private), 'EMAILER_RUNTIME_DIR': str(self.private),
+                      'DATABASE_URL': dsn, 'EMAILER_RUNTIME_CONFIGURATION_FILE': str(runtime), 'EMAILER_PRIVATE_DIR': str(self.private), 'EMAILER_RUNTIME_DIR': str(self.private),
                       'EMAILER_SECRET_KEY_FILE': str(self.keys / 'master.key'), 'EMAILER_RECOVERY_KEY_FILE': str(self.keys / 'recovery-key.enxkey'),
                       'EMAILER_INSTALL_PROOF_FILE': str(self.private / 'setup' / '.emailer-install-proof'),
                       'EMAILER_RELEASE_PUBLIC_KEY_FILE': str(self.config / 'release-signing.pub'), 'EMAILER_RELEASES_DIR': str(self.base / 'releases'),
-                      'EMAILER_BACKUP_DESTINATION_DIR': str(self.backups), 'TRUSTED_PROXIES': '', 'TRUSTED_HOSTS': '^' + re.escape(self.state['hostname']) + '$',
+                      'EMAILER_BACKUP_DESTINATION_DIR': str(self.backups), 'TRUSTED_PROXIES': '', 'EMAILER_HTTP_MODE': 'direct-fpm', 'TRUSTED_HOSTS': '^' + re.escape(self.state['hostname']) + '$',
                       'MAILER_DSN': 'null://null', 'MESSENGER_TRANSPORT_DSN': 'doctrine://default', 'LOCK_DSN': 'flock://' + str(self.private / 'locks')}
             durable(runtime, ''.join(f"{key}='{value}'\n" for key, value in values.items()), 0o640)
             os.chown(runtime, 0, account.pw_gid)
@@ -370,7 +372,7 @@ pm = ondemand
 pm.max_children = 8
 pm.process_idle_timeout = 10s
 clear_env = no
-chdir = {self.release}
+chdir = {self.base}/releases/current
 catch_workers_output = no
 ''', 0o644)
         common = f'''User={self.user}
@@ -402,7 +404,8 @@ WantedBy=multi-user.target
                     'scheduler': 'emailer:delivery:scheduler', 'operations': 'emailer:operations:run'}
         # Resolve exact existing command names from the reviewed deployment examples.
         for role in ('scheduler', 'operations'):
-            example = self.release / 'deployment' / (self.name + '-' + role + '.service.example')
+            template_prefix = 'emailer-light' if self.product == 'emailer-light' else 'emailer'
+            example = self.release / 'deployment' / (template_prefix + '-' + role + '.service.example')
             command = next(line.split('bin/console ', 1)[1] for line in example.read_text().splitlines() if line.startswith('ExecStart='))
             commands[role] = command
         for role, command in commands.items():
@@ -415,6 +418,7 @@ WantedBy=multi-user.target
         run(['systemctl', 'daemon-reload'])
         for unit in ('fpm.service', 'worker.service', 'scheduler.timer', 'operations.timer'):
             run(['systemctl', 'enable', '--now', self.name + '-' + unit])
+        run(['systemctl', 'start', self.name + '-scheduler.service'])
         # Self-contained least-privilege command launcher, no shell expansion of runtime secrets.
         launcher = (self.bundle / 'command.py').read_text().replace('@NAME@', self.name).replace('@USER@', self.user)
         durable('/usr/local/sbin/' + self.name, launcher, 0o755)
@@ -483,11 +487,25 @@ WantedBy=multi-user.target
         if not phrase_file.exists():
             durable(phrase_file, secrets.token_urlsafe(36) + '\n')
         phrase = phrase_file.read_text().strip()
-        if not (self.keys / 'recovery-key.enxkey').exists():
-            self.console(['emailer:secrets:export-recovery-key', '--passphrase-stdin'], data=phrase + '\n' + phrase + '\n')
-        self.console(['emailer:backup:create'])
+        options = ['emailer:secrets:export-recovery-key', '--passphrase-stdin']
+        if (self.keys / 'recovery-key.enxkey').exists():
+            options.append('--verify-existing')
+        self.console(options, data=phrase + '\n' + phrase + '\n')
+        self.state['initial_backup'] = json.loads(self.console(['emailer:backup:create', '--json']))
+        self.save()
+        self.console(['emailer:operations:run'])
 
     def health(self):
+        if 'initial_backup' not in self.state:
+            self.recovery()
+        backup = self.state['initial_backup']
+        path = Path(backup['path'])
+        if path.is_symlink() or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != backup['sha256']:
+            raise SetupError('The initial backup is missing or has changed. It was not replaced. Restore its saved copy or use the backup recovery reference before continuing.')
+        self.console(['emailer:backup:verify', str(path)])
+        self.console(['emailer:health:verify-runtime'])
+        phrase = (self.state_dir / 'recovery-password').read_text().strip()
+        self.console(['emailer:secrets:export-recovery-key', '--passphrase-stdin', '--verify-existing'], data=phrase + '\n' + phrase + '\n')
         for unit in ('fpm.service', 'worker.service', 'scheduler.timer', 'operations.timer'):
             run(['systemctl', 'is-active', '--quiet', self.name + '-' + unit])
         run(['curl', '--fail', '--silent', '--show-error', 'https://' + self.state['hostname'] + '/health/live'])
@@ -508,6 +526,8 @@ WantedBy=multi-user.target
         except BlockingIOError:
             raise SetupError('Another setup process is running for this installation. Let it finish, then retry.') from None
         self.initialize()
+        if 'Checking application health and initial backup' in self.state['completed']:
+            self.state['completed'].remove('Checking application health and initial backup')
         for name, action in [('Installing supported dependencies', self.dependencies), ('Verifying the production runtime', self.verify_runtime),
                              ('Preparing dedicated resources', self.resources), ('Preparing the database', self.database),
                              ('Publishing verified application files', self.publish), ('Creating your administrator account', self.application),
@@ -521,7 +541,9 @@ def main():
     installer = None
     try:
         installer = Installer(sys.argv[1])
-        installer.execute()
+        from manage import dispatch
+        if not dispatch(installer, SetupError):
+            installer.execute()
     except (SetupError, OSError, ValueError, KeyError) as error:
         print('\nSetup stopped during: ' + (installer.step if installer else 'Package validation'), file=sys.stderr)
         print(str(error) if isinstance(error, SetupError) else 'A protected file or host prerequisite could not be read. Existing resources have been retained; see the troubleshooting reference.', file=sys.stderr)

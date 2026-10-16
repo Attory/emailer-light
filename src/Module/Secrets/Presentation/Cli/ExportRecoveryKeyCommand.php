@@ -23,6 +23,7 @@ final class ExportRecoveryKeyCommand extends Command
 
     protected function configure(): void
     {
+        $this->addOption('verify-existing', null, InputOption::VALUE_NONE, 'Authenticate the existing package against this installation without replacing it.');
         $this->addOption('passphrase-stdin', null, InputOption::VALUE_NONE, 'Read the passphrase and confirmation from protected standard input for automated provisioning.');
     }
 
@@ -56,7 +57,11 @@ final class ExportRecoveryKeyCommand extends Command
             return Command::FAILURE;
         }
         try {
-            $this->exporter->export($passphrase);
+            if (true === $input->getOption('verify-existing')) {
+                $this->exporter->verifyCurrent($passphrase);
+            } else {
+                $this->exporter->export($passphrase);
+            }
             $output->writeln('<info>Recovery-key package exported. Store it separately from backups.</info>');
 
             return Command::SUCCESS;

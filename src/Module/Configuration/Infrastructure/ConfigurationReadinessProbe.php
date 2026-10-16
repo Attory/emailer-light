@@ -8,10 +8,29 @@ use App\Module\Health\Application\Contract\LightweightReadinessProbe;
 use App\Module\Health\Application\Contract\SendingGateReadinessProbe;
 use Doctrine\DBAL\Connection;
 
-final readonly class ConfigurationReadinessProbe implements LightweightReadinessProbe, SendingGateReadinessProbe
+final readonly class ConfigurationReadinessProbe implements LightweightReadinessProbe, SendingGateReadinessProbe, \App\Module\Health\Application\Contract\MaintenanceReadinessProbe
 {
     public function __construct(private Connection $connection, private string $canonicalUri, private string $environment)
     {
+    }
+
+    public function offlineVerificationReady(): bool
+    {
+        return true;
+    }
+
+    public function maintenanceFindings(): array
+    {
+        // Missing or untested SMTP is a delivery gate, not a broken installation.
+        $allowed = ['sender_identity'];
+        $sender = $this->connection->fetchAssociative("SELECT smtp_host, smtp_port, encryption_mode, smtp_username, credential_secret_id FROM sender_identity WHERE singleton_key = '1'");
+        // Published installations could use a credential-free local testing sink.
+        // Preserve it for review without ever authorising production delivery.
+        if (false !== $sender && \in_array($sender['smtp_host'], ['mailpit', '127.0.0.1', '::1'], true) && 1025 === $this->integer($sender['smtp_port']) && 'none' === $sender['encryption_mode'] && (null === $sender['smtp_username'] || '' === $sender['smtp_username']) && null === $sender['credential_secret_id']) {
+            $allowed[] = 'smtp_transport_security';
+        }
+
+        return $allowed;
     }
 
     public function findings(): array
