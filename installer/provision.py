@@ -262,7 +262,7 @@ class Installer:
         return mode.group(1)
 
     def install_missing_packages(self, missing):
-        catalogue = subprocess.run(['apt-get', '-o', 'Acquire::Retries=0', '-o', 'Acquire::http::Timeout=10', '-o', 'Acquire::https::Timeout=10', 'update'], capture_output=True, text=True)
+        catalogue = subprocess.run(['apt-get', '--error-on=any', '-o', 'Acquire::Retries=0', '-o', 'Acquire::http::Timeout=10', '-o', 'Acquire::https::Timeout=10', 'update'], capture_output=True, text=True)
         if catalogue.returncode:
             evidence = catalogue.stdout + catalogue.stderr
             if re.search(r'NO_PUBKEY|EXPKEYSIG|not signed|signatures.*verified', evidence, re.I):
@@ -283,6 +283,8 @@ class Installer:
                 reason = 'Debian no longer offers extensions matching the PHP 8.4 patch already used on this server. Setup kept that PHP version unchanged to protect existing websites. Restore the matching signed Debian packages, or arrange a coordinated PHP patch update for those websites, then run setup again. A separate supported VPS also avoids this conflict.'
             elif re.search(r'Could not get lock|Unable to acquire.*lock|dpkg was interrupted', evidence, re.I):
                 reason = 'Another operating-system package task is running, or an earlier task was interrupted. Finish that Debian package task before starting setup again.'
+            elif re.search(r'Unable to locate package|no installation candidate', evidence, re.I):
+                reason = 'The configured Debian repositories do not offer the required supported packages. Enable the standard Debian 13 main and security repositories, then start setup again; setup will not add an untrusted third-party repository.'
             elif re.search(r'No space left|not enough free space', evidence, re.I):
                 reason = 'The operating system has insufficient free space for the missing packages. Free space on the reported filesystem before starting setup again.'
             elif re.search(r'Could not resolve|Temporary failure resolving|Failed to fetch|Connection failed|Connection timed out', evidence, re.I):
