@@ -129,7 +129,7 @@ final readonly class Doctor implements ScheduledHealthOperations, Contract\Runti
             }
         }
         if (0 < $critical) {
-            throw new \DomainException('Sending is blocked by critical readiness findings.');
+            throw new \App\Module\Delivery\Application\Contract\SendingNotReady('Sending is blocked by critical readiness findings.');
         }
     }
 

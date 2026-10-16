@@ -84,7 +84,9 @@ final readonly class DatabaseSetup
                 $plan = $this->migrations->getMigrationPlanCalculator()->getPlanUntilVersion($target);
                 // MariaDB DDL commits implicitly; the schema cannot be one transaction.
                 $configuration = (new MigratorConfiguration())->setAllOrNothing(false);
-                $this->migrations->getMigrator()->migrate($plan, $configuration);
+                if ([] !== $plan->getItems()) {
+                    $this->migrations->getMigrator()->migrate($plan, $configuration);
+                }
             } catch (\Throwable) {
                 throw new \RuntimeException('Database migration failed.');
             } finally {

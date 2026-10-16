@@ -84,6 +84,9 @@ final readonly class NativeWriterFence
      */
     public function replacement(array $source): array
     {
+        if (!str_starts_with($this->replacementRuntimeFile, '/')) {
+            throw new \RuntimeException('Replacement runtime must be an absolute protected path.');
+        }
         $metadata = @lstat($this->replacementRuntimeFile);
         if (!\is_array($metadata) || 0 !== $metadata['uid']) {
             throw new \RuntimeException('Replacement runtime must be root controlled.');

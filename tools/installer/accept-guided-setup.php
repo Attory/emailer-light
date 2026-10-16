@@ -17,10 +17,14 @@ if ($lock->exists()) {
 }
 $application = new Symfony\Bundle\FrameworkBundle\Console\Application($kernel);
 $tester = new Symfony\Component\Console\Tester\CommandTester($application->find('emailer:setup:install'));
-$tester->setInputs(['guided-admin@example.test', 'synthetic guided installer password 2026', 'synthetic guided installer password 2026']);
+$inputs = ['guided-admin@example.test', 'synthetic guided installer password 2026', 'synthetic guided installer password 2026'];
+if (in_array('--retry-input', $argv, true)) {
+    $inputs = ['not-an-email', 'guided-admin@example.test', 'short', 'short', 'synthetic guided installer password 2026', 'synthetic mismatched confirmation', 'synthetic guided installer password 2026', 'synthetic guided installer password 2026'];
+}
+$tester->setInputs($inputs);
 if (0 !== $tester->execute(['--guided' => true])) {
     // Output is deliberately bounded and contains no hidden inputs.
-    throw new RuntimeException('Guided setup failed: '.$tester->getDisplay());
+    throw new RuntimeException('Guided setup did not complete. Its transcript is not printed because hidden input protection is under test.');
 }
 foreach (['synthetic guided installer password 2026', 'local-only'] as $secret) {
     if (str_contains($tester->getDisplay(), $secret)) {

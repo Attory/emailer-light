@@ -256,8 +256,13 @@ class Manager:
         choice = input('Choose an action [0]: ').strip() or '0'
         if choice == '0':
             return
-        self.stage()
-        self.maintenance_environment()
+        if choice == '1' and self.source_version == self.installer.version and (not self.record.get('host_handoff') or self.record['host_handoff'].get('phase') == 'complete'):
+            report = json.loads(self.call(['/usr/local/sbin/' + self.prefix, 'emailer:health:verify-runtime', '--allow-operational-hold']))
+            print('This release is already installed. No settings, services or delivery state were changed.')
+            print('Sign in: ' + self.values['DEFAULT_URI'] + '/login')
+            return
+        if choice in ('4', '5') and self.source_version != self.installer.version:
+            raise ManagementError('This older release does not include the guided health and delivery controls. Choose Update for a verified backup and installation checks first.')
         if choice == '4':
             report = json.loads(self.call(['/usr/local/sbin/' + self.prefix, 'emailer:health:verify-runtime', '--allow-operational-hold']))
             print('Application runtime verified. Delivery ' + ('is ready.' if report['delivery_ready'] else 'is held or needs configuration; open Doctor in the application.'))
@@ -271,6 +276,8 @@ class Manager:
             return
         if choice not in ('1', '2', '3'):
             raise ManagementError('Choose one of the displayed actions.')
+        self.stage()
+        self.maintenance_environment()
         result = self.native_action(choice)
         if choice == '2':
             self.restore_services()
@@ -303,7 +310,7 @@ class Manager:
             result = json.loads(self.console([*arguments, '--recover']))
             handoff.recover_host()
             return result
-        if choice == '1':
+        if choice == '1' and self.source_version != self.installer.version:
             handoff.drain()
             self.console(arguments)
         handoff.adopt()
@@ -330,16 +337,29 @@ def dispatch(installer, error_type, manager_type=Manager, paths=None):
             return False
         if len(candidates) != 1:
             raise ManagementError('Several installations were found. Select a separate supported hosting profile.')
-        # The same OS, architecture, web-server and storage checks apply to management.
-        installer.preflight(managing=True)
-        installer.dependencies(runtime_only=True)
-        manager = manager_type(installer, candidates[0])
-        descriptor = os.open(manager.directory / 'operation.lock', os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        # Fresh setup and every edition/version share this installation-wide lock.
+        # Acquire it before reading/saving operation-specific source bindings.
+        selected = protected(candidates[0])
+        prefix = selected.parent.name
+        if not re.fullmatch(r'emailer(?:-light)?', prefix):
+            raise ManagementError('The selected hosting profile is unsupported.')
+        lock_directory = Path('/var/lib') / (prefix + '-installer')
+        lock_directory.mkdir(mode=0o700, exist_ok=True)
+        metadata = lock_directory.lstat()
+        if lock_directory.is_symlink() or metadata.st_uid != 0 or not stat.S_ISDIR(metadata.st_mode) or metadata.st_mode & 0o077:
+            raise ManagementError('The shared installation lock folder is unsafe.')
+        descriptor = os.open(lock_directory / 'operation.lock', os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         with os.fdopen(descriptor, 'a') as lock:
+            metadata = os.fstat(lock.fileno())
+            if metadata.st_uid != 0 or not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1 or metadata.st_mode & 0o077:
+                raise ManagementError('The shared installation lock file is unsafe.')
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
-                raise ManagementError('Another setup action is active. Wait for it to finish.') from None
+                raise ManagementError('Another setup action is active for this installation. Wait for it to finish.') from None
+            installer.preflight(managing=True)
+            installer.dependencies(runtime_only=True)
+            manager = manager_type(installer, selected)
             manager.run()
         return True
     except ManagementError as error:

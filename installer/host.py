@@ -307,7 +307,7 @@ server {{
     def disable_cron(self):
         # Retain every unrelated entry verbatim. Never replace an entire shared crontab.
         m = self.m
-        markers = (str(m.releases / 'current/bin/console'), '/usr/local/sbin/' + m.prefix)
+        markers = (str(m.releases / 'current/bin/console'), '/usr/local/sbin/' + m.prefix, '/usr/local/sbin/' + m.source_service_prefix)
         sources = [('file', str(path)) for path in Path('/etc/cron.d').iterdir() if path.is_file() and not path.is_symlink()]
         if shutil.which('crontab'):
             sources += [('user', name) for name in set(['root', m.account.pw_name])]
@@ -348,8 +348,10 @@ server {{
         for suffix in ('scheduler.timer', 'operations.timer', 'scheduler.service', 'operations.service', 'worker.service', 'fpm.service'):
             unit = self.name + '-' + suffix
             state = subprocess.run(['systemctl', 'show', unit, '--property=LoadState'], capture_output=True, text=True)
-            if state.returncode or 'LoadState=not-found' in state.stdout:
+            if 'LoadState=not-found' in state.stdout:
                 continue
+            if state.returncode or 'LoadState=loaded' not in state.stdout:
+                self.fail('The target service state could not be inspected. Restoration was not started; restore access to systemd before Recover.')
             self.m.call(['systemctl', 'stop', unit])
             active = subprocess.run(['systemctl', 'is-active', '--quiet', unit])
             if active.returncode not in (3, 4):

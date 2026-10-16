@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Emailer native-host provisioner. Executed only from a verified, root-frozen bundle."""
 import fcntl
+import getpass
 import hashlib
 import json
 import os
@@ -66,6 +67,9 @@ def ask_hostname():
 
 class Installer:
     def __init__(self, bundle):
+        self.php = '/usr/bin/php8.4'
+        self.database_cli = ['mariadb', '--no-defaults', '--protocol=socket', '--socket=/run/mysqld/mysqld.sock', '--user=root']
+        self.database_environment = {'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8'}
         self.bundle = Path(bundle)
         self.meta = json.loads((self.bundle / 'installer.json').read_text())
         self.product = self.meta['product']
@@ -124,7 +128,8 @@ class Installer:
             raise SetupError('This installation path supports Nginx. Apache or Caddy was detected; no website has been changed. Use a separate supported VPS until that coexistence profile is verified.')
         if not managing:
             if shutil.which('mariadb'):
-                version = run(['mariadb', '--batch', '--skip-column-names', '-e', 'SELECT VERSION()']).strip()
+                self.database_authority()
+                version = self.database_run(['--batch', '--skip-column-names', '-e', 'SELECT VERSION()']).strip()
                 if not re.match(r'(10\.11\.|11\.8\.)', version) or 'MariaDB' not in version:
                     raise SetupError('The existing database is not a supported MariaDB 10.11 or 11.8 server. It will not be replaced or upgraded.')
             elif shutil.which('mysqld') or shutil.which('mysql'):
@@ -142,6 +147,41 @@ class Installer:
                         probe.bind(('0.0.0.0', port))
                     except OSError:
                         raise SetupError(f'Port {port} is occupied by an unknown service. Keep that website running and use a separate supported VPS.') from None
+
+    def database_run(self, arguments, data=None):
+        result = subprocess.run([*self.database_cli, *arguments], input=data, capture_output=True, text=True, env=self.database_environment)
+        if result.returncode and re.search(r'access denied|command denied|permission denied', result.stderr, re.I):
+            self.database_authority(force=True)
+            result = subprocess.run([*self.database_cli, *arguments], input=data, capture_output=True, text=True, env=self.database_environment)
+            if result.returncode and re.search(r'access denied|command denied|permission denied', result.stderr, re.I):
+                raise SetupError('That database sign-in cannot add Emailer’s dedicated database and account. Start setup again with a database administrator allowed to create a database, create its account and grant permissions. Existing databases were preserved.')
+        if result.returncode:
+            raise SetupError('MariaDB could not complete this setup step. Check free disk space and the local MariaDB service log, then start this same package again. Saved application data and other databases were retained.')
+        return result.stdout
+
+    def database_authority(self, force=False):
+        saved = self.state_dir / 'database-client.cnf'
+        if saved.exists() or saved.is_symlink():
+            info = saved.lstat()
+            if saved.is_symlink() or info.st_uid != 0 or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_mode & 0o077:
+                raise SetupError('The retained database authorisation file is unsafe. It was not used.')
+            self.database_cli = ['mariadb', '--defaults-file=' + str(saved)]
+        probe = subprocess.run([*self.database_cli, '-NBe', 'SELECT VERSION()'], capture_output=True, text=True, env=self.database_environment)
+        if probe.returncode == 0 and not force:
+            return
+        if not Path('/run/mysqld/mysqld.sock').is_socket():
+            raise SetupError('The installed MariaDB server is not listening on its local socket. Start that existing database service before retrying; setup will not replace it.')
+        print('Your database requires its own administrator sign-in to add Emailer’s dedicated database. Existing databases and passwords will be kept unchanged.')
+        username = input('Database administrator name [root]: ').strip() or 'root'
+        password = getpass.getpass('Database administrator password (hidden): ')
+        if any(character in username + password for character in ('\x00', '\n', '\r')):
+            raise SetupError('The database sign-in contains an unsupported control character. No credentials were saved.')
+        def quote(value):
+            return '"' + value.replace('\\', '\\\\').replace('"', '\\"').replace('\t', '\\t') + '"'
+        durable(saved, '[client]\nuser=' + quote(username) + '\npassword=' + quote(password) + '\nprotocol=socket\nsocket=/run/mysqld/mysqld.sock\n')
+        self.database_cli = ['mariadb', '--defaults-file=' + str(saved)]
+        if subprocess.run([*self.database_cli, '-NBe', 'SELECT VERSION()'], capture_output=True, env=self.database_environment).returncode:
+            raise SetupError('The database administrator sign-in was not accepted. Start setup again to enter it again; existing databases were not changed.')
 
     def initialize(self):
         self.state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -186,14 +226,58 @@ class Installer:
             installed_php_version = common.stdout.split()[-1]
             missing = [package + '=' + installed_php_version if package.startswith('php8.4-') else package for package in missing]
         if missing:
-            run(['apt-get', '-o', 'Acquire::Retries=0', '-o', 'Acquire::http::Timeout=10', '-o', 'Acquire::https::Timeout=10', 'update'])
-            run(['apt-get', 'install', '-y', '--no-install-recommends', '-o', 'Dpkg::Options::=--force-confold', *missing])
+            prior_mode = self.preserve_php_selection(previous_php, missing)
+            try:
+                self.install_missing_packages(missing)
+            finally:
+                if prior_mode == 'auto':
+                    selection = subprocess.run(['update-alternatives', '--query', 'php'], capture_output=True, text=True)
+                    best = re.search(r'^Best: (.+)$', selection.stdout, re.M)
+                    if selection.returncode == 0 and best and os.path.realpath(best.group(1)) == previous_php:
+                        run(['update-alternatives', '--auto', 'php'])
         if previous_php and os.path.realpath('/usr/bin/php') != previous_php:
             run(['update-alternatives', '--set', 'php', previous_php])
         if previous_php and os.path.realpath('/usr/bin/php') != previous_php:
             raise SetupError('The existing global PHP selection could not be preserved. Setup stopped before changing application resources.')
         run([self.php, '-r', 'foreach (["curl","dom","gd","intl","mbstring","pdo_mysql","sodium","zip","posix"] as $e) {if (!extension_loaded($e)) exit(1);}'])
-        run(['systemctl', 'start', 'mariadb'])
+        if not runtime_only:
+            run(['systemctl', 'start', 'mariadb'])
+
+    def preserve_php_selection(self, previous, missing):
+        if previous is None or not any(name.split('=', 1)[0] == 'php8.4-cli' for name in missing):
+            return None
+        selection = subprocess.run(['update-alternatives', '--query', 'php'], capture_output=True, text=True)
+        current = re.search(r'^Value: (.+)$', selection.stdout, re.M)
+        mode = re.search(r'^Status: (auto|manual)$', selection.stdout, re.M)
+        if selection.returncode or not current or not mode or os.path.realpath(current.group(1)) != previous:
+            raise SetupError('The existing PHP command is outside Debian’s alternatives system. No PHP packages were installed. Register that existing executable as a Debian alternative or use a separate supported VPS; setup will not replace its command.')
+        self.state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        metadata = self.state_dir.lstat()
+        if self.state_dir.is_symlink() or metadata.st_uid != 0 or metadata.st_mode & 0o077:
+            raise SetupError('The installer folder cannot safely retain the previous PHP selection.')
+        durable(self.state_dir / 'php-selection.json', json.dumps({'previous_value': current.group(1), 'previous_mode': mode.group(1), 'policy': 'keep_existing_version'}) + '\n')
+        if mode.group(1) == 'auto':
+            # Prevent even a temporary global switch while Debian installs the new CLI.
+            run(['update-alternatives', '--set', 'php', current.group(1)])
+        return mode.group(1)
+
+    def install_missing_packages(self, missing):
+        catalogue = subprocess.run(['apt-get', '-o', 'Acquire::Retries=0', '-o', 'Acquire::http::Timeout=10', '-o', 'Acquire::https::Timeout=10', 'update'], capture_output=True, text=True)
+        if catalogue.returncode:
+            evidence = catalogue.stdout + catalogue.stderr
+            if re.search(r'NO_PUBKEY|EXPKEYSIG|not signed|signatures.*verified', evidence, re.I):
+                reason = 'The operating system could not authenticate its package catalogue. Restore the Debian repository signing configuration; setup will not bypass signature checks.'
+            elif re.search(r'expired|not valid yet', evidence, re.I):
+                reason = 'The signed operating-system package catalogue is expired or not yet valid. Check the server clock and Debian mirror freshness.'
+            elif re.search(r'Could not resolve|Temporary failure resolving', evidence, re.I):
+                reason = 'The server could not resolve its Debian package server. Restore working DNS for the configured Debian repositories.'
+            else:
+                reason = 'The server could not reach a usable signed Debian package catalogue. Check its internet connection, package-download proxy and configured Debian repository addresses.'
+            raise SetupError(reason + ' Then start the same setup package again; completed steps are retained.')
+        try:
+            run(['apt-get', 'install', '-y', '--no-install-recommends', '-o', 'Dpkg::Options::=--force-confold', *missing])
+        except SetupError:
+            raise SetupError('Debian could not install the missing supported packages. Check free disk space and that another package update is not running; the operating system records details in /var/log/apt/term.log. Then start setup again. Existing configuration files were retained.') from None
 
     def verify_runtime(self):
         archive = self.bundle / self.meta['archive']
@@ -212,13 +296,25 @@ class Installer:
                     raise SetupError('An Emailer website, command or service name is already in use. Setup will not overwrite it.')
             configuration = run(['nginx', '-T'])
             host = self.state['hostname']
-            for declaration in re.findall(r'server_name\s+([^;]+);', configuration):
-                for name in declaration.split():
-                    if name == host or name.startswith('~') or (name.startswith('*.') and host.endswith(name[1:])) or (name.startswith('.') and (host == name[1:] or host.endswith(name))) or (name.endswith('.*') and host.startswith(name[:-1])):
-                        raise SetupError('That hostname is already claimed by an existing website or an ambiguous routing rule. Choose a dedicated hostname; the existing website was not changed.')
-            existing_names = [path.name for path in Path('/etc/nginx/sites-enabled').iterdir()]
-            if any(name >= 'zzzz-' + self.site.name for name in existing_names):
-                raise SetupError('The existing Nginx site ordering needs review to preserve its default website. No site was changed.')
+            declarations = [name for declaration in re.findall(r'server_name\s+([^;]+);', configuration) for name in declaration.split()]
+            if any(name.startswith('~') for name in declarations):
+                raise SetupError('Nginx uses a regular-expression website address rule that this profile cannot safely assign around. Keep that site running; use a dedicated standard hostname configuration or a separate supported VPS. No site was changed.')
+            while any(name == host or (name.startswith('*.') and host.endswith(name[1:])) or (name.startswith('.') and (host == name[1:] or host.endswith(name))) or (name.endswith('.*') and host.startswith(name[:-1])) for name in declarations):
+                print('That address already serves another website. It has been kept unchanged. Choose a different dedicated address for Emailer.')
+                host = ask_hostname()
+                self.state['hostname'] = host
+                self.save()
+            for suffix in ('fpm.service', 'worker.service', 'scheduler.service', 'scheduler.timer', 'operations.service', 'operations.timer'):
+                loaded = run(['systemctl', 'show', self.name + '-' + suffix, '--property=LoadState'])
+                if 'LoadState=not-found' not in loaded:
+                    raise SetupError('An Emailer service name is already used by an existing host service. It was not replaced.')
+            names = sorted(path.name for path in Path('/etc/nginx/sites-enabled').iterdir())
+            link_name = 'zzzz-' + self.site.name
+            if names and names[-1] >= link_name:
+                link_name = names[-1] + '-' + self.name
+            if len(link_name.encode()) > 255:
+                raise SetupError('The existing website filename is too long to preserve its default-site ordering automatically. Shorten that enabled filename without changing its site, then rerun setup.')
+            self.state['site_link_name'] = link_name
             self.state['resources_reserved'] = True
             self.save()
         try:
@@ -238,7 +334,7 @@ class Installer:
         if not runtime.exists():
             password = secrets.token_hex(32)
             db = self.state['database']
-            server = run(['mariadb', '-NBe', 'SELECT VERSION()']).strip()
+            server = self.database_run(['-NBe', 'SELECT VERSION()']).strip()
             version = re.match(r'(10\.11\.\d+|11\.8\.\d+)', server)
             if not version:
                 raise SetupError('The database version is unsupported. It has not been changed.')
@@ -266,16 +362,16 @@ class Installer:
         if not re.fullmatch(r'[a-z0-9_]+', db) or not password or not re.fullmatch(r'[a-f0-9]+', password):
             raise SetupError('Saved database configuration is inconsistent. It has not been changed.')
         if not self.state.get('database_reserved'):
-            count = run(['mariadb', '-NBe', f"SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='{db}'"]).strip()
-            users = run(['mariadb', '-NBe', f"SELECT COUNT(*) FROM mysql.user WHERE User='{db}'"]).strip()
+            count = self.database_run(['-NBe', f"SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='{db}'"]).strip()
+            users = self.database_run(['-NBe', f"SELECT COUNT(*) FROM mysql.user WHERE User='{db}'"]).strip()
             if count != '0' or users != '0':
                 raise SetupError('The selected dedicated database name is already in use. No existing database or account was changed.')
             self.state['database_reserved'] = True
             self.save()
         sql = f"CREATE DATABASE IF NOT EXISTS `{db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS '{db}'@'127.0.0.1' IDENTIFIED BY '{password}'; GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, TRIGGER ON `{db}`.* TO '{db}'@'127.0.0.1';"
-        run(['mariadb', '--batch'], data=sql)
+        self.database_run(['--batch'], data=sql)
         owner = self.state['database_owner']
-        run(['mariadb', '--batch'], data=f"CREATE TABLE IF NOT EXISTS `{db}`.`_emailer_provisioning` (operation_token CHAR(48) PRIMARY KEY); INSERT IGNORE INTO `{db}`.`_emailer_provisioning` VALUES ('{owner}');")
+        self.database_run(['--batch'], data=f"CREATE TABLE IF NOT EXISTS `{db}`.`_emailer_provisioning` (operation_token CHAR(48) PRIMARY KEY); INSERT IGNORE INTO `{db}`.`_emailer_provisioning` VALUES ('{owner}');")
 
     def environment(self):
         values = {}
@@ -333,24 +429,24 @@ class Installer:
         db = self.state['database']
         # A failed baseline DDL is recoverable only before ANY administrator/input data exists.
         # Ownership marker belongs solely to this fresh-install operation, never an existing app.
-        pending = run(['mariadb', '-NBe', f"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{db}' AND table_name='doctrine_migration_versions'"]).strip()
+        pending = self.database_run(['-NBe', f"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{db}' AND table_name='doctrine_migration_versions'"]).strip()
         migrated = False
         if pending == '1':
-            migrated = run(['mariadb', '-NBe', f"SELECT COUNT(*) FROM `{db}`.doctrine_migration_versions WHERE version LIKE '%{self.meta['schema_version']}'"]).strip() == '1'
+            migrated = self.database_run(['-NBe', f"SELECT COUNT(*) FROM `{db}`.doctrine_migration_versions WHERE version LIKE '%{self.meta['schema_version']}'"]).strip() == '1'
         if self.state.get('migration_started') and not migrated:
-            token = run(['mariadb', '-NBe', f'SELECT operation_token FROM `{db}`._emailer_provisioning']).strip()
+            token = self.database_run(['-NBe', f'SELECT operation_token FROM `{db}`._emailer_provisioning']).strip()
             if token != self.state['database_owner']:
                 raise SetupError('The incomplete database ownership marker differs. No database was reset.')
-            app_table = run(['mariadb', '-NBe', f"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{db}' AND table_name='app_user'"]).strip()
-            if app_table == '1' and run(['mariadb', '-NBe', f'SELECT COUNT(*) FROM `{db}`.app_user']).strip() != '0':
+            app_table = self.database_run(['-NBe', f"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{db}' AND table_name='app_user'"]).strip()
+            if app_table == '1' and self.database_run(['-NBe', f'SELECT COUNT(*) FROM `{db}`.app_user']).strip() != '0':
                 raise SetupError('An account exists in an incomplete schema. It was preserved; use the recovery reference before continuing.')
-            run(['mariadb', '--batch'], data=f'DROP DATABASE `{db}`; CREATE DATABASE `{db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;')
+            self.database_run(['--batch'], data=f'DROP DATABASE `{db}`; CREATE DATABASE `{db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;')
             self.database()
             print('Recovered this operation’s interrupted empty baseline schema. No administrator or campaign data existed.')
         self.state['migration_started'] = True
         self.save()
         self.console(['doctrine:migrations:migrate', '--no-interaction'])
-        run(['mariadb', '--batch'], data=f'DROP TABLE IF EXISTS `{db}`._emailer_provisioning;')
+        self.database_run(['--batch'], data=f'DROP TABLE IF EXISTS `{db}`._emailer_provisioning;')
         self.console(['emailer:setup:install', '--guided'], interactive=True)
 
     def service_file(self, name, content):
@@ -409,7 +505,7 @@ WantedBy=multi-user.target
             template_prefix = 'emailer-light' if self.product == 'emailer-light' else 'emailer'
             example = self.release / 'deployment' / (template_prefix + '-' + role + '.service.example')
             command = next(line.split('bin/console ', 1)[1] for line in example.read_text().splitlines() if line.startswith('ExecStart='))
-            commands[role] = command
+            commands[role] = command + (' --wait-for-configuration' if role == 'scheduler' else '')
         for role, command in commands.items():
             worker = role == 'worker'
             self.service_file(self.name + '-' + role + '.service', f'[Unit]\nDescription={self.product} {role}\nAfter=mariadb.service\n[Service]\nType=' + ('simple' if worker else 'oneshot') + '\n' + common + f'ExecStart={self.php} {self.base}/releases/current/bin/console {command}\n' + ('Restart=always\nRestartSec=5\n[Install]\nWantedBy=multi-user.target\n' if worker else ''))
@@ -456,7 +552,7 @@ WantedBy=multi-user.target
     location / {{ return 503; }}
 }}
 '''
-        enabled = Path('/etc/nginx/sites-enabled') / ('zzzz-' + self.site.name)
+        enabled = Path('/etc/nginx/sites-enabled') / self.state.get('site_link_name', 'zzzz-' + self.site.name)
         self.validated_site(base, enabled)
         run(['systemctl', 'enable', '--now', 'nginx'])
         run(['systemctl', 'reload', 'nginx'])
@@ -527,7 +623,8 @@ WantedBy=multi-user.target
         run(['curl', '--fail', '--silent', '--show-error', 'https://' + self.state['hostname'] + '/login'])
 
     def execute(self):
-        self.preflight()
+        if os.geteuid() != 0:
+            self.preflight()
         if self.state_dir.is_symlink():
             raise SetupError('The setup state directory is a symbolic link; it was not used.')
         self.state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -540,6 +637,7 @@ WantedBy=multi-user.target
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise SetupError('Another setup process is running for this installation. Let it finish, then retry.') from None
+        self.preflight()
         self.initialize()
         if 'Checking application health and initial backup' in self.state['completed']:
             self.state['completed'].remove('Checking application health and initial backup')

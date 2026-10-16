@@ -103,6 +103,9 @@ final readonly class NativeSchemaUpdate
                     throw new \RuntimeException('A completed update has drifted; its old snapshot cannot overwrite it.');
                 }
                 $this->installed($targetRoot, $target);
+                if (true === ($record['retain_source_fence'] ?? false) && true === ($record['fence_restored'] ?? false) && ($record['writer_replacement'] ?? null) !== $this->fence->replacement($this->account($record))) {
+                    throw new \RuntimeException('The completed writer handoff has drifted. Keep delivery held and investigate the account configuration.');
+                }
                 if (true !== ($record['fence_restored'] ?? false)) {
                     if (true === ($record['retain_source_fence'] ?? false)) {
                         $record['writer_replacement'] = $this->fence->replacement($this->account($record));
