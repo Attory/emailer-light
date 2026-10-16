@@ -274,10 +274,22 @@ class Installer:
             else:
                 reason = 'The server could not reach a usable signed Debian package catalogue. Check its internet connection, package-download proxy and configured Debian repository addresses.'
             raise SetupError(reason + ' Then start the same setup package again; completed steps are retained.')
-        try:
-            run(['apt-get', 'install', '-y', '--no-install-recommends', '-o', 'Dpkg::Options::=--force-confold', *missing])
-        except SetupError:
-            raise SetupError('Debian could not install the missing supported packages. Check free disk space and that another package update is not running; the operating system records details in /var/log/apt/term.log. Then start setup again. Existing configuration files were retained.') from None
+        installation = subprocess.run(['apt-get', 'install', '-y', '--no-install-recommends', '-o', 'Dpkg::Options::=--force-confold', *missing],
+                                      capture_output=True, text=True, env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive', 'NEEDRESTART_MODE': 'l'})
+        if installation.returncode:
+            evidence = installation.stdout + installation.stderr
+            pinned_php = any(name.startswith('php8.4-') and '=' in name for name in missing)
+            if pinned_php and re.search(r'was not found|not available|no installation candidate|unmet dependencies|held broken packages', evidence, re.I):
+                reason = 'Debian no longer offers extensions matching the PHP 8.4 patch already used on this server. Setup kept that PHP version unchanged to protect existing websites. Restore the matching signed Debian packages, or arrange a coordinated PHP patch update for those websites, then run setup again. A separate supported VPS also avoids this conflict.'
+            elif re.search(r'Could not get lock|Unable to acquire.*lock|dpkg was interrupted', evidence, re.I):
+                reason = 'Another operating-system package task is running, or an earlier task was interrupted. Finish that Debian package task before starting setup again.'
+            elif re.search(r'No space left|not enough free space', evidence, re.I):
+                reason = 'The operating system has insufficient free space for the missing packages. Free space on the reported filesystem before starting setup again.'
+            elif re.search(r'Could not resolve|Temporary failure resolving|Failed to fetch|Connection failed|Connection timed out', evidence, re.I):
+                reason = 'Debian could not download a required package. Restore its repository connection, DNS or package-download proxy, then start setup again.'
+            else:
+                reason = 'Debian could not install the missing supported packages. Its package manager records details in /var/log/apt/term.log. Resolve that reported package error, then start setup again.'
+            raise SetupError(reason + ' Completed setup steps and existing configuration files were retained.')
 
     def verify_runtime(self):
         archive = self.bundle / self.meta['archive']

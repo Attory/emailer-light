@@ -3,10 +3,12 @@ from pathlib import Path
 import sys
 import types
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'installer'))
 from runtime_env import parse_environment_text, RuntimeEnvironmentError
 from host import HostHandoff
+from provision import Installer, SetupError
 
 
 class RuntimeFileContract(unittest.TestCase):
@@ -59,6 +61,20 @@ class HostingIsolationContract(unittest.TestCase):
             self.assertIn('access_log off;', site)
             self.assertIn('fastcgi_pass unix:/run/emailer-light-light-110-fpm/php.sock;', site)
             self.assertEqual(maintenance, 'deny all;' in site)
+
+
+class PackageFailureGuidance(unittest.TestCase):
+    def test_missing_matching_php_patch_is_actionable_without_relaxing_pin(self):
+        instance = object.__new__(Installer)
+        calls = []
+        def apt(args, **kwargs):
+            calls.append(args)
+            return types.SimpleNamespace(returncode=0 if args[-1] == 'update' else 100, stdout='', stderr="E: Version '8.4.1' for 'php8.4-xml' was not found")
+        with patch('provision.subprocess.run', side_effect=apt), self.assertRaisesRegex(SetupError, 'kept that PHP version unchanged'):
+            instance.install_missing_packages(['php8.4-xml=8.4.1'])
+        self.assertEqual(2, len(calls))
+        self.assertIn('php8.4-xml=8.4.1', calls[1])
+        self.assertNotIn('--allow-unauthenticated', calls[1])
 
 
 if __name__ == '__main__':
