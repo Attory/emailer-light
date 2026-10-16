@@ -11,3 +11,7 @@ Use the beginner guide for the normal installation path. The HTML files are self
 The Light release includes a Light-only documentation ZIP, signed package inventory, source archive and SPDX SBOM. Licensing and third-party notices accompany the runtime/source; no private implementation is included.
 
 For maintainers: reviewed JSON and PNG sources live here. `tools/docs/build-guides.py` builds matching HTML/PDF documents; never replace real screenshots with invented screens.
+
+Documentation revision1 corrects the Light first-name field to
+`{{ recipient.first_name }}`. Its separate `docs-v1.1.0-r1` release contains only
+updated guides. Application and installer1.1.0 remain unchanged.

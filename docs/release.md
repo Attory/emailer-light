@@ -28,3 +28,16 @@ exact packages before publishing immutable tags. Never replace published release
 The compatible private Ripe 1.1.0 installer supports original Light 1.0.0 and the
 new official Light 1.1.0. See the public upgrade contracts for preserved identity,
 cryptographic contexts and campaign-owned recipients.
+
+## Documentation-only revision for Light1.1.0
+
+`docs-v1.1.0-r1` corrects the manual first-name field without changing any
+published application tag or asset. Render the reviewed guides, then use
+`tools/docs/build-revision.php ORIGINAL_RELEASE_ASSETS RENDERED_DOCS NEW_OUTPUT ORIGINAL_KEY`.
+The builder authenticates the original Light release with its established pin,
+binds the documentation source to the original runtime source and hash, and signs
+the new documentation inventory with the same existing key. Publish the new tag
+only after guide acceptance and required CI pass. The release has no runtime or
+update assets and must use `make_latest:false`; keep v1.1.0 as the latest application.
+Add an erratum and corrected guide links to the original release body, leaving all
+its assets and tags unchanged.
