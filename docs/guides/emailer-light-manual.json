@@ -1,0 +1,142 @@
+{
+  "title": "Emailer Light user manual",
+  "subtitle": "Version 1.1.0 | Setup and everyday newsletters",
+  "blocks": [
+    {
+      "type": "p",
+      "text": "Prepare, test, approve, then send. Saving a draft sends nothing. Light has one administrator and campaign-specific CSV audiences; it has no reusable contacts, lists, additional administrator accounts or MFA."
+    },
+    {
+      "type": "h2",
+      "text": "Your installed account"
+    },
+    {
+      "type": "p",
+      "text": "Sign in with the administrator email and password chosen during installation. Existing installations retain their login identifier. Fresh defaults are Emailer, English and UTC. The installer has already installed background services and an initial encrypted backup. You can prepare templates and campaigns while sending is unconfigured."
+    },
+    {
+      "type": "image",
+      "file": "emailer-light-dashboard.png",
+      "caption": "The installed Light dashboard with email delivery deferred."
+    },
+    {
+      "type": "h2",
+      "text": "Configure email when ready"
+    },
+    {
+      "type": "ol",
+      "items": [
+        "Open Settings &amp; tools &gt; Mail settings. Use your provider server, port, STARTTLS or direct TLS, username, SMTP password/key and allowed sender address. Sender name and reply-to are optional.",
+        "Choose Store secure SMTP configuration. It encrypts settings and sends nothing. Leave the password blank only to retain the saved password for the same server and username. A new server or login needs its password.",
+        "Choose Test connection without sending to validate the certificate and sign-in without emailing anyone.",
+        "For one explicit message, enter your own address in Test destination, check the address, and choose Send test email. This does not approve a campaign."
+      ]
+    },
+    {
+      "type": "image",
+      "file": "emailer-light-mail.png",
+      "caption": "Actual Mail settings before a provider is configured."
+    },
+    {
+      "type": "p",
+      "text": "Provider suggestions are conveniences; use your account's current settings. Leave the optional one-click DKIM confirmation unticked unless your provider confirms signing both unsubscribe headers. Normal unsubscribe links work independently."
+    },
+    {
+      "type": "h2",
+      "text": "Prepare a template"
+    },
+    {
+      "type": "ol",
+      "items": [
+        "Open Templates and create a template with a recognizable name, email subject, HTML and plain text. Preview and save/publish the version you intend to use.",
+        "Upload images through the template asset controls and use the returned asset address. Unsafe HTML and remote image sources are removed.",
+        "Use the supported fields shown by the editor, such as <code>{{ contact.first_name }}</code> and <code>{{ unsubscribe_url }}</code>. Older <code>{{name}}</code> and <code>{{email}}</code> forms are unsupported."
+      ]
+    },
+    {
+      "type": "image",
+      "file": "emailer-light-templates.png",
+      "caption": "The installed Light templates screen."
+    },
+    {
+      "type": "h2",
+      "text": "Create a campaign and upload recipients"
+    },
+    {
+      "type": "ol",
+      "items": [
+        "Open Campaigns, create a campaign and select a template version. The internal campaign name is separate from the email subject.",
+        "Upload a UTF-8 CSV with an email header. Optional headers are display_name, first_name, last_name, locale and time_zone. Review imported, invalid, duplicate and suppressed counts. Only email people you have permission to contact.",
+        "While Draft or Review, replace or delete this campaign's upload if needed. Each campaign owns its recipients; uploads do not create reusable lists. A change invalidates the earlier test."
+      ]
+    },
+    {
+      "type": "code",
+      "text": "email,first_name\nreader@example.test,Sample"
+    },
+    {
+      "type": "image",
+      "file": "emailer-light-campaigns.png",
+      "caption": "Actual campaign preparation while email delivery is deferred."
+    },
+    {
+      "type": "h2",
+      "text": "Test, approve and send"
+    },
+    {
+      "type": "ol",
+      "items": [
+        "Send a test to the administrator address. Check subject, content, images, links and unsubscribe footer in the actual message. This requires configured email and passing sending checks.",
+        "Review the current campaign revision and recipient counts. Approve only when satisfied. Approval freezes the selected audience and content.",
+        "Choose Send now or schedule as a separate action. Use the displayed organisation timezone; fresh installations use UTC. Approval alone sends nothing."
+      ]
+    },
+    {
+      "type": "p",
+      "text": "To change approved content or recipients, make a new campaign. A newer template version does not silently replace the selected campaign version. Global suppression is checked again immediately before delivery."
+    },
+    {
+      "type": "h2",
+      "text": "Read progress and handle problems"
+    },
+    {
+      "type": "ul",
+      "items": [
+        "SMTP accepted means the server accepted the message, not proven inbox placement.",
+        "Installation, domain and concurrency limits can make a campaign take longer than its requested rate.",
+        "Pause stops new claims; a message in flight may finish. Cancel remaining deliveries cannot recall sent messages.",
+        "Uncertain outcomes are not automatically resent. Inspect the history before deciding on a follow-up.",
+        "Open/click reports can be distorted by privacy tools, image blocking and scanners; they do not prove a human read.",
+        "Open Settings &amp; tools &gt; Doctor for the exact sending blocker and repair action."
+      ]
+    },
+    {
+      "type": "h2",
+      "text": "Backups and account care"
+    },
+    {
+      "type": "p",
+      "text": "Fresh setup enables daily encrypted local backup copies. Open Backups to inspect verified backup/transfer evidence, adjust policy or Create and verify local backup. Local copies are on this server; arrange a separate protected destination for server-loss protection. Keep the recovery-key package and its password in separate protected locations. A restore-drill reminder does not automatically restore anything."
+    },
+    {
+      "type": "p",
+      "text": "Use Profile for your account and Sessions to review access. Lost administrator passwords are recovered through the protected server command with hidden input. See the operator reference. Keep recipient exports and backups private."
+    },
+    {
+      "type": "h2",
+      "text": "Updates"
+    },
+    {
+      "type": "ol",
+      "items": [
+        "Download the official new Light setup file and start it using the installation action. Light 1.0.0 to 1.1.0 is supported. Select the detected installation if asked.",
+        "Choose Update with a verified backup. Setup pauses delivery, verifies recovery material and checks the updated application. Follow any Finish a committed update instruction.",
+        "Review Doctor and mail settings. Start the same file and choose Resume delivery after reviewing readiness when ready. Previously approved due work may continue after resume; no draft is approved by this action."
+      ]
+    },
+    {
+      "type": "p",
+      "text": "For an interruption, retain the same package and recovery files and choose Recover. A completed update cannot be undone by replaying recovery. See the <a href=\"emailer-light-operator.html\">operator reference</a>. Installation is described in the <a href=\"emailer-light-install.html\">beginner guide</a>. A compatible edition upgrade is separate; there is no general Ripe to Light downgrade."
+    }
+  ]
+}

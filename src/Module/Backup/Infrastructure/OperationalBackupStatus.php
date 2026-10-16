@@ -22,7 +22,7 @@ final readonly class OperationalBackupStatus implements OperationalStatusProvide
         return ['key' => 'backup', 'title' => 'Backup and recovery', 'status' => false === $last ? 'missing' : (false !== $transfer && 'failed' === $transfer['status'] ? 'attention' : 'verified'), 'metrics' => [
             ['label' => 'Last verified backup', 'value' => false === $last || !\is_string($last['verified_at']) ? 'Never' : $last['verified_at']],
             ['label' => 'Last restore evidence', 'value' => \is_string($lastRestore) ? $lastRestore : 'Never'],
-            ['label' => 'External transfer', 'value' => false === $transfer || !\is_string($transfer['status']) ? 'Not run' : $transfer['status']],
+            ['label' => 'Backup copy', 'value' => false === $transfer || !\is_string($transfer['status']) ? 'Not run' : $transfer['status']],
         ]];
     }
 }

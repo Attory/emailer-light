@@ -44,7 +44,7 @@ final readonly class ConfigurationReadinessProbe implements LightweightReadiness
         }
         $sender = $this->connection->fetchAssociative("SELECT smtp_host, smtp_port, encryption_mode, smtp_username, credential_secret_id, tls_peer_verification, sender_address, test_message_at, one_click_dkim_confirmed FROM sender_identity WHERE singleton_key = '1'");
         if (false === $sender || !\is_string($sender['sender_address']) || (!\is_string($sender['test_message_at']) || str_starts_with($sender['test_message_at'], '1970-01-01'))) {
-            $findings[] = $this->critical('sender_identity', 'Email delivery is not configured or has not passed its connection test.', 'Open Mail transport settings to configure your provider and test the connection. You can prepare templates and campaigns now.');
+            $findings[] = $this->critical('sender_identity', 'Email delivery is not configured or has not passed its connection test.', 'Open Mail settings to configure your provider and test the connection. You can prepare templates and campaigns now.');
         } elseif (!\in_array($this->environment, ['dev', 'test'], true) || !\in_array($sender['smtp_host'], ['mailpit', '127.0.0.1', '::1'], true)) {
             $port = $this->integer($sender['smtp_port']);
             if (!\in_array($sender['encryption_mode'], ['starttls', 'tls'], true) || 1 > $port || 65535 < $port || 1 !== $this->integer($sender['tls_peer_verification']) || !\is_string($sender['smtp_username']) || '' === trim($sender['smtp_username']) || !\is_string($sender['credential_secret_id']) || '' === trim($sender['credential_secret_id'])) {

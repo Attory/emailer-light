@@ -86,7 +86,7 @@
     {
       "type": "image",
       "file": "emailer-light-setup.png",
-      "caption": "Actual Light setup completion. The example address belongs to the acceptance environment; use the login address printed by your installation."
+      "caption": "Actual Light setup completion. Use the login address printed by your own installation."
     },
     {
       "type": "h2",
