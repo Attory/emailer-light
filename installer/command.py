@@ -21,6 +21,7 @@ try:
 except RuntimeEnvironmentError as error:
     sys.exit(str(error))
 account = pwd.getpwnam('@USER@')
+os.umask(0o077)
 os.initgroups(account.pw_name, account.pw_gid)
 os.setgid(account.pw_gid)
 os.setuid(account.pw_uid)

@@ -30,7 +30,7 @@ final class WorkerHeartbeatSubscriber implements EventSubscriberInterface
     public function started(): void
     {
         $now = Identity::now();
-        $this->connection->executeStatement("INSERT INTO worker_heartbeat (worker_id, worker_kind, schema_version, started_at, heartbeat_at, stopped_at) VALUES (?, 'worker', 1, ?, ?, NULL) ON DUPLICATE KEY UPDATE schema_version = 1, started_at = VALUES(started_at), heartbeat_at = VALUES(heartbeat_at), stopped_at = NULL", [$this->workerId, $now, $now]);
+        $this->connection->executeStatement("INSERT INTO worker_heartbeat (worker_id, worker_kind, schema_version, started_at, heartbeat_at, stopped_at) VALUES (?, 'worker', 1, ?, ?, NULL) ON DUPLICATE KEY UPDATE worker_kind = 'worker', schema_version = 1, started_at = VALUES(started_at), heartbeat_at = VALUES(heartbeat_at), stopped_at = NULL", [$this->workerId, $now, $now]);
         $this->lastHeartbeat = time();
     }
 

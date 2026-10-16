@@ -273,6 +273,16 @@ class Manager:
         for unit in units:
             self.call(['systemctl', 'stop', unit])
 
+    def recover_host_preparation(self):
+        from host import HostHandoff
+        handoff = HostHandoff(self)
+        if not handoff.state:
+            raise ManagementError('There is no retained hosting preparation to recover.')
+        handoff.stop_target()
+        handoff.recover_host()
+        self.restore_services()
+        return {'delivery_held': True}
+
     def restore_services(self):
         for unit in self.record.get('active_units', []):
             self.call(['systemctl', 'start', unit])
@@ -328,6 +338,8 @@ class Manager:
             raise ManagementError('This update already succeeded. Choose Check; recovery cannot downgrade it.')
         if choice == '3' and not operation.exists():
             raise ManagementError('There is no retained native operation to finish.')
+        if choice == '2' and not operation.exists():
+            return self.recover_host_preparation()
         from host import HostHandoff
         handoff = HostHandoff(self)
         handoff.prepare()

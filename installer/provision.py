@@ -429,6 +429,7 @@ class Installer:
         account = pwd.getpwnam(self.user)
         env = {'PATH': '/usr/bin:/bin', **self.environment()}
         def drop():
+            os.umask(0o077)
             os.initgroups(self.user, account.pw_gid)
             os.setgid(account.pw_gid)
             os.setuid(account.pw_uid)
@@ -503,6 +504,7 @@ catch_workers_output = no
 Group={self.user}
 WorkingDirectory={self.base}/releases/current
 EnvironmentFile={runtime}
+UMask=0077
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
@@ -517,6 +519,7 @@ EnvironmentFile={runtime}
 RuntimeDirectory={self.name}-fpm
 Restart=on-failure
 RestartSec=3
+UMask=0077
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict

@@ -206,6 +206,149 @@ server {{
         self.apply_site(self.site_text(maintenance=True))
         self.database('drain')
         self.m.stop_services()
+        if self.state.get('phase') == 'recovered' and 'runtime_metadata_before' in self.state:
+            self.state.setdefault('runtime_metadata_history', []).append(self.state.pop('runtime_metadata_before'))
+            self.state['phase'] = 'retrying-preparation'
+            self.m.save()
+        try:
+            self.secure_runtime_metadata()
+        except OSError:
+            self.fail('A generated cache or lock path became unsafe or unavailable. Keep the saved operation and choose Recover before a deliberate retry.')
+
+    def secure_runtime_metadata(self):
+        m = self.m
+        runtime = Path(m.source_values.get('EMAILER_RUNTIME_DIR') or m.private)
+        allowed_runtime = m.private / ('runtime-' + getattr(m, 'source_service_prefix', m.prefix))
+        if runtime not in (m.private, allowed_runtime):
+            self.fail('The runtime folder is outside the dedicated generated-file layout. It was preserved; no permissions were changed.')
+        roots = [runtime / 'cache', runtime / 'log']
+        lock_dsn = m.source_values.get('LOCK_DSN', '')
+        if lock_dsn.startswith('flock://'):
+            lock_root = Path(lock_dsn.removeprefix('flock://'))
+            if lock_root != m.private / 'locks':
+                self.fail('The lock setting points outside the dedicated private locks folder. It was preserved; no permissions were changed.')
+            roots.append(lock_root)
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+
+        def directory(path):
+            if not path.is_absolute() or '..' in path.parts:
+                self.fail('The runtime directory is not a normalized absolute path.')
+            descriptor = os.open('/', flags)
+            try:
+                for part in path.parts[1:]:
+                    child = os.open(part, flags, dir_fd=descriptor)
+                    os.close(descriptor)
+                    descriptor = child
+                return descriptor
+            except BaseException:
+                os.close(descriptor)
+                raise
+
+        def digest(descriptor):
+            value = hashlib.sha256()
+            offset = 0
+            while True:
+                data = os.pread(descriptor, 65536, offset)
+                if not data:
+                    return value.hexdigest()
+                value.update(data)
+                offset += len(data)
+
+        def inspect(descriptor):
+            info = os.fstat(descriptor)
+            is_directory = stat.S_ISDIR(info.st_mode)
+            if info.st_uid not in (0, m.account.pw_uid) or not (is_directory or (stat.S_ISREG(info.st_mode) and info.st_nlink == 1)):
+                self.fail('A generated runtime object has unexpected ownership, links or type. No application data was converted.')
+            return {'uid': info.st_uid, 'gid': info.st_gid, 'mode': stat.S_IMODE(info.st_mode), 'device': info.st_dev, 'inode': info.st_ino, 'directory': is_directory, 'sha256': None if is_directory else digest(descriptor)}
+
+        def open_relative(parent, parts):
+            descriptor = os.dup(parent)
+            try:
+                for index, name in enumerate(parts):
+                    child = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK | (os.O_DIRECTORY if index < len(parts) - 1 else 0), dir_fd=descriptor)
+                    os.close(descriptor)
+                    descriptor = child
+                return descriptor
+            except BaseException:
+                os.close(descriptor)
+                raise
+
+        entries = {}
+        private = directory(m.private)
+        try:
+            anchor = os.fstat(private)
+            for root in roots:
+                if not root.is_relative_to(m.private) or root == m.private or '..' in root.parts:
+                    self.fail('The runtime uses a shared or external cache/lock folder. Its permissions were preserved; this hosting handoff requires a dedicated private runtime.')
+                parts = root.relative_to(m.private).parts
+                try:
+                    descriptor = open_relative(private, parts)
+                except FileNotFoundError:
+                    continue
+                if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+                    os.close(descriptor)
+                    self.fail('A generated runtime root is not a directory. It was preserved.')
+                def walk(current, relative):
+                    metadata = inspect(current)
+                    entries[str(relative)] = metadata
+                    if metadata['directory']:
+                        for name in os.listdir(current):
+                            child = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK, dir_fd=current)
+                            try:
+                                walk(child, relative / name)
+                            finally:
+                                os.close(child)
+                try:
+                    walk(descriptor, Path(*parts))
+                finally:
+                    os.close(descriptor)
+            if 'runtime_metadata_before' in self.state:
+                retained = self.state['runtime_metadata_before']
+                if set(retained) != set(entries):
+                    self.fail('The saved generated runtime inventory changed. Choose Recover to reopen the unchanged source before a deliberate retry.')
+                for name, original in retained.items():
+                    current = entries[name]
+                    identity = ('device', 'inode', 'directory', 'sha256')
+                    original_mode = (original['uid'], original['gid'], original['mode'])
+                    repaired_mode = (m.account.pw_uid, m.account.pw_gid, 0o700 if original['directory'] else 0o600)
+                    if any(current[key] != original[key] for key in identity) or (current['uid'], current['gid'], current['mode']) not in (original_mode, repaired_mode):
+                        self.fail('A saved runtime file drifted after interrupted permission preparation. Choose Recover; the old receipt was retained unchanged.')
+            else:
+                self.state['runtime_metadata_before'] = entries
+            m.save()  # Durable evidence precedes metadata changes; no byte or lock inode is replaced.
+            for name, recorded in entries.items():
+                descriptor = open_relative(private, Path(name).parts)
+                try:
+                    if inspect(descriptor) != recorded:
+                        self.fail('A generated runtime object changed during permission preparation. Keep the saved operation; no business data was converted.')
+                    os.fchown(descriptor, m.account.pw_uid, m.account.pw_gid)
+                    os.fchmod(descriptor, 0o700 if recorded['directory'] else 0o600)
+                    info = os.fstat(descriptor)
+                    if (info.st_dev, info.st_ino, info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) != (recorded['device'], recorded['inode'], m.account.pw_uid, m.account.pw_gid, 0o700 if recorded['directory'] else 0o600) or (not recorded['directory'] and (info.st_nlink != 1 or digest(descriptor) != recorded['sha256'])):
+                        self.fail('A generated runtime file changed while its permissions were secured. Keep the operation for recovery.')
+                finally:
+                    os.close(descriptor)
+            for name, recorded in entries.items():
+                descriptor = open_relative(private, Path(name).parts)
+                try:
+                    current = inspect(descriptor)
+                    if any(current[key] != recorded[key] for key in ('device', 'inode', 'directory', 'sha256')):
+                        self.fail('The generated runtime inventory moved or changed during preparation.')
+                    if current['directory']:
+                        expected_children = {Path(other).name for other in entries if Path(other).parent == Path(name)}
+                        if set(os.listdir(descriptor)) != expected_children:
+                            self.fail('A generated runtime directory changed during preparation. Choose Recover before retrying.')
+                finally:
+                    os.close(descriptor)
+            check = directory(m.private)
+            try:
+                observed = os.fstat(check)
+                if (observed.st_dev, observed.st_ino) != (anchor.st_dev, anchor.st_ino):
+                    self.fail('The private runtime directory moved during preparation. Keep the saved operation; no business data was converted.')
+            finally:
+                os.close(check)
+        finally:
+            os.close(private)
 
     def adopt(self):
         m = self.m
@@ -239,7 +382,7 @@ server {{
         netloc = database['name'] + ':' + database['password'] + '@' + database['host'] + ':' + str(original_url.port or 3306)
         values.update({'DATABASE_URL': urllib.parse.urlunsplit((original_url.scheme, netloc, original_url.path, original_url.query, '')),
                        'EMAILER_RUNTIME_CONFIGURATION_FILE': str(self.runtime), 'EMAILER_RELEASE_PUBLIC_KEY_FILE': str(pin),
-                       'EMAILER_RUNTIME_DIR': str(m.private / ('runtime-' + self.name)), 'EMAILER_HTTP_MODE': 'direct-fpm', 'TRUSTED_PROXIES': '',
+                       'EMAILER_RUNTIME_DIR': str(m.private / ('runtime-' + self.name)), 'LOCK_DSN': 'flock://' + str(m.private / 'locks'), 'EMAILER_HTTP_MODE': 'direct-fpm', 'TRUSTED_PROXIES': '',
                        'EMAILER_INSTALLER_HOLD_FILE': str(self.hold)})
         for name in ('EMAILER_UPDATE_SOURCE_VERSION', 'EMAILER_INSTALLER_REPLACEMENT_RUNTIME', 'EMAILER_INSTALLER_RETAIN_SOURCE_FENCE'):
             values.pop(name, None)

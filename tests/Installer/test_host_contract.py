@@ -117,6 +117,129 @@ class PackageFailureGuidance(unittest.TestCase):
         self.assertIn('php8.4-xml=8.4.1', calls[1])
         self.assertNotIn('--allow-unauthenticated', calls[1])
 
+class PrivateRuntimePermissionContract(unittest.TestCase):
+    def instance(self, root):
+        private = root / 'private'
+        private.mkdir(mode=0o700)
+        manager = types.SimpleNamespace(prefix='emailer-light', private=private, source_values={'EMAILER_RUNTIME_DIR': str(private), 'LOCK_DSN': 'flock://' + str(private / 'locks')}, account=types.SimpleNamespace(pw_uid=os.getuid(), pw_gid=os.getgid()), installer=types.SimpleNamespace(product='emailer-light'), record={}, error=ManagementError)
+        handoff = HostHandoff(manager)
+        return manager, handoff
+
+    def test_generated_files_are_secured_after_receipt_without_replacing_locks_or_data(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager, handoff = self.instance(Path(directory))
+            cache = manager.private / 'cache'
+            locks = manager.private / 'locks'
+            cache.mkdir(mode=0o755)
+            locks.mkdir(mode=0o755)
+            generated = cache / 'generated.php'
+            lock = locks / 'application.lock'
+            business = manager.private / 'campaign-asset'
+            for path in (generated, lock, business):
+                path.write_bytes(b'synthetic fixture bytes')
+                path.chmod(0o644)
+            inodes = {str(path): path.stat().st_ino for path in (generated, lock, business)}
+            saved = []
+            manager.save = lambda: saved.append((generated.stat().st_mode & 0o777, json.loads(json.dumps(handoff.state))))
+            handoff.secure_runtime_metadata()
+            self.assertEqual(0o644, saved[0][0])
+            self.assertIn('cache/generated.php', saved[0][1]['runtime_metadata_before'])
+            for path in (generated, lock):
+                self.assertEqual(0o600, path.stat().st_mode & 0o777)
+                self.assertEqual(inodes[str(path)], path.stat().st_ino)
+                self.assertEqual(b'synthetic fixture bytes', path.read_bytes())
+            self.assertEqual(0o644, business.stat().st_mode & 0o777)
+            handoff.secure_runtime_metadata()
+            self.assertEqual(0o644, handoff.state['runtime_metadata_before']['cache/generated.php']['mode'])
+
+    def test_linked_or_hardlinked_runtime_cannot_change_an_outside_file(self):
+        for hardlink in (False, True):
+            with self.subTest(hardlink=hardlink), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                manager, handoff = self.instance(root)
+                (manager.private / 'cache').mkdir()
+                outside = root / 'outside'
+                outside.write_text('keep this unchanged')
+                outside.chmod(0o644)
+                entry = manager.private / 'cache' / 'unsafe'
+                if hardlink:
+                    os.link(outside, entry)
+                else:
+                    entry.symlink_to(outside)
+                manager.save = lambda: self.fail('Unsafe inventory must fail before metadata mutation')
+                with self.assertRaises((ManagementError, OSError)):
+                    handoff.secure_runtime_metadata()
+                self.assertEqual(0o644, outside.stat().st_mode & 0o777)
+                self.assertEqual('keep this unchanged', outside.read_text())
+
+    def test_interrupted_permission_repair_resumes_and_keeps_an_open_lock_exclusive(self):
+        import fcntl
+        with tempfile.TemporaryDirectory() as directory:
+            manager, handoff = self.instance(Path(directory))
+            locks = manager.private / 'locks'
+            locks.mkdir(mode=0o755)
+            lock = locks / 'held.lock'
+            lock.write_bytes(b'')
+            lock.chmod(0o644)
+            manager.save = lambda: None
+            real_chmod = os.fchmod
+            calls = []
+            def interrupted(descriptor, mode):
+                real_chmod(descriptor, mode)
+                calls.append(mode)
+                raise InterruptedError('synthetic interrupted metadata repair')
+            with lock.open('rb') as held:
+                fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                inode = os.fstat(held.fileno()).st_ino
+                with patch('host.os.fchmod', side_effect=interrupted), self.assertRaises(InterruptedError):
+                    handoff.secure_runtime_metadata()
+                handoff.secure_runtime_metadata()
+                self.assertEqual(inode, lock.stat().st_ino)
+                with lock.open('rb') as contender, self.assertRaises(BlockingIOError):
+                    fcntl.flock(contender, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.assertEqual(0o644, handoff.state['runtime_metadata_before']['locks/held.lock']['mode'])
+
+    def test_business_lock_path_and_drifted_receipts_fail_before_a_new_repair(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager, handoff = self.instance(Path(directory))
+            business = manager.private / 'template-assets'
+            business.mkdir()
+            asset = business / 'keep'
+            asset.write_text('unchanged business asset')
+            asset.chmod(0o644)
+            manager.source_values['LOCK_DSN'] = 'flock://' + str(business)
+            manager.save = lambda: None
+            with self.assertRaises(ManagementError):
+                handoff.secure_runtime_metadata()
+            self.assertEqual(0o644, asset.stat().st_mode & 0o777)
+            manager.source_values['LOCK_DSN'] = 'flock://' + str(manager.private / 'locks')
+            cache = manager.private / 'cache'
+            cache.mkdir()
+            generated = cache / 'file'
+            generated.write_text('first generated content')
+            handoff.secure_runtime_metadata()
+            previous = json.dumps(handoff.state, sort_keys=True)
+            generated.write_text('changed after interruption')
+            with self.assertRaises(ManagementError):
+                handoff.secure_runtime_metadata()
+            self.assertEqual(previous, json.dumps(handoff.state, sort_keys=True))
+
+    def test_concurrent_generated_file_creation_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager, handoff = self.instance(Path(directory))
+            cache = manager.private / 'cache'
+            cache.mkdir()
+            (cache / 'original').write_text('original bytes')
+            manager.save = lambda: None
+            real_chmod = os.fchmod
+            def concurrent(descriptor, mode):
+                real_chmod(descriptor, mode)
+                (cache / 'new-unrecorded').write_text('concurrent generated file')
+            with patch('host.os.fchmod', side_effect=concurrent), self.assertRaises(ManagementError):
+                handoff.secure_runtime_metadata()
+            self.assertNotIn('cache/new-unrecorded', handoff.state['runtime_metadata_before'])
+            self.assertEqual('original bytes', (cache / 'original').read_text())
+
 
 if __name__ == '__main__':
     unittest.main()
