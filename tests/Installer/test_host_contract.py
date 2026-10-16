@@ -39,6 +39,22 @@ class RuntimeFileContract(unittest.TestCase):
 
 
 class HostingIsolationContract(unittest.TestCase):
+    def test_only_the_actual_nginx_listener_is_accepted_when_nginx_is_installed(self):
+        instance = object.__new__(Installer)
+        def table(path, *args, **kwargs):
+            if str(path) == '/proc/4321/comm':
+                return 'nginx\n'
+            if str(path) == '/proc/net/tcp':
+                return 'header\n0: 00000000:0050 00000000:0000 0A 0:0 0:0 0 0 0 111\n'
+            return 'header\n'
+        with patch.object(Path, 'read_text', table), patch.object(Path, 'iterdir', return_value=iter([Path('/proc/4321/fd/7')])), patch('provision.os.readlink', return_value='socket:[111]'), patch('provision.subprocess.run', return_value=types.SimpleNamespace(returncode=0, stdout='4321')):
+            instance.check_public_listeners()
+        def foreign(path, *args, **kwargs):
+            result = table(path, *args, **kwargs)
+            return result + '1: 00000000:01BB 00000000:0000 0A 0:0 0:0 0 0 0 222\n' if str(path) == '/proc/net/tcp' else result
+        with patch.object(Path, 'read_text', foreign), patch.object(Path, 'iterdir', return_value=iter([Path('/proc/4321/fd/7')])), patch('provision.os.readlink', return_value='socket:[111]'), patch('provision.subprocess.run', return_value=types.SimpleNamespace(returncode=0, stdout='4321')), self.assertRaisesRegex(SetupError, 'Port 443.*outside'):
+            instance.check_public_listeners()
+
     def test_cron_matching_preserves_another_edition_and_neighbouring_path(self):
         markers = ('/usr/local/sbin/emailer', '/srv/emailer/releases/current/bin/console')
         for line in ('* * * * * /usr/local/sbin/emailer-light operations:run', '* * * * * /usr/local/sbin/emailer-other job', '* * * * * /srv/emailer/releases/current/bin/console-other'):

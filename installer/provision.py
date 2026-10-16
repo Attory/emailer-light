@@ -140,13 +140,40 @@ class Installer:
                 # Arbitrary scoped/default address changes need separate profile tests.
                 if re.search(r'listen\s+(?!\[::\]:|80\b|443\b|0\.0\.0\.0:)[^;]*:(?:80|443)\b', result):
                     raise SetupError('Nginx uses address-specific public listeners. This profile needs an operator configuration review; no existing website was changed.')
-        else:
-            for port in (80, 443):
-                with socket.socket() as probe:
+        self.check_public_listeners()
+
+    def check_public_listeners(self):
+        try:
+            listeners = {}
+            for table in ('tcp', 'tcp6'):
+                path = Path('/proc/net/' + table)
+                if table == 'tcp6' and not path.exists():
+                    continue
+                for line in path.read_text().splitlines()[1:]:
+                    fields = line.split()
+                    if fields[3] == '0A':
+                        port = int(fields[1].rsplit(':', 1)[1], 16)
+                        if port in (80, 443):
+                            listeners.setdefault(port, set()).add(fields[9])
+            if not listeners:
+                return
+            service = subprocess.run(['systemctl', 'show', 'nginx.service', '--property=MainPID', '--value'], capture_output=True, text=True)
+            pid = service.stdout.strip()
+            owned = set()
+            if service.returncode == 0 and pid.isdecimal() and int(pid) > 0 and Path('/proc/' + pid + '/comm').read_text().strip() == 'nginx':
+                for descriptor in Path('/proc/' + pid + '/fd').iterdir():
                     try:
-                        probe.bind(('0.0.0.0', port))
-                    except OSError:
-                        raise SetupError(f'Port {port} is occupied by an unknown service. Keep that website running and use a separate supported VPS.') from None
+                        target = os.readlink(descriptor)
+                    except FileNotFoundError:
+                        continue
+                    match = re.fullmatch(r'socket:\[([0-9]+)\]', target)
+                    if match:
+                        owned.add(match.group(1))
+            for port, inodes in listeners.items():
+                if not inodes.issubset(owned):
+                    raise SetupError(f'Port {port} is occupied by a service outside the existing Nginx website service. Setup kept it running. Free that port for Nginx or use a separate supported VPS, then start setup again.')
+        except OSError:
+            raise SetupError('Setup could not safely identify the services using web ports 80 and 443. Retain existing websites and restore normal Linux /proc service inspection before retrying; no website was changed.') from None
 
     def database_run(self, arguments, data=None):
         result = subprocess.run([*self.database_cli, *arguments], input=data, capture_output=True, text=True, env=self.database_environment)

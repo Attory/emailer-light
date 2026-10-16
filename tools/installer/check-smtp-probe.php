@@ -13,17 +13,20 @@ use App\Module\Configuration\Infrastructure\SmtpMailProbe;
 $probe = new SmtpMailProbe('prod');
 $host = 'smtp-fixture.test';
 $password = 'synthetic-acceptance-only';
+$probe->check($host, 2465, 'tls', 'synthetic', $password, 'sender@example.test', null);
 $probe->check($host, 2525, 'starttls', 'synthetic', $password, 'sender@example.test', null);
 if (file_exists('/evidence/state.json')) {
     throw new RuntimeException('A connection-only test transmitted DATA.');
 }
-foreach ([['wrong-host.test', $password], [$host, 'synthetic-rejected-password']] as [$invalidHost, $invalidPassword]) {
-    try {
-        $probe->check($invalidHost, 2525, 'starttls', 'synthetic', $invalidPassword, 'sender@example.test', null);
-        throw new LogicException('An invalid TLS identity or password was accepted.');
-    } catch (RuntimeException $error) {
-        if (str_contains($error->getMessage(), $invalidPassword)) {
-            throw new LogicException('A transport failure exposed a credential.');
+foreach ([[2465, 'tls'], [2525, 'starttls']] as [$port, $mode]) {
+    foreach ([['wrong-host.test', $password], [$host, 'synthetic-rejected-password']] as [$invalidHost, $invalidPassword]) {
+        try {
+            $probe->check($invalidHost, $port, $mode, 'synthetic', $invalidPassword, 'sender@example.test', null);
+            throw new LogicException('An invalid TLS identity or password was accepted.');
+        } catch (RuntimeException $error) {
+            if (str_contains($error->getMessage(), $invalidPassword)) {
+                throw new LogicException('A transport failure exposed a credential.');
+            }
         }
     }
 }
@@ -35,4 +38,4 @@ $evidence = json_decode((string) file_get_contents('/evidence/state.json'), true
 if (1 !== $evidence['messages'] || ['requested-test@example.test'] !== $evidence['recipients']) {
     throw new RuntimeException('Explicit test did not produce exactly one synthetic message.');
 }
-echo "Strict TLS and authentication verified; connection-only and failure tests sent no DATA; explicit test sent exactly one synthetic message.\n";
+echo "Strict direct TLS, STARTTLS and authentication verified; connection-only and failure tests sent no DATA; explicit test sent exactly one synthetic message.\n";

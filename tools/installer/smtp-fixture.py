@@ -15,9 +15,15 @@ context.load_cert_chain('/fixture/server.crt', '/fixture/server.key')
 
 
 class SMTP(socketserver.StreamRequestHandler):
+    direct_tls = False
+
     def handle(self):
         self.connection.settimeout(10)
-        secure = False
+        secure = self.direct_tls
+        if secure:
+            self.connection = context.wrap_socket(self.connection, server_side=True)
+            self.rfile = self.connection.makefile('rb')
+            self.wfile = self.connection.makefile('wb', buffering=0)
         authenticated = False
         recipient = None
         self.wfile.write(b'220 smtp-fixture.test acceptance only\r\n')
@@ -89,6 +95,11 @@ class Server(socketserver.ThreadingTCPServer):
     daemon_threads = True
 
 
-with Server(('0.0.0.0', 2525), SMTP) as server:
+class SMTPTLS(SMTP):
+    direct_tls = True
+
+
+with Server(('0.0.0.0', 2465), SMTPTLS) as direct, Server(('0.0.0.0', 2525), SMTP) as server:
+    threading.Thread(target=direct.serve_forever, daemon=True).start()
     Path('/evidence/ready').write_text('ready')
     server.serve_forever()

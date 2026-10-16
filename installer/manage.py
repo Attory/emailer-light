@@ -310,6 +310,7 @@ class Manager:
             if input('Resume delivery now? [y/N]: ').strip().lower() != 'y':
                 return
             self.call(['/usr/local/sbin/' + self.prefix, 'emailer:delivery:resume', '--no-interaction'])
+            self.call(['/usr/local/sbin/' + self.prefix, 'emailer:health:verify-runtime', '--record'])
             print('Delivery readiness passed and the operational hold was lifted.')
             return
         if choice not in ('1', '2', '3'):

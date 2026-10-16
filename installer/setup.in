@@ -24,8 +24,34 @@ if ! command -v python3 >/dev/null 2>&1 || ! command -v openssl >/dev/null 2>&1;
         exit 1
     fi
     export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
-    apt-get update >/dev/null
-    apt-get install -y --no-install-recommends python3 openssl ca-certificates >/dev/null
+    if ! bootstrap_output=$(apt-get --error-on=any -o Acquire::Retries=0 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10 update 2>&1); then
+        case "$bootstrap_output" in
+            *'created after'*'not-after'*|*'not valid yet'*|*'expired'*) bootstrap_reason='The Debian verification-tool catalogue is expired or dated in the future. Check the server clock and mirror freshness.' ;;
+            *'NO_PUBKEY'*|*'EXPKEYSIG'*|*'not signed'*|*'signature verification failed'*) bootstrap_reason='Debian could not authenticate the verification-tool catalogue. Restore the Debian repository signing configuration; setup will not bypass verification.' ;;
+            *'Could not get lock'*|*'Unable to acquire'*) bootstrap_reason='Another Debian package task is running. Let it finish before starting setup again.' ;;
+            *'Could not resolve'*|*'Temporary failure resolving'*) bootstrap_reason='The server cannot resolve its Debian package server. Restore working DNS for the Debian repositories.' ;;
+            *) bootstrap_reason='The server cannot reach a usable signed Debian package catalogue. Check its repository connection and download proxy.' ;;
+        esac
+        printf '%s Start this same setup package again after correcting the problem. No application was installed.\n' "$bootstrap_reason" >&2
+        exit 1
+    fi
+    bootstrap_packages=''
+    if ! command -v python3 >/dev/null 2>&1; then bootstrap_packages="$bootstrap_packages python3"; fi
+    if ! command -v openssl >/dev/null 2>&1; then bootstrap_packages="$bootstrap_packages openssl"; fi
+    if [ ! -r /etc/ssl/certs/ca-certificates.crt ]; then bootstrap_packages="$bootstrap_packages ca-certificates"; fi
+    # The package list contains only the fixed names above, never user input.
+    if ! bootstrap_output=$(apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10 install -y --no-install-recommends $bootstrap_packages 2>&1); then
+        case "$bootstrap_output" in
+            *'Could not get lock'*|*'Unable to acquire'*|*'dpkg was interrupted'*) bootstrap_reason='Finish the running or interrupted Debian package task.' ;;
+            *'No space left'*|*'not enough free space'*) bootstrap_reason='Free disk space for the Debian verification tools.' ;;
+            *'Could not resolve'*|*'Failed to fetch'*|*'Connection failed'*) bootstrap_reason='Restore the Debian repository connection and DNS.' ;;
+            *'Unable to locate package'*|*'no installation candidate'*) bootstrap_reason='Enable the standard Debian 13 main and security repositories.' ;;
+            *) bootstrap_reason='Resolve the Debian package error recorded in /var/log/apt/term.log.' ;;
+        esac
+        printf 'Debian could not install the missing verification tools. %s Then start this same setup package again. No application was installed.\n' "$bootstrap_reason" >&2
+        exit 1
+    fi
+    unset bootstrap_output bootstrap_packages bootstrap_reason
 fi
 exec python3 - "$bundle" <<'PY'
 import base64
