@@ -18,13 +18,7 @@ final class NativeSchemaProof
             if (false === $row) {
                 throw new \RuntimeException('Canonical table proof is unavailable.');
             }
-            $ddl = self::sql(NativeUpdateJournal::text($row['Create Table'] ?? null));
-            if ('doctrine_migration_versions' === $table) {
-                // Doctrine creates its ASCII version ledger using the database
-                // default. These three tested UTF-8 defaults leave its structure
-                // unchanged; the operation still binds the exact live DDL.
-                $ddl = preg_replace('/COLLATE=utf8mb4_(?:general_ci|unicode_ci|bin)\\b/', 'COLLATE=metadata_utf8mb4_default', $ddl) ?? $ddl;
-            }
+            $ddl = self::baselineTable($table, NativeUpdateJournal::text($row['Create Table'] ?? null));
             $result['tables'][$table] = $ddl;
         }
         foreach ($connection->fetchFirstColumn('SELECT TRIGGER_NAME FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() ORDER BY TRIGGER_NAME') as $name) {
@@ -44,6 +38,19 @@ final class NativeSchemaProof
         unset($map);
 
         return $result;
+    }
+
+    /** Only Doctrine's ASCII version ledger may inherit a tested database default. */
+    public static function baselineTable(string $table, string $sql): string
+    {
+        $sql = self::sql($sql);
+        if ('doctrine_migration_versions' === $table) {
+            // Application DDL remains exact. The operation separately binds the
+            // exact live ledger DDL for recovery, including its real collation.
+            $sql = preg_replace('/COLLATE=utf8mb4_(?:general_ci|unicode_ci|bin|uca1400_ai_ci)\\b/', 'COLLATE=metadata_utf8mb4_default', $sql) ?? $sql;
+        }
+
+        return $sql;
     }
 
     private static function sql(string $sql): string

@@ -10,6 +10,20 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 final class NativeSchemaProofTest extends KernelTestCase
 {
+    public function testLedgerDefaultsDoNotRelaxApplicationOrStructuralProofs(): void
+    {
+        $ledger = 'CREATE TABLE `doctrine_migration_versions` (`version` varchar(191) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin';
+        $canonical = NativeSchemaProof::baselineTable('doctrine_migration_versions', $ledger);
+        foreach (['bin', 'unicode_ci', 'general_ci', 'uca1400_ai_ci'] as $collation) {
+            self::assertSame($canonical, NativeSchemaProof::baselineTable('doctrine_migration_versions', str_replace('utf8mb4_bin', 'utf8mb4_'.$collation, $ledger)));
+        }
+        foreach (['varchar(191)' => 'varchar(190)', 'utf8mb4_bin' => 'utf8mb4_unicode_520_ci', 'NOT NULL' => 'DEFAULT NULL'] as $before => $after) {
+            self::assertNotSame($canonical, NativeSchemaProof::baselineTable('doctrine_migration_versions', str_replace($before, $after, $ledger)));
+        }
+        $application = str_replace('doctrine_migration_versions', 'app_user', $ledger);
+        self::assertNotSame($application, NativeSchemaProof::baselineTable('app_user', str_replace('utf8mb4_bin', 'utf8mb4_uca1400_ai_ci', $application)));
+    }
+
     public function testLiveBaselineMatchesTheSignedUpdateProof(): void
     {
         self::bootKernel();
