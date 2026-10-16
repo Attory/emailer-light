@@ -65,6 +65,32 @@ def ask_hostname():
     return host
 
 
+def root_directory(path, group, mode):
+    """Set required traversal explicitly; caller umask must not break service access."""
+    path = Path(path)
+    try:
+        path.mkdir(mode=0o700)
+    except FileExistsError:
+        pass
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    descriptor = os.open('/', flags)
+    try:
+        for part in path.parts[1:]:
+            child = os.open(part, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+        info = os.fstat(descriptor)
+        if info.st_uid != 0 or info.st_mode & 0o022:
+            raise SetupError('A shared application directory is not protected and root owned. It was not changed.')
+        os.fchown(descriptor, 0, group)
+        os.fchmod(descriptor, mode)
+        info = os.fstat(descriptor)
+        if (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) != (0, group, mode):
+            raise SetupError('The required service access could not be verified. Keep installation state and retry.')
+    finally:
+        os.close(descriptor)
+
+
 class Installer:
     def __init__(self, bundle):
         self.php = '/usr/bin/php8.4'
@@ -398,14 +424,14 @@ class Installer:
         except KeyError:
             run(['useradd', '--system', '--user-group', '--home-dir', str(self.private.parent), '--shell', '/usr/sbin/nologin', self.user])
         account = pwd.getpwnam(self.user)
+        root_directory(self.private.parent, 0, 0o755)
         for path in (self.private, self.keys, self.backups, self.private / 'locks'):
             path.mkdir(mode=0o700, parents=True, exist_ok=True)
             os.chmod(path, 0o700)
             os.chown(path, account.pw_uid, account.pw_gid)
-        self.config.mkdir(mode=0o750, parents=True, exist_ok=True)
-        os.chown(self.config, 0, account.pw_gid)
-        self.base.mkdir(mode=0o755, parents=True, exist_ok=True)
-        (self.base / 'releases').mkdir(mode=0o755, exist_ok=True)
+        root_directory(self.config, account.pw_gid, 0o750)
+        root_directory(self.base, 0, 0o755)
+        root_directory(self.base / 'releases', 0, 0o755)
         runtime = self.config / 'runtime.env'
         if not runtime.exists():
             password = secrets.token_hex(32)
@@ -631,8 +657,8 @@ WantedBy=multi-user.target
     def website(self):
         host = self.state['hostname']
         webroot = Path('/var/lib') / (self.name + '-acme')
-        (webroot / '.well-known/acme-challenge').mkdir(parents=True, exist_ok=True)
-        os.chmod(webroot, 0o755)
+        for directory in (webroot, webroot / '.well-known', webroot / '.well-known/acme-challenge'):
+            root_directory(directory, 0, 0o755)
         base = f'''server {{
     listen 80;
     server_name {host};

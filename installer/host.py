@@ -182,11 +182,8 @@ server {{
             account = pwd.getpwnam(self.name)
         if account.pw_uid == 0 or account.pw_name != self.name or grp.getgrgid(account.pw_gid).gr_name != self.name:
             self.fail('The reserved service identity has unexpected ownership.')
-        self.configuration.mkdir(mode=0o750, exist_ok=True)
-        metadata = self.configuration.lstat()
-        if self.configuration.is_symlink() or metadata.st_uid != 0 or metadata.st_mode & 0o022:
-            self.fail('The isolated target configuration folder is unsafe.')
-        os.chown(self.configuration, 0, account.pw_gid)
+        from provision import root_directory
+        root_directory(self.configuration, account.pw_gid, 0o750)
         self.host.durable(self.hold, json.dumps({'format': 'emailer-installer-hold-v1', 'installation_uuid': self.state['installation_uuid'], 'phase': 'host-handoff'}) + '\n', 0o644)
         if not self.state.get('database_prepared'):
             self.database('create')

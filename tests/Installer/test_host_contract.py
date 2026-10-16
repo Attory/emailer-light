@@ -11,7 +11,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'installer'))
 from runtime_env import parse_environment_text, RuntimeEnvironmentError
 from host import HostHandoff
-from provision import Installer, SetupError
+from provision import Installer, SetupError, root_directory
 from manage import Manager, ManagementError
 
 
@@ -39,6 +39,31 @@ class RuntimeFileContract(unittest.TestCase):
 
 
 class HostingIsolationContract(unittest.TestCase):
+    @unittest.skipUnless(os.geteuid() == 0, 'Real root-owned service traversal requires root')
+    def test_required_traversal_survives_restrictive_umask_and_a_retry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            previous = os.umask(0o077)
+            try:
+                configuration = root / 'configuration'
+                root_directory(configuration, 65534, 0o750)
+                self.assertEqual((0, 65534, 0o750), (configuration.stat().st_uid, configuration.stat().st_gid, configuration.stat().st_mode & 0o777))
+                configuration.chmod(0o700)  # An interrupted older run retained this root directory.
+                root_directory(configuration, 65534, 0o750)
+                self.assertEqual(0o750, configuration.stat().st_mode & 0o777)
+                challenge = root / 'challenge'
+                root_directory(challenge, 0, 0o755)
+                self.assertEqual(0o755, challenge.stat().st_mode & 0o777)
+                outside = root / 'outside'
+                outside.mkdir(mode=0o700)
+                linked = root / 'linked'
+                linked.symlink_to(outside, target_is_directory=True)
+                with self.assertRaises(OSError):
+                    root_directory(linked, 65534, 0o750)
+                self.assertEqual(0o700, outside.stat().st_mode & 0o777)
+            finally:
+                os.umask(previous)
+
     def test_only_the_actual_nginx_listener_is_accepted_when_nginx_is_installed(self):
         instance = object.__new__(Installer)
         def table(path, *args, **kwargs):
