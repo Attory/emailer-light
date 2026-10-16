@@ -43,6 +43,8 @@ final class RoutePolicyRegistry
         'admin_logout' => ['POST'],
         'admin_mail_settings' => ['GET', 'HEAD'],
         'admin_mail_settings_update' => ['POST'],
+        'admin_mail_test_connection' => ['POST'],
+        'admin_mail_send_test' => ['POST'],
         'admin_password_change' => ['POST'],
         'admin_profile' => ['GET', 'HEAD'],
         'admin_release' => ['GET', 'HEAD'],

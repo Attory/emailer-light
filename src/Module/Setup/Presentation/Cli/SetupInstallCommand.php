@@ -39,6 +39,9 @@ final class SetupInstallCommand extends Command
         private readonly CliSetupState $cliSetupStateStore,
         private readonly Clock $clock,
         private readonly string $publicDirectory,
+        private readonly string $canonicalUri = '',
+        private readonly string $backupDestinationDirectory = '',
+        private readonly ?\App\Module\Operations\Application\Contract\OperationsPolicyWriter $operationsPolicy = null,
         private readonly ?DatabaseSetup $databaseSetup = null,
         private readonly ?SetupState $setupState = null,
         private readonly ?ConfigurationSetup $configurationSetup = null,
@@ -50,6 +53,7 @@ final class SetupInstallCommand extends Command
 
     protected function configure(): void
     {
+        $this->addOption('guided', null, InputOption::VALUE_NONE, 'Use provisioned hosting settings and defer SMTP; ask only for the first administrator account.');
         $this->addOption('complete', null, InputOption::VALUE_NONE, 'Continue through the interactive full installation after preflight.');
     }
 
@@ -81,7 +85,7 @@ final class SetupInstallCommand extends Command
         }
 
         $this->cliSetupStateStore->recordOwnershipVerified($this->clock->now());
-        if (true !== $input->getOption('complete')) {
+        if (true !== $input->getOption('complete') && true !== $input->getOption('guided')) {
             $io->success('CLI ownership and preflight are verified. Re-run with --complete in a protected interactive terminal to finish installation.');
 
             return self::SUCCESS;
@@ -108,7 +112,7 @@ final class SetupInstallCommand extends Command
 
             return self::FAILURE;
         } catch (\RuntimeException) {
-            $io->error('Installation state validation failed. Verify key/private-path ownership, Mailpit isolation, setup progress, and Doctor results before retrying.');
+            $io->error('Installation state validation failed. Verify key/private-path ownership, mail configuration, setup progress, and Doctor results before retrying.');
 
             return self::FAILURE;
         } catch (\Throwable) {
@@ -134,28 +138,42 @@ final class SetupInstallCommand extends Command
         }
         $summaryRows = [];
 
-        $io->section('Database and installation key');
-        $host = $this->ask($helper, $input, $output, 'MariaDB host: ');
-        $port = $this->askInt($helper, $input, $output, 'MariaDB port [3306]: ', 3306);
-        $database = $this->ask($helper, $input, $output, 'MariaDB database: ');
-        $username = $this->ask($helper, $input, $output, 'MariaDB runtime username: ');
-        $databasePassword = $this->askSecret($helper, $input, $output, 'MariaDB password: ');
-        try {
-            $databaseSetup->configure(new DatabaseInput($host, $port, $database, $username, $databasePassword));
-        } finally {
-            sodium_memzero($databasePassword);
+        $guided = true === $input->getOption('guided');
+        if ($guided) {
+            $io->section('Preparing your application');
+            $databaseSetup->configureRuntime();
+            $summaryRows[] = ['Database', 'Dedicated protected hosting configuration verified'];
+        } else {
+            $io->section('Database and installation key');
+            $host = $this->ask($helper, $input, $output, 'MariaDB host: ');
+            $port = $this->askInt($helper, $input, $output, 'MariaDB port [3306]: ', 3306);
+            $database = $this->ask($helper, $input, $output, 'MariaDB database: ');
+            $username = $this->ask($helper, $input, $output, 'MariaDB runtime username: ');
+            $databasePassword = $this->askSecret($helper, $input, $output, 'MariaDB password: ');
+            try {
+                $databaseSetup->configure(new DatabaseInput($host, $port, $database, $username, $databasePassword));
+            } finally {
+                sodium_memzero($databasePassword);
+            }
+            $summaryRows[] = ['Database', $host.':'.$port.'/'.$database.' as '.$username];
         }
-        $summaryRows[] = ['Database', $host.':'.$port.'/'.$database.' as '.$username];
         $installationId = $setupState->initializeKey();
         $summaryRows[] = ['Installation key', 'External service-owned key initialized and validated'];
 
         $progress = $setupState->progress();
         if (!$progress->organisationReady) {
             $io->section('Organisation');
-            $organisation = $this->ask($helper, $input, $output, 'Organisation display name: ');
-            $baseUrl = $this->ask($helper, $input, $output, 'Canonical HTTPS base URL: ');
-            $locale = $this->ask($helper, $input, $output, 'Locale [en_AU]: ', 'en_AU');
-            $timeZone = $this->ask($helper, $input, $output, 'Time zone [Australia/Sydney]: ', 'Australia/Sydney');
+            if ($guided) {
+                $organisation = 'Emailer';
+                $baseUrl = $this->canonicalUri;
+                $locale = 'en_GB';
+                $timeZone = 'UTC';
+            } else {
+                $organisation = $this->ask($helper, $input, $output, 'Organisation display name: ');
+                $baseUrl = $this->ask($helper, $input, $output, 'Canonical HTTPS base URL: ');
+                $locale = $this->ask($helper, $input, $output, 'Locale [en_AU]: ', 'en_AU');
+                $timeZone = $this->ask($helper, $input, $output, 'Time zone [Australia/Sydney]: ', 'Australia/Sydney');
+            }
             $configurationSetup->saveOrganisation($installationId, new OrganisationInput($organisation, $baseUrl, $locale, $timeZone));
             $setupState->mark('organisation');
             $summaryRows[] = ['Organisation', $organisation.' | '.$baseUrl.' | '.$locale.' | '.$timeZone];
@@ -186,30 +204,35 @@ final class SetupInstallCommand extends Command
 
         $progress = $setupState->progress();
         if (!$progress->mailReady) {
-            $io->section('Isolated setup mail probe');
-            $mailHost = $this->ask($helper, $input, $output, 'Local Mailpit host [mailpit]: ', 'mailpit');
-            $mailPort = $this->askInt($helper, $input, $output, 'Local Mailpit SMTP port [1025]: ', 1025);
-            $senderAddress = $this->ask($helper, $input, $output, 'Synthetic sender address: ');
-            $senderName = $this->ask($helper, $input, $output, 'Synthetic sender name [Emailer Light Test]: ', 'Emailer Light Test');
-            $configurationSetup->testAndSaveMail($installationId, new MailInput(
-                $mailHost,
-                $mailPort,
-                'none',
-                '',
-                '',
-                $senderAddress,
-                $senderName,
-                '',
-            ));
+            if ($guided) {
+                $io->note('Email delivery is not configured. You can sign in and prepare templates and campaigns; add SMTP in Mail settings when ready.');
+                $summaryRows[] = ['Email delivery', 'Not configured; sending remains unavailable'];
+            } else {
+                $io->section('Isolated setup mail probe');
+                $mailHost = $this->ask($helper, $input, $output, 'Local Mailpit host [mailpit]: ', 'mailpit');
+                $mailPort = $this->askInt($helper, $input, $output, 'Local Mailpit SMTP port [1025]: ', 1025);
+                $senderAddress = $this->ask($helper, $input, $output, 'Synthetic sender address: ');
+                $senderName = $this->ask($helper, $input, $output, 'Synthetic sender name [Emailer Light Test]: ', 'Emailer Light Test');
+                $configurationSetup->testAndSaveMail($installationId, new MailInput(
+                    $mailHost,
+                    $mailPort,
+                    'none',
+                    '',
+                    '',
+                    $senderAddress,
+                    $senderName,
+                    '',
+                ));
+                $summaryRows[] = ['Setup mail', $mailHost.':'.$mailPort.' | '.$senderAddress.' | '.$senderName.' | no TLS/auth'];
+            }
             $setupState->mark('mail');
-            $summaryRows[] = ['Setup mail', $mailHost.':'.$mailPort.' | '.$senderAddress.' | '.$senderName.' | no TLS/auth'];
         } else {
             $summaryRows[] = ['Setup mail', 'Previously completed; production SMTP remains prohibited until authenticated reconfiguration'];
         }
 
         $progress = $setupState->progress();
         if (!$progress->policyReady || !$progress->capabilityReady) {
-            $workerMode = $this->ask($helper, $input, $output, 'Worker mode, supervised or cron [supervised]: ', 'supervised');
+            $workerMode = $guided ? 'supervised' : $this->ask($helper, $input, $output, 'Worker mode, supervised or cron [supervised]: ', 'supervised');
             $configurationSetup->savePolicies(new PolicyInput(
                 60,
                 1,
@@ -222,6 +245,10 @@ final class SetupInstallCommand extends Command
                 'You are receiving this message from the configured organisation. An unsubscribe link is included below.',
                 $workerMode,
             ));
+            if ($guided && '' !== $this->backupDestinationDirectory && null !== $this->operationsPolicy) {
+                $this->operationsPolicy->updateBackup(['backup_automation_enabled' => true, 'backup_interval_hours' => 24, 'backup_retention_days' => 30, 'restore_drill_interval_days' => 30, 'backup_destination_type' => 'filesystem']);
+                $summaryRows[] = ['Backups', 'Daily encrypted local backup; 30-day retention'];
+            }
             $setupState->mark('policy');
             $setupState->mark('capability');
             $summaryRows[] = ['Worker policy', $workerMode];
@@ -231,9 +258,9 @@ final class SetupInstallCommand extends Command
 
         $io->section('Non-secret installation summary');
         $io->table(['Area', 'Recorded value or state'], $summaryRows);
-        $io->note('Confirm the canonical origin, identities, isolated setup mail, worker ownership, and external key boundary. Secret values are intentionally omitted.');
+        $io->note($guided ? 'Your account and security settings are ready. Email delivery stays unavailable until you configure it in Mail settings. Secret values are never displayed.' : 'Confirm the canonical origin, identities, isolated setup mail, worker ownership, and external key boundary. Secret values are intentionally omitted.');
 
-        if (true !== $helper->ask($input, $output, new ConfirmationQuestion(
+        if (!$guided && true !== $helper->ask($input, $output, new ConfirmationQuestion(
             'Permanently lock setup and complete this installation? [y/N] ',
             false,
         ))) {

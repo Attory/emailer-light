@@ -1,0 +1,100 @@
+#!/bin/sh
+# Initial trust: obtain this entry point from the official HTTPS release URL in the guide.
+# The embedded edition key authenticates the entire bundle before provisioner execution.
+set -eu
+if [ "$(id -u)" -ne 0 ]; then
+    printf 'Start setup with sudo. Emailer will run as a dedicated service account.\n' >&2
+    exit 1
+fi
+# Reject unsupported hosting before installing even bootstrap dependencies.
+if [ ! -r /etc/os-release ] || [ ! -d /run/systemd/system ]; then
+    printf 'Setup needs a Debian 13 amd64 VPS with systemd. File-upload hosting is unsupported.\n' >&2
+    exit 1
+fi
+. /etc/os-release
+if [ "${ID:-}" != debian ] || [ "${VERSION_ID:-}" != 13 ] || [ "$(uname -m)" != x86_64 ]; then
+    printf 'This setup supports Debian 13 on amd64. No application was installed.\n' >&2
+    exit 1
+fi
+bundle=$0
+# Only distro-authenticated bootstrap tools may be installed before bundle verification.
+if ! command -v python3 >/dev/null 2>&1 || ! command -v openssl >/dev/null 2>&1; then
+    if ! command -v apt-get >/dev/null 2>&1; then
+        printf 'This setup needs Debian 13 with APT. No application was installed.\n' >&2
+        exit 1
+    fi
+    export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
+    apt-get update >/dev/null
+    apt-get install -y --no-install-recommends python3 openssl ca-certificates >/dev/null
+fi
+exec python3 - "$bundle" <<'PY'
+import base64
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import zipfile
+import zlib
+
+PIN = '@PUBLIC_KEY@'
+PRODUCT = '@PRODUCT@'
+try:
+    source = zipfile.ZipFile(sys.argv[1])
+    if len(source.namelist()) != len(set(source.namelist())):
+        raise ValueError()
+except (OSError, ValueError, zipfile.BadZipFile):
+    sys.exit('Package verification failed. Download a fresh official setup file and try again.')
+frozen = Path(tempfile.mkdtemp(prefix='emailer-verified-', dir='/var/tmp'))
+os.chmod(frozen, 0o700)
+try:
+    def read_regular(relative, maximum):
+        info = source.getinfo(relative)
+        if info.file_size > maximum or stat.S_IFMT(info.external_attr >> 16) not in (0, stat.S_IFREG):
+            raise ValueError()
+        content = source.read(relative)
+        if len(content) > maximum:
+            raise ValueError()
+        return content
+    manifest = read_regular('installer.json', 1024 * 1024)
+    signature = read_regular('installer.json.sig', 64)
+    if len(signature) != 64:
+        raise ValueError()
+    # RFC 8410 SubjectPublicKeyInfo header for Ed25519.
+    (frozen / 'pinned.der').write_bytes(bytes.fromhex('302a300506032b6570032100') + base64.urlsafe_b64decode(PIN + '='))
+    (frozen / 'installer.json').write_bytes(manifest)
+    (frozen / 'installer.json.sig').write_bytes(signature)
+    result = subprocess.run(['openssl', 'pkeyutl', '-verify', '-pubin', '-keyform', 'DER', '-inkey', str(frozen / 'pinned.der'), '-rawin', '-in', str(frozen / 'installer.json'), '-sigfile', str(frozen / 'installer.json.sig')], capture_output=True)
+    if result.returncode:
+        raise ValueError()
+    contract = json.loads(manifest)
+    if contract.get('format') != 'emailer-installer-v1' or contract.get('product') != PRODUCT:
+        raise ValueError()
+    required = {'provision.py', 'command.py', 'verify-package.php', 'PackageInspector.php', 'release.pub', contract['archive']}
+    if not required.issubset(contract['files']):
+        raise ValueError()
+    for relative, digest in contract['files'].items():
+        if not relative or '/' in relative or relative in ('.', '..') or not isinstance(digest, str):
+            raise ValueError()
+        content = read_regular(relative, 512 * 1024 * 1024)
+        if hashlib.sha256(content).hexdigest() != digest:
+            raise ValueError()
+        destination = frozen / relative
+        destination.write_bytes(content)
+        destination.chmod(0o400)
+    if (frozen / 'release.pub').read_text().strip() != PIN:
+        raise ValueError()
+    # Never execute a mutable user-owned file after verifying it.
+    with open('/dev/tty') as terminal:
+        result = subprocess.run(['/usr/bin/python3', str(frozen / 'provision.py'), str(frozen)], stdin=terminal)
+    sys.exit(result.returncode)
+except (OSError, ValueError, KeyError, TypeError, RuntimeError, zlib.error, zipfile.BadZipFile):
+    sys.exit('Package authenticity or integrity verification failed. Nothing from this bundle was executed. Download a fresh official setup package and try again.')
+finally:
+    source.close()
+    shutil.rmtree(frozen)
+PY

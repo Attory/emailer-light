@@ -15,9 +15,13 @@ final readonly class DoctrineDeliveryConfiguration implements DeliveryConfigurat
 
     public function current(): array
     {
-        $row = $this->connection->fetchAssociative("SELECT o.installation_uuid, s.smtp_host, s.smtp_port, s.encryption_mode, s.smtp_username, s.credential_secret_id, s.tls_peer_verification, s.sender_address, s.sender_name, s.reply_to_address, s.one_click_dkim_confirmed, p.unsubscribe_footer, p.open_tracking, p.click_tracking, p.rsvp_enabled, p.rsvp_retention_days, p.rsvp_repeat_policy, d.messages_per_minute, d.worker_concurrency, d.retry_limit, d.maximum_campaign_size FROM organisation_settings o CROSS JOIN sender_identity s CROSS JOIN privacy_policy p CROSS JOIN delivery_policy d WHERE o.singleton_key = '1' AND s.singleton_key = '1' AND p.singleton_key = '1' AND d.singleton_key = '1'");
+        $row = $this->connection->fetchAssociative("SELECT o.installation_uuid, s.smtp_host, s.smtp_port, s.encryption_mode, s.smtp_username, s.credential_secret_id, s.tls_peer_verification, s.sender_address, s.sender_name, s.reply_to_address, s.one_click_dkim_confirmed, p.unsubscribe_footer, p.open_tracking, p.click_tracking, p.rsvp_enabled, p.rsvp_retention_days, p.rsvp_repeat_policy, d.messages_per_minute, d.worker_concurrency, d.retry_limit, d.maximum_campaign_size FROM organisation_settings o CROSS JOIN privacy_policy p CROSS JOIN delivery_policy d LEFT JOIN sender_identity s ON s.singleton_key = '1' WHERE o.singleton_key = '1' AND p.singleton_key = '1' AND d.singleton_key = '1'");
         if (false === $row) {
             throw new \RuntimeException('Delivery configuration is incomplete.');
+        }
+        // Draft preparation works before SMTP exists. These values cannot pass the sending gate.
+        if (null === $row['smtp_host']) {
+            $row = array_replace($row, ['smtp_host' => 'unconfigured.invalid', 'smtp_port' => 587, 'encryption_mode' => 'starttls', 'tls_peer_verification' => 0, 'sender_address' => 'Not configured', 'sender_name' => 'Not configured', 'one_click_dkim_confirmed' => 0]);
         }
         foreach (['installation_uuid', 'smtp_host', 'encryption_mode', 'sender_address', 'sender_name'] as $key) {
             if (!\is_string($row[$key]) || '' === $row[$key]) {

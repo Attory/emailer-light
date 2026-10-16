@@ -41,6 +41,18 @@ final readonly class RecoveryKeyExporter implements RecoveryKeyVerifier
                 @unlink($temporary);
                 throw new \RuntimeException('Recovery-key package cannot be published safely.');
             }
+            $handle = @fopen($temporary, 'rb');
+            if (false === $handle) {
+                @unlink($temporary);
+                throw new \RuntimeException('Recovery-key package cannot be synchronized.');
+            }
+            try {
+                if (!fsync($handle)) {
+                    throw new \RuntimeException('Recovery-key package durability failed.');
+                }
+            } finally {
+                fclose($handle);
+            }
             if (!@link($temporary, $this->outputFile)) {
                 @unlink($temporary);
                 throw new \RuntimeException('Recovery-key package already exists or cannot be published safely.');
@@ -49,6 +61,20 @@ final readonly class RecoveryKeyExporter implements RecoveryKeyVerifier
                 @unlink($this->outputFile);
                 @unlink($temporary);
                 throw new \RuntimeException('Recovery-key package staging cannot be removed safely.');
+            }
+            $directoryHandle = @fopen($directory, 'rb');
+            if (false === $directoryHandle) {
+                throw new \RuntimeException('Recovery-key directory cannot be synchronized.');
+            }
+            try {
+                if (!fsync($directoryHandle)) {
+                    throw new \RuntimeException('Recovery-key directory durability failed.');
+                }
+            } finally {
+                fclose($directoryHandle);
+            }
+            if (!$this->verifiesKey($passphrase, $master)) {
+                throw new \RuntimeException('Recovery-key package verification failed.');
             }
         } finally {
             sodium_memzero($master);

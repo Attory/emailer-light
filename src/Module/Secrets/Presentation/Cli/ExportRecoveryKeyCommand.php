@@ -9,6 +9,7 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\QuestionHelper;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Question\Question;
 
@@ -20,9 +21,15 @@ final class ExportRecoveryKeyCommand extends Command
         parent::__construct();
     }
 
+    protected function configure(): void
+    {
+        $this->addOption('passphrase-stdin', null, InputOption::VALUE_NONE, 'Read the passphrase and confirmation from protected standard input for automated provisioning.');
+    }
+
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        if (!$input->isInteractive()) {
+        $fromStdin = true === $input->getOption('passphrase-stdin');
+        if (!$fromStdin && !$input->isInteractive()) {
             $output->writeln('<error>Interactive input is required.</error>');
 
             return Command::FAILURE;
@@ -32,11 +39,17 @@ final class ExportRecoveryKeyCommand extends Command
         if (!$helper instanceof QuestionHelper) {
             return Command::FAILURE;
         }
-        $passphrase = $helper->ask($input, $output, $question);
+        $passphrase = $fromStdin ? fgets(STDIN, 4098) : $helper->ask($input, $output, $question);
+        if ($fromStdin && \is_string($passphrase)) {
+            $passphrase = rtrim($passphrase, "\r\n");
+        }
         if (!\is_string($passphrase)) {
             return Command::FAILURE;
         }
-        $confirm = $helper->ask($input, $output, (new Question('Confirm passphrase: '))->setHidden(true)->setHiddenFallback(false));
+        $confirm = $fromStdin ? fgets(STDIN, 4098) : $helper->ask($input, $output, (new Question('Confirm passphrase: '))->setHidden(true)->setHiddenFallback(false));
+        if ($fromStdin && \is_string($confirm)) {
+            $confirm = rtrim($confirm, "\r\n");
+        }
         if (!\is_string($confirm) || !hash_equals($passphrase, $confirm)) {
             $output->writeln('<error>Passphrases did not match.</error>');
 

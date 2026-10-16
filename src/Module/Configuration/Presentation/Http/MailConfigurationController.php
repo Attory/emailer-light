@@ -40,6 +40,33 @@ final class MailConfigurationController extends AbstractController
         return $this->redirectToRoute('admin_mail_settings', status: Response::HTTP_SEE_OTHER);
     }
 
+    #[Route('/test-connection', name: 'admin_mail_test_connection', methods: ['POST'])]
+    public function testConnection(Request $request): Response
+    {
+        return $this->test($request, false);
+    }
+
+    #[Route('/send-test', name: 'admin_mail_send_test', methods: ['POST'])]
+    public function sendTest(Request $request): Response
+    {
+        return $this->test($request, true);
+    }
+
+    private function test(Request $request, bool $send): Response
+    {
+        if (!$this->isCsrfTokenValid('mail-test', $request->request->getString('_token'))) {
+            return new Response('Request not accepted.', Response::HTTP_BAD_REQUEST);
+        }
+        try {
+            $this->mail->test($this->actor(), $send ? $request->request->getString('destination') : null);
+            $this->addFlash('success', $send ? 'The requested test email was accepted by your provider. No campaign was sent.' : 'Secure connection and sign-in succeeded. No email was sent.');
+        } catch (\Throwable) {
+            $this->addFlash('error', 'The mail test did not succeed. Check your provider hostname, port, TLS mode and credentials, and try again. No campaign was sent.');
+        }
+
+        return $this->redirectToRoute('admin_mail_settings', status: Response::HTTP_SEE_OTHER);
+    }
+
     private function actor(): AdministrativeActor
     {
         $actor = $this->getUser();

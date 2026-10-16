@@ -2,6 +2,7 @@
 {% block title %}Mail settings · Emailer Light{% endblock %}
 {% block admin_body %}
 <h1>Mail transport</h1>
+{% if not mail.smtp_host %}<p role="status">Email delivery is not configured. You can prepare templates and campaigns now. Add your email provider below when you are ready to send.</p>{% endif %}
 <p>Configured host: {{ mail.smtp_host }}:{{ mail.smtp_port }}; mode: {{ mail.encryption_mode }}; TLS peer verification: {{ mail.tls_peer_verification ? 'on' : 'off' }}.</p>
 <p>Username: {{ mail.smtp_username|default('none') }}; credential: {{ mail.credential_configured ? 'stored encrypted' : 'not stored' }}; sender: {{ mail.sender_address }}.</p>
 <p>RFC 8058 provider signing attestation: {{ mail.one_click_dkim_confirmed ? 'confirmed' : 'not confirmed; one-click header disabled' }}.</p>
@@ -20,5 +21,15 @@
 
     <button type="submit">Store secure SMTP configuration</button>
 </form>
-<p>Saving validates and encrypts configuration only. Use a queued campaign test to verify transport.</p>
+<p>Saving validates and encrypts configuration only. It does not send email.</p>
+<form method="post" action="{{ path('admin_mail_test_connection') }}">
+    <input type="hidden" name="_token" value="{{ csrf_token('mail-test') }}">
+    <button type="submit">Test connection without sending</button>
+</form>
+<form method="post" action="{{ path('admin_mail_send_test') }}">
+    <input type="hidden" name="_token" value="{{ csrf_token('mail-test') }}">
+    <label>Test destination <input type="email" name="destination" required placeholder="Your own email address"></label>
+    <p>Send one test email to the address shown above. This does not approve or send a campaign.</p>
+    <button type="submit">Send test email</button>
+</form>
 {% endblock %}
