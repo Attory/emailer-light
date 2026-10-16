@@ -214,7 +214,7 @@ class Manager:
             raise ManagementError('The recorded database name is outside the supported hosting profile.')
         socket_path = Path('/run/mysqld/mysqld.sock')
         if params.hostname in ('127.0.0.1', 'localhost', '::1') and socket_path.exists():
-            dsn = 'mysql://root@localhost/' + database + '?' + urllib.parse.urlencode({'unix_socket': str(socket_path), 'charset': 'utf8mb4'})
+            dsn = 'mysql://root@localhost/' + database + '?' + urllib.parse.urlencode({'unix_socket': str(socket_path), 'charset': 'utf8mb4'}, safe='/')
         else:
             dsn = ''
         runtime_dir = self.directory / 'console' / self.installer.product / self.installer.version / self.source_version
