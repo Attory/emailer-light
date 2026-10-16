@@ -9,12 +9,14 @@ if (5 !== $argc || file_exists($argv[3])) {
 $arguments = $argv;
 $root = dirname(__DIR__, 2);
 $git = static function (string $operation) use ($root): string {
-    $value = shell_exec('git -C '.escapeshellarg($root).' '.$operation);
-    if (!is_string($value)) {
+    $lines = [];
+    $status = 0;
+    exec('git -C '.escapeshellarg($root).' '.$operation, $lines, $status);
+    if (0 !== $status) {
         throw new RuntimeException('Documentation source identity could not be read.');
     }
 
-    return trim($value);
+    return trim(implode("\n", $lines));
 };
 if ('' !== $git('status --porcelain --untracked-files=normal')) {
     throw new RuntimeException('Build documentation only from a clean reviewed commit.');
