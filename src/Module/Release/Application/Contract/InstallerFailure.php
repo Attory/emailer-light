@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Shared;
+namespace App\Module\Release\Application\Contract;
 
 /** A bounded customer-facing category, never an exception message or credential. */
 final class InstallerFailure

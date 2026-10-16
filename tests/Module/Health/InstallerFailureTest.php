@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Module\Health;
 
-use App\Shared\InstallerFailure;
+use App\Module\Release\Application\Contract\InstallerFailure;
 use PHPUnit\Framework\TestCase;
 
 final class InstallerFailureTest extends TestCase

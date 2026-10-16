@@ -12,6 +12,34 @@ use Symfony\Component\Yaml\Yaml;
 
 final class ProxyEnvironmentTest extends TestCase
 {
+    public function testDatabaseUrlPreservesPercentEncodedCredentialsAndSocketPaths(): void
+    {
+        $configuration = Yaml::parseFile(__DIR__.'/../../../config/packages/doctrine.yaml');
+        self::assertIsArray($configuration);
+        self::assertIsArray($configuration['doctrine']);
+        self::assertIsArray($configuration['doctrine']['dbal']);
+        self::assertSame('%env(DATABASE_URL)%', $configuration['doctrine']['dbal']['url']);
+        $previous = getenv('DATABASE_URL');
+        $previousEnv = $_ENV['DATABASE_URL'] ?? null;
+        $previousServer = $_SERVER['DATABASE_URL'] ?? null;
+        $url = 'mysql://example:synthetic%25password@localhost/database?unix_socket=%2Frun%2Fmysqld%2Fmysqld.sock';
+        try {
+            putenv('DATABASE_URL='.$url);
+            $_ENV['DATABASE_URL'] = $_SERVER['DATABASE_URL'] = $url;
+            $processor = new EnvVarProcessor(new Container(new ParameterBag()));
+            self::assertSame($url, $processor->getEnv('string', 'DATABASE_URL', static fn () => null));
+        } finally {
+            putenv(false === $previous ? 'DATABASE_URL' : 'DATABASE_URL='.$previous);
+            unset($_ENV['DATABASE_URL'], $_SERVER['DATABASE_URL']);
+            if (null !== $previousEnv) {
+                $_ENV['DATABASE_URL'] = $previousEnv;
+            }
+            if (null !== $previousServer) {
+                $_SERVER['DATABASE_URL'] = $previousServer;
+            }
+        }
+    }
+
     public function testDirectFastCgiPreservesExplicitEmptyProxyListAndLegacyDefault(): void
     {
         $configuration = Yaml::parseFile(__DIR__.'/../../../config/services.yaml', Yaml::PARSE_CUSTOM_TAGS);

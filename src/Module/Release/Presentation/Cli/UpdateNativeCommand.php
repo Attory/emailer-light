@@ -35,7 +35,7 @@ final class UpdateNativeCommand extends Command
             if ('1' !== getenv('EMAILER_INSTALLER_DIAGNOSTICS')) {
                 throw $error;
             }
-            $output->writeln(json_encode(\App\Shared\InstallerFailure::report($error), JSON_THROW_ON_ERROR));
+            $output->writeln(json_encode(\App\Module\Release\Application\Contract\InstallerFailure::report($error), JSON_THROW_ON_ERROR));
 
             return Command::FAILURE;
         }
