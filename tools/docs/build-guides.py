@@ -53,7 +53,12 @@ styles.add(ParagraphStyle(name='CaptionGuide', fontName='Guide', fontSize=8, lea
 styles.add(ParagraphStyle(name='CodeGuide', fontName='GuideCode', fontSize=8, leading=12, backColor=colors.HexColor('#eef3f0'), borderPadding=10, spaceBefore=8, spaceAfter=14))
 styles.add(ParagraphStyle(name='TableGuide', parent=styles['BodyText'], fontSize=8, leading=12, spaceAfter=0))
 
+release_base = 'https://github.com/' + json.loads((root / 'composer.json').read_text())['name'] + '/releases/download/v1.1.0/'
+local_guides = {path.stem + '.html' for path in (root / 'docs/guides').glob('*.json')}
+
 def pdftext(text):
+    # Individual PDFs work even when their sibling HTML files were not downloaded.
+    text = re.sub(r'href="([^"]+)"', lambda match: 'href="' + release_base + match.group(1) + '"' if match.group(1) in local_guides else match.group(0), text)
     text = re.sub(r'<a href="([^"]+)">(.*?)</a>', r'<link href="\1" color="#216758">\2</link>', text)
     return text.replace('<code>', '<font name="GuideCode">').replace('</code>', '</font>').replace('<br>', '<br/>')
 
@@ -126,6 +131,6 @@ for source in sorted((root / 'docs/guides').glob('*.json')):
 
 # Bind every rendered file to the exact reviewed document sources and commit.
 (output / 'FONT-LICENSE.txt').write_bytes((root / 'docs/guides/FONT-LICENSE.txt').read_bytes())
-inputs = [root / 'tools/docs/build-guides.py', root / 'tools/docs/check-guides.py', root / 'tools/docs/requirements.txt', root / 'tools/docs/verify-built-guides.php', root / 'docs/guides/FONT-LICENSE.txt', *(root / 'docs/guides').glob('*.json'), *(root / 'docs/guides').glob('*.md'), *(root / 'docs/guides/images').glob('*.png')]
+inputs = [root / 'composer.json', root / 'tools/docs/build-guides.py', root / 'tools/docs/check-guides.py', root / 'tools/docs/requirements.txt', root / 'tools/docs/verify-built-guides.php', root / 'docs/guides/FONT-LICENSE.txt', *(root / 'docs/guides').glob('*.json'), *(root / 'docs/guides').glob('*.md'), *(root / 'docs/guides/images').glob('*.png')]
 manifest = {'format': 'emailer-docs-v1', 'source_commit': subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip(), 'inputs': {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(inputs)}, 'outputs': {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(output.iterdir()) if path.suffix in ('.pdf', '.html') or path.name == 'FONT-LICENSE.txt'}}
 (output / 'DOCS-MANIFEST.json').write_text(json.dumps(manifest, indent=2) + '\n')

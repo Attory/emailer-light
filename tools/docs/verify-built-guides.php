@@ -15,7 +15,7 @@ $manifest = json_decode((string) file_get_contents($directory.'/DOCS-MANIFEST.js
 if ('emailer-docs-v1' !== ($manifest['format'] ?? null) || $argv[2] !== ($manifest['source_commit'] ?? null)) {
     throw new RuntimeException('Documentation was not built from the exact release commit.');
 }
-$expected = ['tools/docs/build-guides.py', 'tools/docs/check-guides.py', 'tools/docs/requirements.txt', 'tools/docs/verify-built-guides.php', 'docs/guides/FONT-LICENSE.txt'];
+$expected = ['composer.json', 'tools/docs/build-guides.py', 'tools/docs/check-guides.py', 'tools/docs/requirements.txt', 'tools/docs/verify-built-guides.php', 'docs/guides/FONT-LICENSE.txt'];
 foreach (['docs/guides/*.json', 'docs/guides/*.md', 'docs/guides/images/*.png'] as $pattern) {
     foreach (glob($root.'/'.$pattern) ?: [] as $file) {
         $expected[] = substr($file, strlen($root) + 1);
