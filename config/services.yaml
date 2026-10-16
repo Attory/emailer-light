@@ -33,8 +33,8 @@ parameters:
     emailer.installer_fence: '%env(bool:default:emailer.default_installer_fence:EMAILER_INSTALLER_RETAIN_SOURCE_FENCE)%'
     emailer.default_http_mode: 'proxy'
     emailer.http_mode: '%env(default:emailer.default_http_mode:EMAILER_HTTP_MODE)%'
-    emailer.default_trusted_proxies: '127.0.0.1,::1'
-    emailer.trusted_proxies: '%env(default:emailer.default_trusted_proxies:TRUSTED_PROXIES)%'
+    env(TRUSTED_PROXIES): '127.0.0.1,::1'
+    emailer.trusted_proxies: '%env(TRUSTED_PROXIES)%'
     emailer.default_trusted_hosts: '^(localhost|127\.0\.0\.1|\[::1\])$'
     emailer.trusted_hosts: '%env(default:emailer.default_trusted_hosts:TRUSTED_HOSTS)%'
 

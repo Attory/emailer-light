@@ -99,7 +99,7 @@ class Manager:
         self.installer.durable(self.record_file, json.dumps(self.record, indent=2) + '\n')
 
     def call(self, arguments, *, environment=None, data=None):
-        result = subprocess.run(arguments, input=data, text=True, env=environment, capture_output=True)
+        result = subprocess.run(arguments, input=data, text=True, env={**(os.environ if environment is None else environment), 'EMAILER_INSTALLER_DIAGNOSTICS': '1'}, capture_output=True)
         if result.returncode:
             step = arguments[2] if arguments[0].endswith('php8.4') and len(arguments) > 2 else Path(arguments[0]).name
             diagnostic = {'step': step, 'exit_code': result.returncode}
@@ -109,9 +109,37 @@ class Manager:
                 if isinstance(blockers, list) and all(isinstance(code, str) and re.fullmatch(r'[a-z0-9_]+', code) for code in blockers):
                     diagnostic['runtime_blockers'] = blockers
             except (ValueError, AttributeError):
-                pass
+                report = {}
+            guidance = {
+                'finish_required': 'The application update committed. Choose Finish (or Accept for a Light to Ripe upgrade); recovery cannot undo a completed operation.',
+                'completed_operation': 'This operation already completed. Choose Check the installation. Recovery cannot downgrade it.',
+                'delivery_busy': 'Delivery still has active work. Let it finish; no delivery claim was reset. If an operation was recorded, choose Recover before retrying.',
+                'operation_busy': 'Another operation already owns this installation. Let it finish, then start this package again.',
+                'recovery_required': 'An interrupted operation requires recovery. Start this same package and choose Recover before trying the update again.',
+                'schema_mismatch': 'The database does not match the supported schema or its saved recovery proof. Keep delivery held and retain the recovery material. Use the schema mismatch troubleshooting entry; do not edit migration records.',
+                'package_mismatch': 'A release package, installed file or saved identity failed verification. Keep the recovery material and use the original official package. Do not replace signing keys or overwrite application files.',
+                'source_unsupported': 'This installation does not match a supported source release. No unsupported conversion is allowed. Check the supported version combinations in the upgrade guide.',
+                'verification_failed': 'An installation safety check failed. Keep delivery held and retain the recovery material. Read the redacted diagnostic category and the verification troubleshooting entry before choosing Recover, Finish or Accept.',
+            }
+            if not report:
+                for line in reversed(result.stdout.splitlines()):
+                    try:
+                        candidate = json.loads(line)
+                    except ValueError:
+                        continue
+                    if isinstance(candidate, dict) and candidate.get('installer_error') in guidance:
+                        report = candidate
+                        break
+            code = report.get('installer_error', 'verification_failed')
+            if code not in guidance:
+                code = 'verification_failed'
+            diagnostic['error_code'] = code
+            if diagnostic.get('runtime_blockers'):
+                message = 'Application checks need attention: ' + ', '.join(diagnostic['runtime_blockers']) + '. Open Doctor for the matching repair steps; delivery remains blocked.'
+            else:
+                message = guidance[code]
             self.installer.durable(self.directory / 'last-error.json', json.dumps(diagnostic) + '\n')
-            raise ManagementError('Step ' + step + ' stopped safely (status ' + str(result.returncode) + '). Delivery may remain held. Start this package again and choose Recover or Finish. Redacted diagnostics: ' + str(self.directory / 'last-error.json'))
+            raise ManagementError(message + ' Redacted diagnostics: ' + str(self.directory / 'last-error.json'))
         return result.stdout
 
     def stage(self):

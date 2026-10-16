@@ -1,4 +1,7 @@
+import base64
 import json
+import os
+import tempfile
 from pathlib import Path
 import sys
 import types
@@ -9,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'installer'))
 from runtime_env import parse_environment_text, RuntimeEnvironmentError
 from host import HostHandoff
 from provision import Installer, SetupError
+from manage import Manager, ManagementError
 
 
 class RuntimeFileContract(unittest.TestCase):
@@ -61,6 +65,43 @@ class HostingIsolationContract(unittest.TestCase):
             self.assertIn('access_log off;', site)
             self.assertIn('fastcgi_pass unix:/run/emailer-light-light-110-fpm/php.sock;', site)
             self.assertEqual(maintenance, 'deny all;' in site)
+
+
+class RecoveryAndDiagnosticContract(unittest.TestCase):
+    def test_chain_recovery_restores_the_previous_active_runtime_receipt(self):
+        for existed in (True, False):
+            with self.subTest(existed=existed), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                pointer = root / 'active-installation.json'
+                previous = b'{"runtime":"/etc/emailer-light-light-110/runtime.env"}\n'
+                pointer.write_text('target pointer')
+                def write(path, content, mode):
+                    Path(path).write_bytes(content if isinstance(content, bytes) else content.encode())
+                    Path(path).chmod(mode)
+                manager = types.SimpleNamespace(prefix='emailer-light', root=root, installer=types.SimpleNamespace(product='emailer-pro', durable=write), record={}, save=lambda: None)
+                handoff = HostHandoff(manager)
+                handoff.state.update(phase='prepared', site_bytes=base64.b64encode(b'source site').decode(), source_active_pointer={'bytes': base64.b64encode(previous).decode(), 'mode': 0o600, 'uid': os.getuid(), 'gid': os.getgid()} if existed else None)
+                handoff.hold = root / 'hold'
+                handoff.apply_site = lambda text: None
+                with patch('host.subprocess.run'):
+                    handoff.recover_host()
+                if existed:
+                    self.assertEqual(previous, pointer.read_bytes())
+                    self.assertEqual(0o600, pointer.stat().st_mode & 0o777)
+                else:
+                    self.assertFalse(pointer.exists())
+
+    def test_machine_failure_uses_bounded_guidance_and_retains_no_raw_secret(self):
+        with tempfile.TemporaryDirectory() as directory:
+            instance = object.__new__(Manager)
+            instance.directory = Path(directory)
+            saved = []
+            instance.installer = types.SimpleNamespace(durable=lambda path, content: saved.append(content))
+            result = types.SimpleNamespace(returncode=1, stdout='A safe note\n{"installer_error":"finish_required"}\n', stderr='synthetic-sensitive-value')
+            with patch('manage.subprocess.run', return_value=result), self.assertRaisesRegex(ManagementError, 'Choose Finish'):
+                instance.call(['/usr/bin/php8.4', '/console', 'emailer:release:update'])
+            self.assertNotIn('synthetic-sensitive-value', ''.join(saved))
+            self.assertEqual('finish_required', json.loads(saved[0])['error_code'])
 
 
 class PackageFailureGuidance(unittest.TestCase):

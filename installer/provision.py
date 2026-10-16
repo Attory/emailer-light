@@ -265,7 +265,9 @@ class Installer:
         catalogue = subprocess.run(['apt-get', '--error-on=any', '-o', 'Acquire::Retries=0', '-o', 'Acquire::http::Timeout=10', '-o', 'Acquire::https::Timeout=10', 'update'], capture_output=True, text=True)
         if catalogue.returncode:
             evidence = catalogue.stdout + catalogue.stderr
-            if re.search(r'NO_PUBKEY|EXPKEYSIG|not signed|signatures.*verified', evidence, re.I):
+            if re.search(r'Could not get lock|Unable to acquire.*lock', evidence, re.I):
+                reason = 'Another operating-system package task is running. Let it finish before starting setup again.'
+            elif re.search(r'NO_PUBKEY|EXPKEYSIG|not signed|signatures.*verified', evidence, re.I):
                 reason = 'The operating system could not authenticate its package catalogue. Restore the Debian repository signing configuration; setup will not bypass signature checks.'
             elif re.search(r'expired|not valid yet', evidence, re.I):
                 reason = 'The signed operating-system package catalogue is expired or not yet valid. Check the server clock and Debian mirror freshness.'
@@ -434,7 +436,17 @@ class Installer:
                                 stdout=None if interactive else subprocess.PIPE, stderr=None if interactive else subprocess.PIPE,
                                 preexec_fn=drop)
         if result.returncode:
-            raise SetupError('Application setup did not finish. Correct the message above and start the same setup action again; your completed steps and account are retained.')
+            diagnostic = {'step': args[0], 'exit_code': result.returncode}
+            try:
+                report = json.loads(result.stdout or '{}')
+                blockers = report.get('runtime_blockers', [])
+                if isinstance(blockers, list) and all(isinstance(code, str) and re.fullmatch(r'[a-z0-9_]+', code) for code in blockers):
+                    diagnostic['runtime_blockers'] = blockers
+            except (ValueError, AttributeError):
+                pass
+            durable(self.state_dir / 'last-error.json', json.dumps(diagnostic) + '\n')
+            reason = ('Application checks need attention: ' + ', '.join(diagnostic['runtime_blockers']) + '. Use the matching Doctor check in the troubleshooting reference. ') if diagnostic.get('runtime_blockers') else ('Correct the displayed setup message. ' if interactive else 'The protected application operation failed; its redacted step is recorded. ')
+            raise SetupError(reason + 'Start this same setup action again after correcting the problem; your completed steps and account are retained. Redacted diagnostics: ' + str(self.state_dir / 'last-error.json'))
         return result.stdout or ''
 
     def application(self):

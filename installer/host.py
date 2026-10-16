@@ -164,6 +164,14 @@ server {{
                                'database': {'name': 'em_' + secrets.token_hex(10), 'password': secrets.token_hex(32), 'host': 'localhost' if 'unix_socket' in urllib.parse.parse_qs(urllib.parse.urlsplit(m.source_values['DATABASE_URL']).query) else '127.0.0.1'}, 'cron': {}})
             launcher = Path('/usr/local/sbin') / m.prefix
             self.state['launcher_bytes'] = base64.b64encode(launcher.read_bytes()).decode() if launcher.exists() else None
+            pointer = m.root / 'active-installation.json'
+            if pointer.exists() or pointer.is_symlink():
+                from manage import protected
+                protected(pointer)
+                metadata = pointer.lstat()
+                self.state['source_active_pointer'] = {'bytes': base64.b64encode(pointer.read_bytes()).decode(), 'mode': stat.S_IMODE(metadata.st_mode), 'uid': metadata.st_uid, 'gid': metadata.st_gid}
+            else:
+                self.state['source_active_pointer'] = None
             m.save()  # Reserve all generated identities before creating resources.
         if hashlib.sha256(m.original_configuration.read_bytes()).hexdigest() != self.state['source_configuration_sha256']:
             self.fail('The original application configuration changed after this operation began. It was preserved; Finish needs its original recovery evidence.')
@@ -382,6 +390,14 @@ server {{
             self.host.durable('/usr/local/sbin/' + m.prefix, base64.b64decode(saved), 0o755)
         # The core restores source data/key ownership before this method is called.
         self.hold.unlink(missing_ok=True)
-        (m.root / 'active-installation.json').unlink(missing_ok=True)
+        pointer = m.root / 'active-installation.json'
+        if 'source_active_pointer' not in self.state:
+            self.fail('This operation lacks its previous active-installation receipt. The source data was retained; restore the exact protected host receipt before reopening the site.')
+        saved_pointer = self.state['source_active_pointer']
+        if saved_pointer is None:
+            pointer.unlink(missing_ok=True)
+        else:
+            self.host.durable(pointer, base64.b64decode(saved_pointer['bytes']), saved_pointer['mode'])
+            os.chown(pointer, saved_pointer['uid'], saved_pointer['gid'])
         self.state['phase'] = 'recovered'
         m.save()
