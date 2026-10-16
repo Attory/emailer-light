@@ -145,3 +145,10 @@ Emailer Light first-party code is AGPL-3.0-or-later. This does not relicense dep
 | runtime | `twig/twig` | `v3.28.0` | BSD-3-Clause | https://github.com/twigphp/Twig.git |
 
 All production packages have declared MIT or BSD-3-Clause licenses in the reviewed lock. This inventory is generated from `composer.lock` and must be rechecked for every dependency update.
+
+## Documentation fonts
+
+The documentation PDFs embed DejaVu Sans/Mono font subsets, with Bitstream Vera
+permission terms and public-domain DejaVu changes. The full copyright and permission
+notice is [FONT-LICENSE.txt](docs/guides/FONT-LICENSE.txt), included with the guides
+and attached inside every PDF. This does not change application or dependency licenses.

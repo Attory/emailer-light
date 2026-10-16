@@ -45,11 +45,20 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Verify installer configuration and hosting isolation contracts
+        run: |
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/Installer
+          sudo env PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/Installer
+          python3 tools/docs/check-guides.py
+
       - name: Prepare writable generated-output directories
         run: sudo install -d -o 1000 -g 1000 -m 0755 build .cache public/template-assets
 
       - name: Build locked PHP application image
         run: docker compose build --pull app
+
+      - name: Verify SMTP TLS, authentication and explicit-send isolation
+        run: EMAILER_SMTP_PROBE_IMAGE="${COMPOSE_PROJECT_NAME}-app:latest" bash tools/installer/check-smtp-probe.sh
 
       - name: Start MariaDB and Mailpit
         run: docker compose up --detach --wait database mailpit

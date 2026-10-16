@@ -127,6 +127,9 @@ final readonly class ReleaseManager
             if (!\is_string($targetVersion) || version_compare($targetVersion, $this->currentVersion, '<=')) {
                 throw new \RuntimeException('Release downgrade or same-version update is not allowed.');
             }
+            if ('prod' === $this->environment && '1.0.0' === $this->currentVersion && '1.1.0' === $targetVersion) {
+                throw new \RuntimeException('Use the guided native installer for this schema-preserving Light update, including its persistent writer fencing and recovery journal.');
+            }
             $this->assertPlatformAndSchemaCompatibility($manifest);
             $this->assertDiskCapacity($archive, $manifest);
             $sourceSchemaFingerprint = $this->schemaFingerprint();
@@ -148,7 +151,7 @@ final readonly class ReleaseManager
             $migrationApplied = true;
             $this->switchPointer($target);
             $pointerSwitched = true;
-            $this->runConsole($target, ['emailer:doctor:run', '--json', '--maintenance-verification'], [0, 1]);
+            $this->runConsole($target, ['emailer:health:verify-runtime', '--offline-maintenance'], [0]);
             $this->connection->update('release_operation', ['status' => 'succeeded', 'detail_code' => 'health_passed', 'finished_at' => Identity::now()], ['id' => $operationId]);
         } catch (\Throwable $exception) {
             if (null !== $safety) {
@@ -304,7 +307,8 @@ final readonly class ReleaseManager
     {
         $command = array_merge([PHP_BINARY, $release.'/bin/console'], $arguments);
         $pipes = [];
-        $process = proc_open($command, [['file', '/dev/null', 'r'], ['file', '/dev/null', 'w'], ['file', '/dev/null', 'w']], $pipes, $release);
+        $environment = LegacyDatabaseEnvironment::forRelease($release, getenv());
+        $process = proc_open(LegacyDatabaseEnvironment::command($command, $environment), [['file', '/dev/null', 'r'], ['file', '/dev/null', 'w'], ['file', '/dev/null', 'w']], $pipes, $release, $environment);
         if (!\is_resource($process)) {
             throw new \RuntimeException('Release command could not start.');
         }

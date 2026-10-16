@@ -43,6 +43,11 @@ final readonly class AdminHealthSubscriber implements EventSubscriberInterface
             return;
         }
         try {
+            // Settings actions redirect here. Refresh actual checks so the header does
+            // not retain pre-configuration findings after a successful connection test.
+            if (\in_array($route, ['admin_mail_settings'], true)) {
+                $this->doctor->run();
+            }
             $event->getRequest()->attributes->set('doctor_active_findings', $this->doctor->activeFindings());
         } catch (\Throwable) {
             $event->getRequest()->attributes->set('doctor_active_findings', [[

@@ -8,10 +8,29 @@ use App\Module\Health\Application\Contract\LightweightReadinessProbe;
 use App\Module\Health\Application\Contract\SendingGateReadinessProbe;
 use Doctrine\DBAL\Connection;
 
-final readonly class ConfigurationReadinessProbe implements LightweightReadinessProbe, SendingGateReadinessProbe
+final readonly class ConfigurationReadinessProbe implements LightweightReadinessProbe, SendingGateReadinessProbe, \App\Module\Health\Application\Contract\MaintenanceReadinessProbe
 {
     public function __construct(private Connection $connection, private string $canonicalUri, private string $environment)
     {
+    }
+
+    public function offlineVerificationReady(): bool
+    {
+        return true;
+    }
+
+    public function maintenanceFindings(): array
+    {
+        // Missing or untested SMTP is a delivery gate, not a broken installation.
+        $allowed = ['sender_identity'];
+        $sender = $this->connection->fetchAssociative("SELECT smtp_host, smtp_port, encryption_mode, smtp_username, credential_secret_id FROM sender_identity WHERE singleton_key = '1'");
+        // Published installations could use a credential-free local testing sink.
+        // Preserve it for review without ever authorising production delivery.
+        if (false !== $sender && \in_array($sender['smtp_host'], ['mailpit', '127.0.0.1', '::1'], true) && 1025 === $this->integer($sender['smtp_port']) && 'none' === $sender['encryption_mode'] && (null === $sender['smtp_username'] || '' === $sender['smtp_username']) && null === $sender['credential_secret_id']) {
+            $allowed[] = 'smtp_transport_security';
+        }
+
+        return $allowed;
     }
 
     public function findings(): array
@@ -24,8 +43,8 @@ final readonly class ConfigurationReadinessProbe implements LightweightReadiness
             $findings[] = $this->critical('canonical_origin_mismatch', 'Runtime and stored canonical origins differ.', 'Configure one exact externally verified HTTPS origin.');
         }
         $sender = $this->connection->fetchAssociative("SELECT smtp_host, smtp_port, encryption_mode, smtp_username, credential_secret_id, tls_peer_verification, sender_address, test_message_at, one_click_dkim_confirmed FROM sender_identity WHERE singleton_key = '1'");
-        if (false === $sender || !\is_string($sender['sender_address']) || null === $sender['test_message_at']) {
-            $findings[] = $this->critical('sender_identity', 'A tested sender identity is unavailable.', 'Configure and test the sender identity.');
+        if (false === $sender || !\is_string($sender['sender_address']) || (!\is_string($sender['test_message_at']) || str_starts_with($sender['test_message_at'], '1970-01-01'))) {
+            $findings[] = $this->critical('sender_identity', 'Email delivery is not configured or has not passed its connection test.', 'Open Mail settings to configure your provider and test the connection. You can prepare templates and campaigns now.');
         } elseif (!\in_array($this->environment, ['dev', 'test'], true) || !\in_array($sender['smtp_host'], ['mailpit', '127.0.0.1', '::1'], true)) {
             $port = $this->integer($sender['smtp_port']);
             if (!\in_array($sender['encryption_mode'], ['starttls', 'tls'], true) || 1 > $port || 65535 < $port || 1 !== $this->integer($sender['tls_peer_verification']) || !\is_string($sender['smtp_username']) || '' === trim($sender['smtp_username']) || !\is_string($sender['credential_secret_id']) || '' === trim($sender['credential_secret_id'])) {

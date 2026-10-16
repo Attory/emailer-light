@@ -12,6 +12,10 @@ if [ -d "$project_root/var/cache" ]; then
     find "$project_root/var/cache" -mindepth 1 -depth -delete
 fi
 
+# The ignored formatter cache stores only reproducible source-file hashes.
+# Scan the original source rather than treating those digests as API credentials.
+rm -f -- "$project_root/.php-cs-fixer.cache"
+
 if ! command -v gitleaks >/dev/null 2>&1; then
     printf 'gitleaks 8.30.1 is required; use the project container or install the pinned version.\n' >&2
     exit 2

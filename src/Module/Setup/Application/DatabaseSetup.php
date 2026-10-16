@@ -19,6 +19,22 @@ final readonly class DatabaseSetup
     ) {
     }
 
+    /** Use the protected, already provisioned runtime; never ask for its password again. */
+    public function configureRuntime(): void
+    {
+        $params = $this->connection->getParams();
+        foreach (['host', 'dbname', 'user', 'password'] as $name) {
+            if (!\is_string($params[$name] ?? null)) {
+                throw new \RuntimeException('Protected database configuration is incomplete.');
+            }
+        }
+        $port = $params['port'] ?? 3306;
+        if (!is_numeric($port)) {
+            throw new \RuntimeException('Protected database port is invalid.');
+        }
+        $this->configure(new DatabaseInput($params['host'], (int) $port, $params['dbname'], $params['user'], $params['password']));
+    }
+
     public function configure(DatabaseInput $input): void
     {
         $params = $this->connection->getParams();
@@ -68,7 +84,9 @@ final readonly class DatabaseSetup
                 $plan = $this->migrations->getMigrationPlanCalculator()->getPlanUntilVersion($target);
                 // MariaDB DDL commits implicitly; the schema cannot be one transaction.
                 $configuration = (new MigratorConfiguration())->setAllOrNothing(false);
-                $this->migrations->getMigrator()->migrate($plan, $configuration);
+                if ([] !== $plan->getItems()) {
+                    $this->migrations->getMigrator()->migrate($plan, $configuration);
+                }
             } catch (\Throwable) {
                 throw new \RuntimeException('Database migration failed.');
             } finally {

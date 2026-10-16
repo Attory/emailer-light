@@ -75,7 +75,7 @@ final readonly class DeliveryScheduler
     private function heartbeat(string $schedulerId): void
     {
         $now = Identity::now();
-        $this->connection->executeStatement("INSERT INTO worker_heartbeat (worker_id, worker_kind, schema_version, started_at, heartbeat_at, stopped_at) VALUES (?, 'scheduler', 1, ?, ?, NULL) ON DUPLICATE KEY UPDATE schema_version = 1, heartbeat_at = VALUES(heartbeat_at), stopped_at = NULL", [$schedulerId, $now, $now]);
+        $this->connection->executeStatement("INSERT INTO worker_heartbeat (worker_id, worker_kind, schema_version, started_at, heartbeat_at, stopped_at) VALUES (?, 'scheduler', 1, ?, ?, NULL) ON DUPLICATE KEY UPDATE worker_kind = 'scheduler', schema_version = 1, heartbeat_at = VALUES(heartbeat_at), stopped_at = NULL", [$schedulerId, $now, $now]);
     }
 
     private function intValue(mixed $value): int

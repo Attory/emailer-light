@@ -1,0 +1,175 @@
+{
+  "title": "Install Emailer Light",
+  "subtitle": "Version 1.1.0 | Beginner guide | Verified Debian 13 VPS path",
+  "blocks": [
+    {
+      "type": "p",
+      "text": "Install a usable Emailer Light website with one guided server setup. You need your administrator email, a new password, and the address you want people to use. Email delivery can wait."
+    },
+    {
+      "type": "h2",
+      "text": "Who can use this guide?"
+    },
+    {
+      "type": "p",
+      "text": "Use a Debian 13 (Trixie), amd64/x86-64 virtual server with systemd and permission to run sudo. The verified setup uses Nginx, PHP 8.4 and MariaDB 10.11 or 11.8. A server with 2 CPU cores, 3 GB memory and a 20 GB disk was tested; setup requires at least 2 GiB free before it starts. Allow additional space for your uploads and backups."
+    },
+    {
+      "type": "p",
+      "text": "An existing Nginx website can stay on the server, including one using another PHP version. Give Emailer its own hostname. Setup preserves the existing database service and global PHP selection and creates dedicated Emailer resources. Apache, another service on web ports, unsupported database versions, Ubuntu and ARM are outside this release's tested native profile."
+    },
+    {
+      "type": "p",
+      "text": "Ordinary file-upload/shared hosting is unsupported: Emailer needs a persistent background worker, scheduled maintenance, private key storage outside the website, and dedicated server services. Uploading PHP files alone cannot provide those requirements. Choose the supported VPS path."
+    },
+    {
+      "type": "h2",
+      "text": "1. Get your server and website address ready"
+    },
+    {
+      "type": "p",
+      "text": "Sign in to your hosting provider's server console or use its SSH instructions. This is the terminal where you paste the setup action below. You need the provider's server sign-in; it is separate from the new Emailer account."
+    },
+    {
+      "type": "p",
+      "text": "Choose a spare address such as <code>news.your-domain.com</code>. In your domain provider's DNS controls, point its A record to this server's public IPv4 address. Add an AAAA record only if this server actually accepts public IPv6. Allow incoming TCP ports 80 and 443 in the hosting firewall. Do not take over an existing website address. Setup cannot edit your domain or hosting-provider account without access to that account."
+    },
+    {
+      "type": "h2",
+      "text": "2. Download the official setup package"
+    },
+    {
+      "type": "p",
+      "text": "In the server terminal, paste this download action. It saves the official installation package in your current folder."
+    },
+    {
+      "type": "code",
+      "text": "curl --fail --location --output emailer-light-1.1.0-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.1.0/\\\nemailer-light-1.1.0-setup.run"
+    },
+    {
+      "type": "p",
+      "text": "Or download <b>emailer-light-1.1.0-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.1.0\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
+    },
+    {
+      "type": "p",
+      "text": "Initial trust comes from obtaining the setup action itself from the official HTTPS release or an authorized private channel. Its embedded, established edition signing identity then verifies the package inventory, runtime and release identity before installer code runs. A key supplied beside an arbitrary download would not establish that initial trust."
+    },
+    {
+      "type": "h2",
+      "text": "3. Start setup"
+    },
+    {
+      "type": "p",
+      "text": "From the folder containing the downloaded file, paste this single setup action:"
+    },
+    {
+      "type": "code",
+      "text": "sudo sh emailer-light-1.1.0-setup.run"
+    },
+    {
+      "type": "p",
+      "text": "sudo may ask for your server account password once. Setup needs host permission to install services; the application itself runs under a dedicated account. Keep the terminal open. Password entry is hidden, so no letters or dots may appear."
+    },
+    {
+      "type": "ol",
+      "items": [
+        "Enter <b>Application hostname</b> if asked: just your dedicated address, without https://, a port or a path. Setup does not assume the machine's name is a public website.",
+        "Enter <b>Administrator email</b>. This becomes your sign-in name.",
+        "Enter a strong <b>Administrator password</b> and enter it again. Use 15-256 characters.",
+        "If the existing database requires its own administrator sign-in, enter those details only at the hidden prompt. A standard local MariaDB setup normally needs no database details."
+      ]
+    },
+    {
+      "type": "p",
+      "text": "You will see named progress steps for dependencies, package verification, private folders, database and account, services, backup/recovery, HTTPS and health. Organisation name defaults to Emailer; language to English and scheduling timezone to UTC. SMTP details are not required."
+    },
+    {
+      "type": "image",
+      "file": "emailer-light-setup.png",
+      "caption": "Actual Light setup completion. Use the login address printed by your own installation."
+    },
+    {
+      "type": "h2",
+      "text": "4. Sign in"
+    },
+    {
+      "type": "p",
+      "text": "Wait for <b>Installation successful</b>. Open the printed HTTPS login address in your browser and sign in with the email and password you entered. Setup has already installed the worker, scheduler, maintenance jobs and command launcher and verified the initial backup. Do not proceed past a browser certificate warning; use the HTTPS troubleshooting entry below."
+    },
+    {
+      "type": "image",
+      "file": "emailer-light-dashboard.png",
+      "caption": "Actual Light dashboard after sign-in with email delivery deferred."
+    },
+    {
+      "type": "h2",
+      "text": "5. Configure email now or later"
+    },
+    {
+      "type": "p",
+      "text": "You can prepare templates and draft campaigns immediately. <b>Email delivery is not configured</b> means actual sending is blocked. No campaign is approved or sent during installation."
+    },
+    {
+      "type": "p",
+      "text": "When ready, open <b>Settings &amp; tools &gt; Mail settings</b>. Use your provider's outgoing-mail server, port, encryption, username, SMTP password/key and permitted sender address. The sender name is optional. Saving encrypts the settings; it sends nothing. Choose <b>Test connection without sending</b> to check secure connection and sign-in. To send one message, enter your own address in <b>Test destination</b> and explicitly choose <b>Send test email</b>."
+    },
+    {
+      "type": "image",
+      "file": "emailer-light-mail.png",
+      "caption": "Actual Mail settings screen. A connection test sends no message; sending a test email is a separate explicit action."
+    },
+    {
+      "type": "h2",
+      "text": "6. Keep your recovery information"
+    },
+    {
+      "type": "p",
+      "text": "The completion summary gives your verified backup folder, local backup destination, encrypted recovery-key package and protected recovery-password file. These paths are created automatically. Keep a separate, securely stored copy of the recovery package and its password, using different protected locations. A backup on the same server cannot protect you from losing the server."
+    },
+    {
+      "type": "p",
+      "text": "For a fresh Light installation, backups are under <code>/var/lib/emailer-light/private/backups</code>, the local destination is <code>/var/backups/emailer-light</code>, the recovery package is <code>/var/lib/emailer-light/keys/recovery-key.enxkey</code>, and the password is <code>/var/lib/emailer-light-installer/recovery-password</code>. Host permission is needed to read the password. Never paste it into a support ticket. After updates or edition changes, use the locations printed by that operation."
+    },
+    {
+      "type": "h2",
+      "text": "If setup stops"
+    },
+    {
+      "type": "table",
+      "head": [
+        "What you see",
+        "Smallest next action"
+      ],
+      "rows": [
+        [
+          "Address/DNS or HTTPS validation failed",
+          "Correct the domain records and provider firewall for this server, then run the same setup action again. Saved progress is retained. HTTPS is complete only after validation succeeds."
+        ],
+        [
+          "Another service owns port 80 or 443",
+          "Keep that service running. Use a supported Nginx host or a separate supported VPS; do not stop an unrelated site."
+        ],
+        [
+          "Debian catalogue cannot be authenticated or is dated in the future",
+          "Check the server clock and the named repository connection. Setup will not bypass Debian signature checks."
+        ],
+        [
+          "Package authenticity or integrity verification failed",
+          "Delete only the failed download, obtain a fresh official setup file, and retry. Keep any existing application and recovery files."
+        ],
+        [
+          "Setup interrupted",
+          "Run the same action again. It resumes the recorded setup; it does not create another administrator or reset an existing database."
+        ]
+      ]
+    },
+    {
+      "type": "p",
+      "text": "After successful installation, running the file again opens an installation management menu. <b>Check the installation</b> is safe to repeat; an already-installed update leaves settings and delivery state unchanged. For other errors, use the <a href=\"emailer-light-operator.html\">operator and troubleshooting reference</a>. Do not delete installer state or database files to retry."
+    },
+    {
+      "type": "p",
+      "text": "Next: <a href=\"emailer-light-manual.html\">Light user manual</a>."
+    }
+  ]
+}

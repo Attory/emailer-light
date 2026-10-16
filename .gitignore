@@ -87,3 +87,6 @@ Thumbs.db
 /public/assets/
 /assets/vendor/
 ###< symfony/asset-mapper ###
+
+# Installer Python runtime cache
+__pycache__/

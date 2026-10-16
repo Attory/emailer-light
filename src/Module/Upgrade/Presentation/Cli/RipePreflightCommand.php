@@ -32,7 +32,7 @@ final class RipePreflightCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $findings = [];
-        $report = ['format' => 'emailer-light-ripe-preflight-v1', 'product' => 'emailer-light', 'product_version' => '1.0.0', 'schema_version' => '20261014000000', 'upgrade_contract_version' => '1.0', 'status' => 'unsafe', 'findings' => []];
+        $report = ['format' => 'emailer-light-ripe-preflight-v1', 'product' => 'emailer-light', 'product_version' => $this->connection->fetchOne("SELECT product_version FROM product_identity WHERE singleton_key = '1'"), 'schema_version' => '20261014000000', 'upgrade_contract_version' => '1.0', 'status' => 'unsafe', 'findings' => []];
         try {
             $this->checkDatabase($findings);
             $this->checkFilesystem($findings);
@@ -44,7 +44,7 @@ final class RipePreflightCommand extends Command
         if (true === $input->getOption('json')) {
             $output->writeln(json_encode($report, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
         } else {
-            $output->writeln('Emailer Light 1.0.0, schema 20261014000000, upgrade contract 1.0');
+            $output->writeln('Emailer Light, schema 20261014000000, upgrade contract 1.0');
             $output->writeln([] === $findings ? 'Preflight passed. A compatible Ripe installer is still required.' : 'Preflight failed: '.implode(', ', $report['findings']));
         }
 
@@ -61,7 +61,7 @@ final class RipePreflightCommand extends Command
             return;
         }
         $identity = $this->connection->fetchAssociative("SELECT product_id, product_version, schema_version, upgrade_contract_version, installation_uuid FROM product_identity WHERE singleton_key = '1'");
-        if (false === $identity || 'emailer-light' !== $identity['product_id'] || '1.0.0' !== $identity['product_version'] || '20261014000000' !== $identity['schema_version'] || '1.0' !== $identity['upgrade_contract_version']) {
+        if (false === $identity || 'emailer-light' !== $identity['product_id'] || !\in_array($identity['product_version'], ['1.0.0', '1.1.0'], true) || '20261014000000' !== $identity['schema_version'] || '1.0' !== $identity['upgrade_contract_version']) {
             $findings[] = 'unsupported_or_ambiguous_identity';
 
             return;
@@ -185,7 +185,7 @@ final class RipePreflightCommand extends Command
         }
         $lock = json_decode((string) file_get_contents($lockFile), true);
         $databaseId = $this->connection->fetchOne("SELECT installation_uuid FROM product_identity WHERE singleton_key = '1'");
-        if (!\is_array($lock) || 'emailer-light' !== ($lock['product_id'] ?? null) || '1.0.0' !== ($lock['product_version'] ?? null)
+        if (!\is_array($lock) || 'emailer-light' !== ($lock['product_id'] ?? null) || !\in_array($lock['product_version'] ?? null, ['1.0.0', '1.1.0'], true)
             || '20261014000000' !== ($lock['schema_version'] ?? null) || '1.0' !== ($lock['upgrade_contract_version'] ?? null)
             || !\is_string($databaseId) || $databaseId !== ($lock['installation_uuid'] ?? null)) {
             $findings[] = 'installation_lock_identity_mismatch';

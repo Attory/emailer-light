@@ -60,10 +60,12 @@ final readonly class Phase3SetupDoctor implements SetupDoctor
             if (1 !== $this->count('SELECT COUNT(*) FROM app_user')) {
                 $failures[] = 'administrator_uniqueness';
             }
-            if (1 !== $this->count("SELECT COUNT(*) FROM product_identity WHERE singleton_key = '1' AND product_id = 'emailer-light' AND product_version = '1.0.0' AND schema_version = '20261014000000' AND upgrade_contract_version = '1.0'")) {
+            if (1 !== $this->count("SELECT COUNT(*) FROM product_identity WHERE singleton_key = '1' AND product_id = 'emailer-light' AND product_version IN ('1.0.0', '1.1.0') AND schema_version = '20261014000000' AND upgrade_contract_version = '1.0'")) {
                 $failures[] = 'product_identity';
             }
-            if (1 !== $this->count(<<<'SQL'
+            // An absent transport with a recorded mail decision means explicitly deferred SMTP.
+            // Normal sending readiness still requires a secure, configured transport.
+            if (0 !== $this->count('SELECT COUNT(*) FROM sender_identity') && 1 !== $this->count(<<<'SQL'
 SELECT COUNT(*) FROM sender_identity
 WHERE singleton_key = '1'
   AND smtp_host IN ('mailpit', '127.0.0.1', '::1')

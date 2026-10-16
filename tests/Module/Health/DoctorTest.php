@@ -13,6 +13,82 @@ use PHPUnit\Framework\TestCase;
 
 final class DoctorTest extends TestCase
 {
+    public function testRuntimeVerificationRetainsDeliveryGatesAndRejectsUnrelatedCriticalFailure(): void
+    {
+        $probe = new class implements SendingGateReadinessProbe, \App\Module\Health\Application\Contract\MaintenanceReadinessProbe {
+            public bool $brokenKey = false;
+            public bool $idle = true;
+
+            public function offlineVerificationReady(): bool
+            {
+                return $this->idle;
+            }
+
+            public function findings(): array
+            {
+                $findings = [
+                    ['code' => 'sender_identity', 'severity' => 'critical', 'summary' => 'SMTP is deferred.', 'remediation' => 'Configure mail when ready.'],
+                    ['code' => 'delivery_quiesced', 'severity' => 'critical', 'summary' => 'Delivery is held.', 'remediation' => 'Accept after verification.'],
+                ];
+                if ($this->brokenKey) {
+                    $findings[] = ['code' => 'master_key_unavailable', 'severity' => 'critical', 'summary' => 'The key is unavailable.', 'remediation' => 'Recover the original key.'];
+                }
+
+                return $findings;
+            }
+
+            public function maintenanceFindings(): array
+            {
+                return ['sender_identity', 'delivery_quiesced'];
+            }
+        };
+        $doctor = new Doctor([$probe], self::createStub(Connection::class));
+        self::assertFalse($doctor->verifyRuntime()['runtime_verified']);
+        self::assertTrue($doctor->verifyRuntime(false, true)['runtime_verified']);
+        $probe->idle = false;
+        self::assertFalse($doctor->verifyRuntime(false, true)['runtime_verified']);
+        $probe->idle = true;
+        $report = $doctor->verifyRuntime(true);
+        self::assertTrue($report['runtime_verified']);
+        self::assertFalse($report['delivery_ready']);
+        self::assertSame(2, $report['critical_count']);
+        self::assertIsArray($report['findings']);
+        self::assertSame([true, true], array_column($report['findings'], 'sending_blocked'));
+        $probe->idle = false;
+        self::assertFalse($doctor->verifyRuntime(true)['runtime_verified']);
+        $probe->idle = true;
+        $probe->brokenKey = true;
+        self::assertFalse($doctor->verifyRuntime(true)['runtime_verified']);
+        self::assertSame(['master_key_unavailable'], $doctor->verifyRuntime(true)['runtime_blockers']);
+        $this->expectException(\DomainException::class);
+        $doctor->assertSendingReady();
+    }
+
+    public function testCompletionRefreshesSavedFindingsWithoutWeakeningDeferredSmtp(): void
+    {
+        $probe = new class implements SendingGateReadinessProbe {
+            public function findings(): array
+            {
+                return [['code' => 'sender_identity', 'severity' => 'critical', 'summary' => 'SMTP is deferred.', 'remediation' => 'Configure mail when ready.']];
+            }
+        };
+        $connection = $this->createMock(Connection::class);
+        $connection->expects(self::once())->method('insert')->with('health_check_run', self::callback(static fn (array $row): bool => 'full' === $row['run_type'] && 'update' === $row['trigger_source'] && 1 === $row['critical_count']));
+        $connection->expects(self::exactly(2))->method('executeStatement')->willReturnCallback(static function (string $sql): int {
+            self::assertTrue(str_starts_with($sql, 'UPDATE health_finding_state SET active = 0') || str_starts_with($sql, 'INSERT INTO health_finding_state'));
+
+            return 1;
+        });
+        $doctor = new Doctor([$probe], $connection);
+        self::assertTrue($doctor->verifyRuntime()['runtime_verified']);
+        $report = $doctor->verifyRuntime(false, false, true);
+        self::assertTrue($report['runtime_verified']);
+        self::assertFalse($report['delivery_ready']);
+        self::assertIsArray($report['findings']);
+        self::assertIsArray($report['findings'][0]);
+        self::assertSame('critical', $report['findings'][0]['severity']);
+    }
+
     public function testCriticalFindingFailsSendingClosedAndPersistsOnlyRedactedEvidence(): void
     {
         $probe = new class implements ReadinessProbe {

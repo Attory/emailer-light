@@ -6,8 +6,9 @@
 <section class="quick-start"><div><h2>Create a campaign</h2><p>Upload recipients for this campaign, choose a template, review, then send or schedule.</p></div><a class="button" href="{{ path('admin_campaigns') }}#compose">Create campaign</a></section>
 <div class="section-header"><h2>Installation health</h2><a href="{{ path('admin_doctor') }}">Open Doctor</a></div>
 <div class="dashboard-grid">
+{% set sending_blocked = app.request.attributes.get('doctor_active_findings')|default([])|filter(finding => finding.sending_blocked)|length > 0 %}
 {% for section in app.request.attributes.get('operations_dashboard')|default([]) %}
-    <section><h2>{{ section.title }}</h2><p><strong>Status:</strong> {{ section.status }}</p><dl>{% for metric in section.metrics %}<dt>{{ metric.label }}</dt><dd>{{ metric.value }}</dd>{% endfor %}</dl></section>
+    <section><h2>{{ section.title }}</h2><p><strong>Status:</strong> {{ section.key == 'delivery' and sending_blocked ? 'sending blocked - open Doctor' : section.status }}</p><dl>{% for metric in section.metrics %}<dt>{{ metric.label }}</dt><dd>{{ metric.value }}</dd>{% endfor %}</dl></section>
 {% else %}<p>Operational status is unavailable.</p>{% endfor %}
 </div>
 {% endblock %}

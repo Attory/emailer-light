@@ -11,7 +11,7 @@ use App\Module\Health\Application\Contract\SendingGateReadinessProbe;
 use App\Shared\Identity;
 use Doctrine\DBAL\Connection;
 
-final readonly class Doctor implements ScheduledHealthOperations
+final readonly class Doctor implements ScheduledHealthOperations, Contract\RuntimeVerification
 {
     /** @param iterable<ReadinessProbe> $probes */
     public function __construct(private iterable $probes, private Connection $connection)
@@ -129,8 +129,40 @@ final readonly class Doctor implements ScheduledHealthOperations
             }
         }
         if (0 < $critical) {
-            throw new \DomainException('Sending is blocked by critical readiness findings.');
+            throw new \App\Module\Delivery\Application\Contract\SendingNotReady('Sending is blocked by critical readiness findings.');
         }
+    }
+
+    /** @return array<string, mixed> */
+    public function verifyRuntime(bool $offlineMaintenance = false, bool $allowOperationalHold = false, bool $persist = false): array
+    {
+        // Preserve every original severity and sending gate in the report.
+        $result = $this->run($persist, false, 'full', 'update');
+        $expected = ['sender_identity'];
+        $blocking = [];
+        foreach ($this->probes as $probe) {
+            if ($probe instanceof Contract\MaintenanceReadinessProbe) {
+                if ($offlineMaintenance && !$probe->offlineVerificationReady()) {
+                    $blocking[] = 'offline_not_quiesced';
+                }
+                $codes = $probe->maintenanceFindings();
+                foreach ($codes as $code) {
+                    if ($offlineMaintenance || \in_array($code, ['sender_identity', 'smtp_transport_security'], true) || ($allowOperationalHold && $probe->offlineVerificationReady() && 'delivery_quiesced' === $code)) {
+                        $expected[] = $code;
+                    }
+                }
+            }
+        }
+        foreach ($result['findings'] as $finding) {
+            if ('critical' === $finding['severity'] && !\in_array($finding['code'], $expected, true)) {
+                $blocking[] = $finding['code'];
+            }
+        }
+        $result['runtime_verified'] = [] === $blocking;
+        $result['runtime_blockers'] = $blocking;
+        $result['delivery_ready'] = [] === array_filter($result['findings'], static fn (array $finding): bool => $finding['sending_blocked']);
+
+        return $result;
     }
 
     /** @return list<array<string, mixed>> */

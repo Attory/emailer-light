@@ -17,6 +17,7 @@ final readonly class DoctrineInstallationFinalizer implements InstallationFinali
         private InstallationLock $installationLock,
         private SetupDoctor $doctor,
         private SetupLifecycle $lifecycle,
+        private string $productVersion = '1.1.0',
     ) {
     }
 
@@ -61,7 +62,7 @@ final readonly class DoctrineInstallationFinalizer implements InstallationFinali
                         'result' => 'success',
                     ]);
                     $this->connection->update('installation_state', ['completed_at' => $completedAt], ['singleton_key' => '1']);
-                    $this->connection->update('product_identity', ['installation_uuid' => $installationId, 'updated_at' => $completedAt], ['singleton_key' => '1']);
+                    $this->connection->update('product_identity', ['installation_uuid' => $installationId, 'product_version' => $this->productVersion, 'updated_at' => $completedAt], ['singleton_key' => '1']);
                 }
                 $this->connection->commit();
             } catch (\Throwable $exception) {
@@ -73,7 +74,7 @@ final readonly class DoctrineInstallationFinalizer implements InstallationFinali
                 $this->installationLock->create([
                     'version' => 1,
                     'product_id' => 'emailer-light',
-                    'product_version' => '1.0.0',
+                    'product_version' => $this->productVersion,
                     'installation_uuid' => $installationId,
                     'completed_at' => $completedAt,
                     'schema_version' => '20261014000000',

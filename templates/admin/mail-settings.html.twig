@@ -1,24 +1,44 @@
 {% extends 'admin/layout.html.twig' %}
 {% block title %}Mail settings · Emailer Light{% endblock %}
 {% block admin_body %}
-<h1>Mail transport</h1>
+<h1>Mail settings</h1>
+{% if not mail.smtp_host %}<p role="status">Email delivery is not configured. You can prepare templates and campaigns now. Add your email provider below when you are ready to send.</p>{% endif %}
+{% if mail.smtp_host %}
 <p>Configured host: {{ mail.smtp_host }}:{{ mail.smtp_port }}; mode: {{ mail.encryption_mode }}; TLS peer verification: {{ mail.tls_peer_verification ? 'on' : 'off' }}.</p>
 <p>Username: {{ mail.smtp_username|default('none') }}; credential: {{ mail.credential_configured ? 'stored encrypted' : 'not stored' }}; sender: {{ mail.sender_address }}.</p>
-<p>RFC 8058 provider signing attestation: {{ mail.one_click_dkim_confirmed ? 'confirmed' : 'not confirmed; one-click header disabled' }}.</p>
+<p>One-click unsubscribe support: {{ mail.one_click_dkim_confirmed ? 'confirmed' : 'not confirmed; one-click header disabled' }}.</p>
+{% endif %}
 
 <form method="post" action="{{ path('admin_mail_settings_update') }}" autocomplete="off">
     <input type="hidden" name="_token" value="{{ csrf_token('mail-settings-update') }}">
-    <label>SMTP hostname <input name="host" value="{{ mail.smtp_host }}" required></label>
+    <p>Use the outgoing-mail (SMTP) details from your email provider. Your SMTP password may be a separate key supplied by that provider.</p>
+    <label>Provider server <input name="host" value="{{ mail.smtp_host }}" list="smtp-provider-hosts" required></label>
+    <datalist id="smtp-provider-hosts">
+        <option value="smtp-broadcasts.postmarkapp.com" label="Postmark broadcast stream"></option>
+        <option value="smtp-relay.brevo.com" label="Brevo SMTP relay"></option>
+    </datalist>
+    <p>These suggestions use port 587 and STARTTLS. Your provider's current settings take priority. <a href="https://postmarkapp.com/support/article/811-what-are-the-smtp-details-api-tokens-i-should-be-using" rel="noreferrer">Postmark settings</a> · <a href="https://help.brevo.com/hc/en-us/articles/7924908994450-Send-transactional-emails-using-Brevo-SMTP" rel="noreferrer">Brevo settings</a>. Confirm that your account permits your intended mail.</p>
     <label>Port <input name="port" value="{{ mail.smtp_port }}" type="number" min="1" max="65535" required></label>
     <label>Encryption <select name="encryption"><option value="starttls"{% if mail.encryption_mode == 'starttls' %} selected{% endif %}>STARTTLS required</option><option value="tls"{% if mail.encryption_mode == 'tls' %} selected{% endif %}>Direct TLS</option></select></label>
     <label>Username <input name="username" value="{{ mail.smtp_username }}" autocomplete="off" required></label>
-    <label>SMTP password <input name="password" type="password" autocomplete="new-password" required></label>
+    <label>SMTP password or key <input name="password" type="password" autocomplete="new-password"{% if not mail.credential_configured %} required{% endif %}></label>
+    {% if mail.credential_configured %}<p>Leave the password blank to keep the saved password for this server and username. Enter a password when changing either.</p>{% endif %}
     <label>Sender address <input name="sender_address" value="{{ mail.sender_address }}" type="email" required></label>
-    <label>Sender name <input name="sender_name" value="{{ mail.sender_name }}" required></label>
+    <label>Sender name (optional) <input name="sender_name" value="{{ mail.sender_name|default('Emailer') }}"></label>
     <label>Reply-to (optional) <input name="reply_to" value="{{ mail.reply_to_address }}" type="email"></label>
-    <label><input name="one_click_dkim_confirmed" type="checkbox" value="1"{% if mail.one_click_dkim_confirmed %} checked{% endif %}> I have verified that the provider applies a valid DKIM signature covering both List-Unsubscribe headers</label>
+    <label><input name="one_click_dkim_confirmed" type="checkbox" value="1"{% if mail.one_click_dkim_confirmed %} checked{% endif %}> My provider confirms DKIM signing of both unsubscribe headers (optional; leave unticked if unsure)</label>
 
     <button type="submit">Store secure SMTP configuration</button>
 </form>
-<p>Saving validates and encrypts configuration only. Use a queued campaign test to verify transport.</p>
+<p>Saving validates and encrypts configuration only. It does not send email.</p>
+<form method="post" action="{{ path('admin_mail_test_connection') }}">
+    <input type="hidden" name="_token" value="{{ csrf_token('mail-test') }}">
+    <button type="submit">Test connection without sending</button>
+</form>
+<form method="post" action="{{ path('admin_mail_send_test') }}">
+    <input type="hidden" name="_token" value="{{ csrf_token('mail-test') }}">
+    <label>Test destination <input type="email" name="destination" required placeholder="Your own email address"></label>
+    <p>Send one test email to the address shown above. This does not approve or send a campaign.</p>
+    <button type="submit">Send test email</button>
+</form>
 {% endblock %}

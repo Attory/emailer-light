@@ -11,7 +11,7 @@ use Doctrine\DBAL\Connection;
 
 final readonly class SystemReadinessProbe implements LightweightReadinessProbe, SendingGateReadinessProbe
 {
-    public function __construct(private Connection $connection, private MasterKey $masterKey, private string $privateDirectory, private string $projectDirectory, private string $canonicalUri, private string $environment, private string $trustedProxies, private string $trustedHosts, private string $expectedSchemaVersion, private string $releasesDirectory, private string $releasePublicKeyFile)
+    public function __construct(private Connection $connection, private MasterKey $masterKey, private string $privateDirectory, private string $projectDirectory, private string $canonicalUri, private string $environment, private string $trustedProxies, private string $trustedHosts, private string $expectedSchemaVersion, private string $releasesDirectory, private string $releasePublicKeyFile, private string $httpMode = 'proxy')
     {
     }
 
@@ -47,8 +47,8 @@ final readonly class SystemReadinessProbe implements LightweightReadinessProbe, 
         if (!str_starts_with($this->canonicalUri, 'https://') && !\in_array($this->environment, ['dev', 'test'], true)) {
             $findings[] = $this->critical('canonical_https', 'The canonical application URI is not HTTPS.', 'Configure the canonical HTTPS URI and trusted proxy boundary.');
         }
-        if (!\in_array($this->environment, ['dev', 'test'], true) && ('' === trim($this->trustedProxies) || str_contains($this->trustedProxies, '*') || str_contains($this->trustedProxies, '0.0.0.0/0') || str_contains($this->trustedProxies, '::/0'))) {
-            $findings[] = $this->critical('trusted_proxies', 'Trusted proxy configuration is empty or over-broad.', 'Configure only the exact TLS proxy hops.');
+        if (!\in_array($this->environment, ['dev', 'test'], true) && (('direct-fpm' !== $this->httpMode && '' === trim($this->trustedProxies)) || !\in_array($this->httpMode, ['proxy', 'direct-fpm'], true) || ('direct-fpm' === $this->httpMode && '' !== trim($this->trustedProxies)) || str_contains($this->trustedProxies, '*') || str_contains($this->trustedProxies, '0.0.0.0/0') || str_contains($this->trustedProxies, '::/0'))) {
+            $findings[] = $this->critical('trusted_proxies', 'The HTTP deployment boundary is missing or unsafe.', 'Use exact TLS proxy hops, or explicit direct FastCGI mode without trusted proxies.');
         }
         if ('' === trim($this->trustedHosts) || str_contains($this->trustedHosts, '.*') || str_contains($this->trustedHosts, '*')) {
             $findings[] = $this->critical('trusted_hosts', 'Trusted host configuration is empty or over-broad.', 'Configure a strict canonical-host regular expression.');

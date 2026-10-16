@@ -1,13 +1,15 @@
-# Emailer Light → Emailer Ripe upgrade contract 1.0
+# Light to Ripe compatibility
 
-Emailer Light 1.0.0 is **upgrade-ready for Emailer Ripe**. Ripe 1.0.5 cannot perform this transition. The first compatible Ripe installer is expected in Ripe 1.0.6 or later. No Light → Ripe transition has been rehearsed with a signed compatible installer, so an edition upgrade is not yet available.
+The private Ripe 1.1.0 installer supports the original published Light 1.0.0 and
+the official Light 1.1.0 release. Ripe 1.0.6 does not recognize Light 1.1.0;
+use the corresponding new Ripe release. The original 1.0.0 path remains supported.
 
-The normative machine contract is [contract-1.0.json](contract-1.0.json), paired with the exact Light [schema manifest](../../config/upgrade/schema-1.0.0.json) and fully synthetic [fixture](../../tests/Fixtures/upgrade-light-1.0.0.json). The Light preflight command is `php bin/console emailer:upgrade:ripe-preflight --json`. It makes only read queries, sends nothing, reports codes rather than private values, and returns 0 only when quiesced and consistent. Exit 3 means unsafe or unsupported. A passing preflight is preparation evidence, not authorization to run Ripe 1.0.5.
+The private release supplies the guided upgrade and its beginner guide. It retains
+administrator identity/password hash, campaign-owned recipients, history, assets,
+SMTP/encryption/token contexts, suppressions and installation identity. It maps
+the administrator to Owner at High security, with MFA enrollment required.
+Acceptance completes host handoff; delivery resumes only after an explicit
+readiness-checked action. There is no general Ripe to Light downgrade.
 
-## Required Ripe implementation
-
-Ripe must first implement a campaign-owned recipient model alongside its reusable contacts. Ripe 1.0.5 has `contact_id` foreign keys on campaign audience, delivery, and token rows; copying Light recipient IDs into those fields would force creation of reusable contacts and violate the contract. Ripe 1.0.6 must add a `recipient_id` path with foreign keys to campaign audience rows, migrate delivery and token readers/writers to support it, and leave contact/list tables empty on transition. It must retain the Light token and encryption contexts or safely transform encrypted records after a verified backup. The mapping file lists every table and field.
-
-The signed Ripe installer must identify exact source version and schema from `product_identity`, the protected installation lock, the migration ledger and the schema manifest, reject drift and dirty state, quiesce all workers and schedulers, prove no active send or lease, create and verify a complete protected backup, apply forward-only transition migrations, and stage Ripe code. It must preserve the sole Argon2id password hash unchanged, map that administrator to Owner, set High security, leave MFA unconfigured, and preserve campaigns, snapshots, templates, SMTP secrets, suppression, unsubscribe, delivery failures, tracking, audit and settings data. It must retain case-insensitive global suppression matching and must not approve, schedule, retry, resume or send anything. Validate referential integrity, digest counts, schema, application boot and Doctor before atomically switching. If validation fails before or after switching, stop services and restore the untouched Light release and verified backup. Record a redacted audit event and operator receipt. Never offer automatic Ripe → Light downgrade.
-
-The synthetic fixture and contract preservation test are intended for the first compatible Ripe installer CI. They contain no production-derived data. Ripe 1.0.5 cannot consume the fixture; its contact foreign keys and installer identity checks are incompatible.
+The public contracts are [1.0](contract-1.0.json) and [1.1](contract-1.1.json).
+This repository contains only Light implementation and its public contract.
