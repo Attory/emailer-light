@@ -12,6 +12,20 @@ use Symfony\Component\DependencyInjection\ParameterBag\ParameterBag;
 
 final class LegacyDatabaseEnvironmentTest extends TestCase
 {
+    public function testSubprocessRetainsEmptyProxySettingWithoutCredentialsInArguments(): void
+    {
+        $values = ['TRUSTED_PROXIES' => '', 'DATABASE_URL' => 'synthetic-sensitive-url', 'APP_SECRET' => 'synthetic-sensitive-secret'];
+        $command = LegacyDatabaseEnvironment::command([PHP_BINARY, '-r', 'echo json_encode(getenv("TRUSTED_PROXIES"));'], $values);
+        self::assertNotContains($values['DATABASE_URL'], $command);
+        self::assertNotContains($values['APP_SECRET'], $command);
+        $process = proc_open($command, [['file', '/dev/null', 'r'], ['pipe', 'w'], ['file', '/dev/null', 'w']], $pipes, null, $values);
+        self::assertIsResource($process);
+        $output = stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        self::assertSame(0, proc_close($process));
+        self::assertSame('""', $output);
+    }
+
     public function testEncodedCredentialsSurviveLegacyResolutionAndStayLiteralInNewRuntime(): void
     {
         $root = sys_get_temp_dir().'/emailer-legacy-dsn-'.bin2hex(random_bytes(8));

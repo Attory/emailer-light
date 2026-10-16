@@ -7,6 +7,29 @@ namespace App\Module\Release\Application;
 /** Preserve URL-encoded credentials when launching an authenticated older runtime. */
 final class LegacyDatabaseEnvironment
 {
+    /** PHP proc_open drops explicit empty array values. Restore only empty values,
+     * never credentials, through the distro environment launcher without a shell.
+     *
+     * @param list<string>          $command
+     * @param array<string, string> $environment
+     *
+     * @return list<string>
+     */
+    public static function command(array $command, array $environment): array
+    {
+        $empty = [];
+        foreach ($environment as $name => $value) {
+            if ('' === $value) {
+                if (1 !== preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $name)) {
+                    throw new \RuntimeException('Release environment name is unsafe.');
+                }
+                $empty[] = $name.'=';
+            }
+        }
+
+        return [] === $empty ? $command : array_merge(['/usr/bin/env', '--'], $empty, $command);
+    }
+
     /** @param array<string, string> $environment
      * @return array<string, string>
      */
