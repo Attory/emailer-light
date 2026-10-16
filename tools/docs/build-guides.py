@@ -35,6 +35,7 @@ for name, filename in [('Guide', 'DejaVuSans.ttf'), ('Guide-Bold', 'DejaVuSans-B
 pdfmetrics.registerFontFamily('Guide', normal='Guide', bold='Guide-Bold', italic='Guide', boldItalic='Guide-Bold')
 styles = getSampleStyleSheet()
 for name in ('Normal', 'BodyText', 'Heading1', 'Heading2', 'Heading3'):
+    styles[name].keepWithNext = name.startswith('Heading')
     styles[name].fontName = 'Guide-Bold' if name.startswith('Heading') else 'Guide'
     styles[name].textColor = colors.HexColor('#233b37')
 styles['BodyText'].fontSize = 10
