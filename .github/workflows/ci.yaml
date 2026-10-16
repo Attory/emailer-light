@@ -56,6 +56,9 @@ jobs:
       - name: Build locked PHP application image
         run: docker compose build --pull app
 
+      - name: Verify SMTP TLS, authentication and explicit-send isolation
+        run: EMAILER_SMTP_PROBE_IMAGE="${COMPOSE_PROJECT_NAME}-app:latest" bash tools/installer/check-smtp-probe.sh
+
       - name: Start MariaDB and Mailpit
         run: docker compose up --detach --wait database mailpit
 

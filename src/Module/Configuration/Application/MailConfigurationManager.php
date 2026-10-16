@@ -44,11 +44,11 @@ final readonly class MailConfigurationManager
         $this->authorization->assertAtLeastRank($actor, AdministrativeAccessLevel::Administrator, 'mail.configuration.update');
         $host = strtolower(trim($host));
         $username = trim($username);
-        $senderName = trim($senderName);
+        $senderName = '' === trim($senderName) ? 'Emailer' : trim($senderName);
         if (1 !== preg_match('/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/', $host)
             || \in_array($host, ['localhost', 'mailpit'], true) || 1 > $port || 65535 < $port || !\in_array($encryption, ['starttls', 'tls'], true)
             || '' === $username || 254 < mb_strlen($username) || 1 === preg_match('/[\x00-\x1F\x7F]/', $username)
-            || '' === $password || 4096 < \strlen($password) || '' === $senderName || 160 < mb_strlen($senderName) || 1 === preg_match('/[\x00-\x1F\x7F]/', $senderName)
+            || 4096 < \strlen($password) || '' === $senderName || 160 < mb_strlen($senderName) || 1 === preg_match('/[\x00-\x1F\x7F]/', $senderName)
         ) {
             throw new \InvalidArgumentException('Secure SMTP configuration is invalid.');
         }
@@ -56,18 +56,24 @@ final readonly class MailConfigurationManager
         $reply = '' === trim($replyTo) ? null : new EmailAddress($replyTo);
         $this->connection->transactional(function () use ($actor, $host, $port, $encryption, $username, $password, $sender, $senderName, $reply, $oneClickDkimConfirmed): void {
             $installationId = $this->connection->fetchOne("SELECT installation_uuid FROM organisation_settings WHERE singleton_key = '1' FOR UPDATE");
-            $existingId = $this->connection->fetchOne("SELECT credential_secret_id FROM sender_identity WHERE singleton_key = '1' FOR UPDATE");
+            $existing = $this->connection->fetchAssociative("SELECT credential_secret_id, smtp_host, smtp_username FROM sender_identity WHERE singleton_key = '1' FOR UPDATE");
+            $existingId = false === $existing ? null : $existing['credential_secret_id'];
             if (!\is_string($installationId)) {
                 throw new \RuntimeException('Installation identity is unavailable.');
             }
-            if (\is_string($existingId)) {
+            if ('' === $password) {
+                if (!\is_string($existingId) || '' === $existingId || $host !== $existing['smtp_host'] || $username !== $existing['smtp_username']) {
+                    throw new \InvalidArgumentException('Enter the SMTP password for a new provider or changed login.');
+                }
+                $secretId = $existingId;
+            } elseif (\is_string($existingId)) {
                 $this->vault->replace($existingId, 'smtp.credential', $password, $installationId);
                 $secretId = $existingId;
             } else {
                 $secretId = $this->vault->store('smtp.credential', $password, $installationId);
             }
             $values = ['smtp_host' => $host, 'smtp_port' => $port, 'encryption_mode' => $encryption, 'smtp_username' => $username, 'credential_secret_id' => $secretId, 'sender_address' => $sender->canonical, 'sender_name' => $senderName, 'reply_to_address' => $reply?->canonical, 'tls_peer_verification' => 1, 'one_click_dkim_confirmed' => $oneClickDkimConfirmed ? 1 : 0, 'test_message_at' => '1970-01-01 00:00:00.000000', 'updated_at' => Identity::now()];
-            if (false === $existingId) {
+            if (false === $existing) {
                 $this->connection->insert('sender_identity', ['singleton_key' => '1', 'transport_type' => 'smtp', 'created_at' => Identity::now()] + $values);
             } else {
                 $this->connection->update('sender_identity', $values, ['singleton_key' => '1']);

@@ -450,7 +450,7 @@ server {{
         self.host.durable(m.root / 'active-installation.json', json.dumps({'format': 'emailer-active-installation-v1', 'runtime': str(self.runtime), 'product': self.host.product, 'version': self.host.version}) + '\n')
         # Only this root-controlled operation can lift the host hold. Delivery itself stays quiesced.
         self.hold.unlink(missing_ok=True)
-        self.live(['emailer:health:verify-runtime', '--allow-operational-hold'])
+        self.live(['emailer:health:verify-runtime', '--allow-operational-hold', '--record'])
         self.apply_site(self.site_text(maintenance=False))
         self.state['phase'] = 'complete'
         m.record.pop('active_units', None)

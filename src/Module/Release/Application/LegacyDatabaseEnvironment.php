@@ -35,7 +35,7 @@ final class LegacyDatabaseEnvironment
      */
     public static function forRelease(string $release, array $environment): array
     {
-        $configuration = file_get_contents($release.'/config/packages/doctrine.yaml');
+        $configuration = @file_get_contents($release.'/config/packages/doctrine.yaml');
         if (false === $configuration) {
             throw new \RuntimeException('Authenticated release database configuration is unavailable.');
         }

@@ -105,6 +105,41 @@ class RecoveryAndDiagnosticContract(unittest.TestCase):
 
 
 class PackageFailureGuidance(unittest.TestCase):
+    def test_registered_socket_survives_missing_run_link_interruption_and_completed_rerun(self):
+        instance = object.__new__(Installer)
+        with tempfile.TemporaryDirectory() as directory:
+            instance.state_dir = Path(directory)
+            output = 'Name: php-fpm.sock\nStatus: auto\nValue: /run/php/php8.3-fpm.sock\nBest: /run/php/php8.3-fpm.sock\n'
+            original_lstat = Path.lstat
+            def metadata(path, *args, **kwargs):
+                info = original_lstat(path, *args, **kwargs)
+                return types.SimpleNamespace(st_uid=0, st_mode=info.st_mode, st_nlink=info.st_nlink)
+            with patch.object(Path, 'lstat', metadata), patch('provision.os.path.lexists', return_value=False):
+                with patch('provision.subprocess.run', return_value=types.SimpleNamespace(returncode=0, stdout=output)), patch('provision.run') as commands:
+                    record = instance.preserve_php_selection('/run/php/php-fpm.sock', ['php8.4-fpm'], name='php-fpm.sock', package='php8.4-fpm')
+                    self.assertEqual('auto', record['previous_mode'])
+                    commands.assert_called_once_with(['update-alternatives', '--set', 'php-fpm.sock', '/run/php/php8.3-fpm.sock'])
+                receipt = (instance.state_dir / 'php-fpm-sock-selection.json').read_bytes()
+                after = output.replace('Status: auto', 'Status: manual').replace('Best: /run/php/php8.3-fpm.sock', 'Best: /run/php/php8.4-fpm.sock')
+                with patch('provision.subprocess.run', return_value=types.SimpleNamespace(returncode=0, stdout=after)), patch('provision.run') as commands:
+                    # A killed APT task can have installed every package already.
+                    retained = instance.preserve_php_selection('/run/php/php-fpm.sock', [], name='php-fpm.sock', package='php8.4-fpm')
+                    self.assertEqual(record, retained)
+                    self.assertEqual(receipt, (instance.state_dir / 'php-fpm-sock-selection.json').read_bytes())
+                    instance.verify_php_selection('php-fpm.sock', '/run/php/php-fpm.sock', retained)
+                    commands.assert_not_called()
+                drift = after.replace('Value: /run/php/php8.3-fpm.sock', 'Value: /run/php/php8.4-fpm.sock')
+                with patch('provision.subprocess.run', return_value=types.SimpleNamespace(returncode=0, stdout=drift)), self.assertRaisesRegex(SetupError, 'differs from the saved'):
+                    instance.preserve_php_selection('/run/php/php-fpm.sock', [], name='php-fpm.sock', package='php8.4-fpm')
+
+    def test_unregistered_existing_fpm_socket_refuses_package_installation(self):
+        instance = object.__new__(Installer)
+        with tempfile.TemporaryDirectory() as directory:
+            instance.state_dir = Path(directory)
+            with patch('provision.subprocess.run', return_value=types.SimpleNamespace(returncode=2, stdout='')), patch('provision.os.path.lexists', return_value=True), patch('provision.run') as commands, self.assertRaisesRegex(SetupError, 'outside Debian'):
+                instance.preserve_php_selection('/run/php/php-fpm.sock', ['php8.4-fpm'], name='php-fpm.sock', package='php8.4-fpm')
+            commands.assert_not_called()
+
     def test_missing_matching_php_patch_is_actionable_without_relaxing_pin(self):
         instance = object.__new__(Installer)
         calls = []

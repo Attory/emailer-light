@@ -220,46 +220,79 @@ class Installer:
             status = subprocess.run(['dpkg-query', '-W', '-f=${Status}', package], capture_output=True, text=True)
             if status.returncode or status.stdout != 'install ok installed':
                 missing.append(package)
-        previous_php = os.path.realpath('/usr/bin/php') if Path('/usr/bin/php').exists() else None
+        selections = [('php', '/usr/bin/php', 'php8.4-cli'), ('php-fpm.sock', '/run/php/php-fpm.sock', 'php8.4-fpm')]
         common = subprocess.run(['dpkg-query', '-W', '-f=${Status} ${Version}', 'php8.4-common'], capture_output=True, text=True)
         if common.returncode == 0 and common.stdout.startswith('install ok installed '):
             installed_php_version = common.stdout.split()[-1]
             missing = [package + '=' + installed_php_version if package.startswith('php8.4-') else package for package in missing]
-        if missing:
-            prior_mode = self.preserve_php_selection(previous_php, missing)
-            try:
+        # Inspect registered selections even when /run links have disappeared after boot.
+        # Retain original receipts across an interrupted APT task and already-installed reruns.
+        retained = []
+        for name, link, package in selections:
+            record = self.preserve_php_selection(link, missing, name=name, package=package)
+            if record is not None:
+                retained.append((name, link, record))
+        try:
+            if missing:
                 self.install_missing_packages(missing)
-            finally:
-                if prior_mode == 'auto':
-                    selection = subprocess.run(['update-alternatives', '--query', 'php'], capture_output=True, text=True)
-                    best = re.search(r'^Best: (.+)$', selection.stdout, re.M)
-                    if selection.returncode == 0 and best and os.path.realpath(best.group(1)) == previous_php:
-                        run(['update-alternatives', '--auto', 'php'])
-        if previous_php and os.path.realpath('/usr/bin/php') != previous_php:
-            run(['update-alternatives', '--set', 'php', previous_php])
-        if previous_php and os.path.realpath('/usr/bin/php') != previous_php:
-            raise SetupError('The existing global PHP selection could not be preserved. Setup stopped before changing application resources.')
+        finally:
+            for name, link, record in retained:
+                self.verify_php_selection(name, link, record)
         run([self.php, '-r', 'foreach (["curl","dom","gd","intl","mbstring","pdo_mysql","sodium","zip","posix"] as $e) {if (!extension_loaded($e)) exit(1);}'])
         if not runtime_only:
             run(['systemctl', 'start', 'mariadb'])
 
-    def preserve_php_selection(self, previous, missing):
-        if previous is None or not any(name.split('=', 1)[0] == 'php8.4-cli' for name in missing):
-            return None
-        selection = subprocess.run(['update-alternatives', '--query', 'php'], capture_output=True, text=True)
-        current = re.search(r'^Value: (.+)$', selection.stdout, re.M)
+    def preserve_php_selection(self, link, missing, *, name='php', package='php8.4-cli'):
+        receipt = self.state_dir / (name.replace('.', '-') + '-selection.json')
+        selection = subprocess.run(['update-alternatives', '--query', name], capture_output=True, text=True)
+        current = re.search(r'^Value: (/.+)$', selection.stdout, re.M)
         mode = re.search(r'^Status: (auto|manual)$', selection.stdout, re.M)
-        if selection.returncode or not current or not mode or os.path.realpath(current.group(1)) != previous:
-            raise SetupError('The existing PHP command is outside Debian’s alternatives system. No PHP packages were installed. Register that existing executable as a Debian alternative or use a separate supported VPS; setup will not replace its command.')
-        self.state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-        metadata = self.state_dir.lstat()
-        if self.state_dir.is_symlink() or metadata.st_uid != 0 or metadata.st_mode & 0o077:
-            raise SetupError('The installer folder cannot safely retain the previous PHP selection.')
-        durable(self.state_dir / 'php-selection.json', json.dumps({'previous_value': current.group(1), 'previous_mode': mode.group(1), 'policy': 'keep_existing_version'}) + '\n')
-        if mode.group(1) == 'auto':
-            # Prevent even a temporary global switch while Debian installs the new CLI.
-            run(['update-alternatives', '--set', 'php', current.group(1)])
-        return mode.group(1)
+        relevant = any(item.split('=', 1)[0] == package for item in missing)
+        if receipt.exists() or receipt.is_symlink():
+            info = receipt.lstat()
+            if receipt.is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or info.st_mode & 0o077:
+                raise SetupError('The saved PHP selection is unsafe. It was not replaced.')
+            record = json.loads(receipt.read_text())
+            if not isinstance(record, dict) or record.get('policy') != 'keep_existing_version' or record.get('previous_mode') not in ('auto', 'manual') or not isinstance(record.get('previous_value'), str) or not record['previous_value'].startswith('/'):
+                raise SetupError('The saved PHP selection is invalid. It was not replaced.')
+            if selection.returncode or not current or not mode or current.group(1) != record['previous_value']:
+                raise SetupError('The registered PHP selection differs from the saved installation record. No PHP packages were installed. Restore the recorded selection before resuming setup.')
+        else:
+            if not relevant:
+                return None
+            if selection.returncode:
+                if not os.path.lexists(link):
+                    return None
+                raise SetupError('The existing PHP command or shared FPM socket is outside Debian’s alternatives system. No PHP packages were installed. Register that existing selection as a Debian alternative or use a separate supported VPS; setup will not replace it.')
+            if not current or not mode:
+                raise SetupError('The registered PHP command or shared FPM socket selection is ambiguous. No PHP packages were installed.')
+            record = {'previous_value': current.group(1), 'previous_mode': mode.group(1), 'policy': 'keep_existing_version'}
+            self.state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+            metadata = self.state_dir.lstat()
+            if self.state_dir.is_symlink() or metadata.st_uid != 0 or metadata.st_mode & 0o077:
+                raise SetupError('The installer folder cannot safely retain the previous PHP selection.')
+            if os.path.lexists(link) and os.path.realpath(link) != os.path.realpath(record['previous_value']):
+                raise SetupError('The live PHP command or shared FPM socket differs from its registered selection. No PHP packages were installed.')
+            durable(receipt, json.dumps(record) + '\n')
+        if relevant and mode.group(1) == 'auto':
+            # Prevent even a temporary global command/socket switch during Debian package hooks.
+            run(['update-alternatives', '--set', name, record['previous_value']])
+        return record
+
+    def verify_php_selection(self, name, link, record):
+        selection = subprocess.run(['update-alternatives', '--query', name], capture_output=True, text=True)
+        current = re.search(r'^Value: (/.+)$', selection.stdout, re.M)
+        best = re.search(r'^Best: (/.+)$', selection.stdout, re.M)
+        if selection.returncode or not current:
+            raise SetupError('The saved PHP command or shared FPM socket selection is unavailable. Retain the setup record and restore that registered alternative before resuming.')
+        if current.group(1) != record['previous_value'] or (os.path.lexists(link) and os.path.realpath(link) != os.path.realpath(record['previous_value'])):
+            run(['update-alternatives', '--set', name, record['previous_value']])
+        if record['previous_mode'] == 'auto' and best and best.group(1) == record['previous_value']:
+            run(['update-alternatives', '--auto', name])
+        final = subprocess.run(['update-alternatives', '--query', name], capture_output=True, text=True)
+        selected = re.search(r'^Value: (/.+)$', final.stdout, re.M)
+        if final.returncode or not selected or selected.group(1) != record['previous_value'] or (os.path.lexists(link) and os.path.realpath(link) != os.path.realpath(record['previous_value'])):
+            raise SetupError('The existing PHP command or shared FPM socket could not be preserved. Setup stopped before changing application resources.')
 
     def install_missing_packages(self, missing):
         catalogue = subprocess.run(['apt-get', '--error-on=any', '-o', 'Acquire::Retries=0', '-o', 'Acquire::http::Timeout=10', '-o', 'Acquire::https::Timeout=10', 'update'], capture_output=True, text=True)
@@ -640,7 +673,7 @@ WantedBy=multi-user.target
         if path.is_symlink() or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != backup['sha256']:
             raise SetupError('The initial backup is missing or has changed. It was not replaced. Restore its saved copy or use the backup recovery reference before continuing.')
         self.console(['emailer:backup:verify', str(path)])
-        report = json.loads(self.console(['emailer:health:verify-runtime']))
+        report = json.loads(self.console(['emailer:health:verify-runtime', '--record']))
         codes = {finding['code'] for finding in report['findings']}
         self.state['mail_status'] = 'not configured; open Mail settings when ready' if 'sender_identity' in codes else ('configured; complete the connection check in Mail settings' if 'smtp_transport_security' in codes else 'configured')
         self.save()

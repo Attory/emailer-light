@@ -134,10 +134,10 @@ final readonly class Doctor implements ScheduledHealthOperations, Contract\Runti
     }
 
     /** @return array<string, mixed> */
-    public function verifyRuntime(bool $offlineMaintenance = false, bool $allowOperationalHold = false): array
+    public function verifyRuntime(bool $offlineMaintenance = false, bool $allowOperationalHold = false, bool $persist = false): array
     {
         // Preserve every original severity and sending gate in the report.
-        $result = $this->run(false);
+        $result = $this->run($persist, false, 'full', 'update');
         $expected = ['sender_identity'];
         $blocking = [];
         foreach ($this->probes as $probe) {
