@@ -1,10 +1,14 @@
 {
   "title": "Emailer Light user manual",
-  "subtitle": "Version 1.1.0 | Setup and everyday newsletters",
+  "subtitle": "Version 1.2.0 | Setup and everyday newsletters",
   "blocks": [
     {
       "type": "p",
       "text": "Prepare, test, approve, then send. Saving a draft sends nothing. Light has one administrator and campaign-specific CSV audiences; it has no reusable contacts, lists, additional administrator accounts or MFA."
+    },
+    {
+      "type": "p",
+      "text": "The 1.2.0 setup file supports Ubuntu 22.04/24.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action."
     },
     {
       "type": "h2",
@@ -129,7 +133,7 @@
     {
       "type": "ol",
       "items": [
-        "Download the official new Light setup file and start it using the installation action. Light 1.0.0 to 1.1.0 is supported. Select the detected installation if asked.",
+        "Download the official new Light setup file and start it using the installation action. Light 1.0.0 and 1.1.0 can update directly to 1.2.0. Check the displayed address before choosing an action.",
         "Choose Update with a verified backup. Setup pauses delivery, verifies recovery material and checks the updated application. Follow any Finish a committed update instruction.",
         "Review Doctor and mail settings. Start the same file and choose Resume delivery after reviewing readiness when ready. Previously approved due work may continue after resume; no draft is approved by this action."
       ]
