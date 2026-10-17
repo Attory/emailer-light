@@ -34,7 +34,7 @@ class VerificationBootstrap(unittest.TestCase):
         self.script = self.root / 'bootstrap.sh'
         self.script.write_text('set -eu\n' + source)
         self.mock('dpkg-deb', '''case "$3" in Package) echo openssl;; Version) echo 3.0.99;; Architecture) echo amd64;; *) exit 1;; esac''')
-        self.mock('dpkg-query', '''if [ "$BOOTSTRAP_TEST_MODE" = changed ]; then printf 'install ok installed\\n3.0.0'; else exit 1; fi''')
+        self.mock('dpkg-query', '''if [ "$BOOTSTRAP_TEST_MODE" = changed ]; then printf 'install ok installed\\n3.0.0'; elif [ "$BOOTSTRAP_TEST_MODE" = partial ]; then printf 'install ok unpacked\\n3.0.99'; else exit 1; fi''')
         self.mock('apt-get', '''case " $* " in
  *' update '*) exit 0;;
  *' --simulate '*) if [ "$BOOTSTRAP_TEST_MODE" = upgrade ]; then echo 'Inst apache2 [2.4.52] (2.4.99 Ubuntu [amd64])'; else echo 'Inst openssl (3.0.99 Ubuntu [amd64])'; fi; exit 0;;
@@ -87,6 +87,13 @@ class VerificationBootstrap(unittest.TestCase):
 
     def test_actual_transaction_change_is_rejected_before_unpack(self):
         result = self.run_bootstrap('changed')
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn('No package was unpacked', result.stderr)
+        self.assertFalse((self.root / 'unpacked').exists())
+        self.assert_policy_restored()
+
+    def test_intervening_unpacked_package_is_not_treated_as_absent(self):
+        result = self.run_bootstrap('partial')
         self.assertNotEqual(0, result.returncode)
         self.assertIn('No package was unpacked', result.stderr)
         self.assertFalse((self.root / 'unpacked').exists())

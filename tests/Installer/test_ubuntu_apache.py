@@ -211,3 +211,12 @@ class ActualAptTransaction(unittest.TestCase):
                 if args[0]=='dpkg-deb':return types.SimpleNamespace(stdout='Package: php-common\nVersion: 2:101\nArchitecture: all\n',returncode=0)
                 return types.SimpleNamespace(stdout='install ok installed\n'+version,returncode=0)
             self.guard().inspect(plan,['/cache/common.deb'],metadata)
+
+    def test_unpacked_and_half_configured_versions_are_not_treated_as_absent(self):
+        plan={'format':'emailer-apt-plan-v1','packages':{'php8.4-cli':{'version':'8.4.26','previous':None}}}
+        for state in ('install ok unpacked','install ok half-configured','install reinstreq half-installed','install ok triggers-awaited'):
+            def metadata(args,**kwargs):
+                if args[0]=='dpkg-deb':return types.SimpleNamespace(stdout='Package: php8.4-cli\nVersion: 8.4.26\nArchitecture: amd64\n',returncode=0)
+                return types.SimpleNamespace(stdout=state+'\n8.4.26',returncode=0)
+            with self.subTest(state=state),self.assertRaisesRegex(ValueError,'nonterminal'):
+                self.guard().inspect(plan,['/cache/php.deb'],metadata)

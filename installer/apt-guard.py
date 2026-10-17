@@ -19,6 +19,8 @@ def inspect(plan, paths, runner=subprocess.run):
         if not isinstance(approved,dict) or approved.get('version')!=version:raise ValueError('unplanned package')
         current=runner(['dpkg-query','-W','-f=${Status}\n${Version}',name],capture_output=True,text=True)
         installed=current.stdout.splitlines()
+        if current.returncode==0 and installed and installed[0] not in ('install ok installed','deinstall ok config-files','unknown ok not-installed'):
+            raise ValueError('installed package is in an unrecorded nonterminal state')
         existing=installed[1] if current.returncode==0 and len(installed)==2 and installed[0]=='install ok installed' else None
         if existing not in (approved.get('previous'),version):raise ValueError('installed package changed')
 

@@ -120,7 +120,11 @@ while IFS= read -r archive; do
     awk -F '|' -v name="$name" -v version="$version" '$1==name && $2==version {found=1} END {exit !found}' /var/lib/emailer-bootstrap-installer/plan || { printf 'EMAILER_BOOTSTRAP_PLAN_CHANGED\n' >&2; exit 1; }
     current=$(dpkg-query -W '-f=${Status}\n${Version}' "$name" 2>/dev/null || true)
     case "$current" in
+        '') ;;
+        'deinstall ok config-files'*) ;;
+        'unknown ok not-installed'*) ;;
         'install ok installed'*) [ "$current" = "$(printf 'install ok installed\n%s' "$version")" ] || { printf 'EMAILER_BOOTSTRAP_PLAN_CHANGED\n' >&2; exit 1; } ;;
+        *) printf 'EMAILER_BOOTSTRAP_PLAN_CHANGED\n' >&2; exit 1 ;;
     esac
 done
 GUARD
