@@ -1,6 +1,6 @@
 {
   "title": "Install Emailer Light",
-  "subtitle": "Version 1.1.0 | Beginner guide | Verified Debian 13 VPS path",
+  "subtitle": "Version 1.2.0 | Beginner guide | Ubuntu Apache or Debian Nginx VPS",
   "blocks": [
     {
       "type": "p",
@@ -12,15 +12,53 @@
     },
     {
       "type": "p",
-      "text": "Use a Debian 13 (Trixie), amd64/x86-64 virtual server with systemd and permission to run sudo. The verified setup uses Nginx, PHP 8.4 and MariaDB 10.11 or 11.8. A server with 2 CPU cores, 3 GB memory and a 20 GB disk was tested; setup requires at least 2 GiB free before it starts. Allow additional space for your uploads and backups."
+      "text": "Use a virtual server with Ubuntu 22.04 LTS or 24.04 LTS and Apache, or Debian 13 and Nginx. It must be amd64/x86-64, use systemd, and let you run sudo. Setup chooses Apache on a clean Ubuntu host and Nginx on a clean Debian 13 host. The tested server has 2 CPU cores, 3 GB memory and a 24 GB disk. Ubuntu 22.04 needs at least 5 GiB free; other supported profiles need 2 GiB. Leave additional space for uploads and backups."
     },
     {
       "type": "p",
-      "text": "An existing Nginx website can stay on the server, including one using another PHP version. Give Emailer its own hostname. Setup preserves the existing database service and global PHP selection and creates dedicated Emailer resources. Apache, another service on web ports, unsupported database versions, Ubuntu and ARM are outside this release's tested native profile."
+      "text": "An existing Apache website using PHP 8.1 can stay on Ubuntu 22.04, including its existing database and unrelated services. Give Emailer a spare hostname. Setup adds its own PHP runtime and application services without changing the existing website’s PHP selection. Ubuntu 22.04 also gets a separate supported database; it does not upgrade an older shared database. Ubuntu 24.04 and Debian 13 reuse a compatible local MariaDB server. An incompatible existing database on those two profiles stops setup before packages change."
+    },
+    {
+      "type": "table",
+      "head": [
+        "Tested server",
+        "Website software",
+        "Handled automatically"
+      ],
+      "rows": [
+        [
+          "Ubuntu 22.04.5 LTS, amd64/systemd",
+          "Apache 2.4.52",
+          "PHP 8.4.26; dedicated MariaDB 10.11.19 alongside the host database"
+        ],
+        [
+          "Ubuntu 24.04.5 LTS, amd64/systemd",
+          "Apache 2.4.58",
+          "PHP 8.4.26; distribution MariaDB 10.11.14"
+        ],
+        [
+          "Debian 13 Trixie, amd64/systemd",
+          "Nginx 1.26.3",
+          "PHP 8.4.26; MariaDB 11.8.6"
+        ]
+      ],
+      "widths": [
+        1.4,
+        1,
+        2.7
+      ]
     },
     {
       "type": "p",
-      "text": "Ordinary file-upload/shared hosting is unsupported: Emailer needs a persistent background worker, scheduled maintenance, private key storage outside the website, and dedicated server services. Uploading PHP files alone cannot provide those requirements. Choose the supported VPS path."
+      "text": "Only these OS/web-server combinations are supported. Ubuntu with Nginx, Debian 13 with Apache, ARM, custom website ports/subfolders and ordinary file-upload hosting are outside this installer’s tested scope. On a VPS that also hosts other websites, Emailer needs its own dedicated hostname; existing websites retain their configuration and operation."
+    },
+    {
+      "type": "p",
+      "text": "Ordinary file-upload/shared hosting cannot run this installer: Emailer needs a persistent background worker, scheduled services and private key storage outside the website. Uploading PHP files alone cannot provide these requirements. Use the supported VPS path."
+    },
+    {
+      "type": "p",
+      "text": "On Ubuntu, setup adds the maintained Ondřej Surý PHP package source and verifies its signing identity automatically. Ubuntu 22.04’s separate database receives security patches through reviewed Emailer maintenance releases, rather than the server’s ordinary package updates. Keep Emailer maintenance releases current; you do not need to assemble or configure the database yourself."
     },
     {
       "type": "h2",
@@ -44,15 +82,19 @@
     },
     {
       "type": "code",
-      "text": "curl --fail --location --output emailer-light-1.1.0-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.1.0/\\\nemailer-light-1.1.0-setup.run"
+      "text": "curl --fail --location --output emailer-light-1.2.0-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.2.0/\\\nemailer-light-1.2.0-setup.run"
     },
     {
       "type": "p",
-      "text": "Or download <b>emailer-light-1.1.0-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.1.0\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
+      "text": "Or download <b>emailer-light-1.2.0-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.2.0\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
     },
     {
       "type": "p",
       "text": "Initial trust comes from obtaining the setup action itself from the official HTTPS release or an authorized private channel. Its embedded, established edition signing identity then verifies the package inventory, runtime and release identity before installer code runs. A key supplied beside an arbitrary download would not establish that initial trust."
+    },
+    {
+      "type": "p",
+      "text": "Ubuntu 22.04 also retrieves an authenticated MariaDB runtime of about 360 MB. Allow time for this download; progress is saved and an interrupted download resumes when you start the same setup file again. No container software or Composer command is needed."
     },
     {
       "type": "h2",
@@ -64,7 +106,7 @@
     },
     {
       "type": "code",
-      "text": "sudo sh emailer-light-1.1.0-setup.run"
+      "text": "sudo sh emailer-light-1.2.0-setup.run"
     },
     {
       "type": "p",
@@ -76,7 +118,7 @@
         "Enter <b>Application hostname</b> if asked: just your dedicated address, without https://, a port or a path. Setup does not assume the machine's name is a public website.",
         "Enter <b>Administrator email</b>. This becomes your sign-in name.",
         "Enter a strong <b>Administrator password</b> and enter it again. Use 15-256 characters.",
-        "If the existing database requires its own administrator sign-in, enter those details only at the hidden prompt. A standard local MariaDB setup normally needs no database details."
+        "On Ubuntu 22.04 fresh setup creates its own database without asking for database details. On Ubuntu 24.04 or Debian 13, enter a database administrator sign-in only if the existing local MariaDB server needs it; passwords are hidden."
       ]
     },
     {
@@ -147,11 +189,15 @@
         ],
         [
           "Another service owns port 80 or 443",
-          "Keep that service running. Use a supported Nginx host or a separate supported VPS; do not stop an unrelated site."
+          "Keep that service running. Existing supported Apache/Nginx sites can coexist; a different service owning the web ports needs a separate supported VPS. Setup does not stop unrelated services."
         ],
         [
-          "Debian catalogue cannot be authenticated or is dated in the future",
-          "Check the server clock and the named repository connection. Setup will not bypass Debian signature checks."
+          "Existing database is incompatible",
+          "Ubuntu 22.04 provisions its own isolated database. On Ubuntu 24.04 or Debian 13, an incompatible existing server is preserved; use the supported separate VPS profile rather than upgrading a shared database during setup."
+        ],
+        [
+          "Signed OS package catalogue cannot be used",
+          "Check the server clock, internet connection and configured OS repositories. Setup does not bypass signature checks. Keep the same setup file and retry."
         ],
         [
           "Package authenticity or integrity verification failed",

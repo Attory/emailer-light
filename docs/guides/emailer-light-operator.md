@@ -1,6 +1,6 @@
 # Light operator and troubleshooting reference
 
-Version 1.1.0 | Exceptional hosting, updates and recovery
+Version 1.2.0 | Exceptional hosting, updates and recovery
 
 This reference covers exceptional hosting, update and recovery work. Start with the [beginner installation guide](emailer-light-install.md) for the normal path. The installer supplies the runtime, verifier, launcher, database provisioning, keys, services, backup defaults and HTTPS configuration; customers do not assemble these pieces.
 
@@ -8,21 +8,35 @@ This reference covers exceptional hosting, update and recovery work. Start with 
 
 | Component | Supported scope |
 | --- | --- |
-| Host | Debian 13 Trixie, amd64/x86-64, systemd, APT standard signed main/security repositories. Tested VPS: 2 cores, 3 GB RAM, 20 GB disk. At least 2 GiB free required before setup. |
-| Web/runtime | Nginx; dedicated Emailer PHP 8.4 FPM instance. An existing site using another PHP version can coexist. No switch of global CLI/FPM alternatives. |
-| Database | Local MariaDB 10.11 or 11.8, existing healthy service reused. Dedicated application database/account, separate privileged maintenance identity. |
-| Network | Official HTTPS package delivery; signed Debian repositories; public DNS to this VPS; inbound 80/443 and outbound HTTPS for certificate issuance. SMTP optional until sending. |
-| Excluded | Ubuntu/ARM/other Linux profiles are unverified. Apache/Caddy coexistence, remote database, custom URL port/subfolder, shared runtime/keys and ordinary file-upload hosting are outside this automated host profile. |
+| Host | Ubuntu 22.04/24.04 LTS amd64/systemd with Apache, or Debian 13 amd64/systemd with Nginx. Tested server: 2 cores, 3 GB RAM, 24 GB disk. Minimum free space: 5 GiB on Ubuntu 22.04; 2 GiB elsewhere. |
+| Web/runtime | Dedicated PHP 8.4 FPM instance: Apache on Ubuntu, Nginx on Debian 13. Existing PHP versions, global CLI selection and Apache MPM/handlers are retained. |
+| Database | Ubuntu 22.04: isolated socket-only MariaDB 10.11.19; existing shared servers remain unchanged. Ubuntu 24.04/Debian 13: compatible local MariaDB 10.11 or 11.8; incompatible servers stop preflight before packages. |
+| Network | Official HTTPS setup delivery, signed OS/PHP repositories, archive.mariadb.org on Ubuntu 22.04; public DNS, inbound 80/443 and outbound HTTPS for ACME. SMTP is optional until sending. |
+| Excluded | Untested OS/web combinations, ARM, Caddy, remote databases, custom URL port/subfolder, shared private/key storage and ordinary file-upload hosting. |
 
-The native Debian VM acceptance used PHP 8.4.26, Nginx 1.26.3 and MariaDB 11.8.6. Application CI also tests PHP 8.4.24 and 8.5.9 against MariaDB 10.11.19 and 11.8.9. Native provisioning selects the supported Debian PHP 8.4 packages; the PHP 8.5 application test does not claim a native PHP 8.5 hosting profile.
+The exact native versions below are acceptance observations, not a promise to freeze security patches. PHP extensions must match the installed PHP 8.4 patch. Application CI separately tests PHP 8.4.24 and 8.5.9 with MariaDB 10.11.19 and 11.8.9; it does not claim a native PHP 8.5 profile.
+
+| OS | Web server | Emailer PHP | Emailer database |
+| --- | --- | --- | --- |
+| Ubuntu 22.04.5 LTS, amd64/systemd | Apache 2.4.52 | 8.4.26 | 10.11.19 isolated |
+| Ubuntu 24.04.5 LTS, amd64/systemd | Apache 2.4.58 | 8.4.26 | 10.11.14 distro |
+| Debian 13 Trixie, amd64/systemd | Nginx 1.26.3 | 8.4.26 | 11.8.6 distro |
+
+## Ubuntu package sources and isolated database maintenance
+
+Ubuntu PHP 8.4 comes from the maintained [Ondřej Surý Launchpad PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php), using the existing signing identity B8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6. Setup pins all other PPA packages below installed distro packages; only php8.4-*, php-common metadata and the ABI-compatible libgd3 image library may be selected. It does not change installed PHP 8.1 packages or shared Apache/database packages.
+
+Ubuntu 22.04’s isolated MariaDB 10.11.19 uses `/opt/emailer-database/10.11.19`, `/var/lib/emailer-database/data`, `/etc/emailer-database.cnf` and `/run/emailer-database/mysql.sock`, under `emailer-database.service` and its dedicated non-root user. It accepts only a Unix socket, not a TCP database port. The official upstream binary archive is SHA-256 pinned inside the edition-signed installer; its upstream signature was verified during release preparation. See [MariaDB’s binary-tarball documentation](https://mariadb.com/docs/server/server-management/install-and-upgrade-mariadb/installing-mariadb/binary-packages/installing-mariadb-binary-tarballs).
+
+Host APT does not patch the isolated MariaDB binary. Its future security patches require a reviewed Emailer installer/maintenance release. Retain its ownership receipt and data directory; do not replace its binaries or run the distribution database upgrade against it. A shared Ubuntu 22.04 MariaDB 10.6.23 server and its data were tested unchanged beside it. On Ubuntu 24.04/Debian13 an incompatible shared database stops before mutation; isolated arrangements on those profiles are not claimed.
 
 Shared hosting is unsupported because persistent workers, system timers, isolated service identity and private key storage are required. No file-upload compatibility is claimed. The native installer does not require Docker or Composer on the customer server.
 
 ## Discovery and isolation
 
-Fresh setup checks platform, free space, actual port owners, Nginx names, protected paths and resource conflicts. It reserves generated identities before creation. Several installations are selected explicitly; an occupied hostname is retained and a different address is requested. It never uses unrelated applications' credentials.
+Fresh setup checks the exact platform, free space, actual port owners, parsed Apache/Nginx hostname inventory, protected paths and resource conflicts. It reserves dedicated generated identities before creating them. An occupied hostname is preserved and a spare address is requested. Several existing Emailer installations are an ambiguous target and stop without adoption. Existing unrelated databases and applications’ secrets are never reused.
 
-Healthy installed PHP 8.4 is reused at its current patch level; missing extensions must match it exactly. A missing matching signed package is a clear stop, not permission to change a shared PHP runtime. The original global CLI and generic FPM socket selections are recorded before APT and checked on retries. Database servers and unrelated PHP services are not replaced or restarted. Nginx config is checked before a scoped reload.
+Healthy installed PHP 8.4 stays on its current patch; missing extensions must match exactly. Setup preserves the global CLI choice, existing PHP handlers, Apache MPM and shared database versions. It authenticates the pre-unpack package plan again under APT’s locks. A temporary, crash-recoverable service policy suppresses package-triggered restarts and retains the original bytes, mode, ownership and extended attributes. Apache/nginx configuration is checked before a scoped reload. Unknown custom routing, handlers, includes or additional sites in an adopted file are refused before whole-file replacement.
 
 ## Files and service ownership
 
@@ -41,15 +55,15 @@ sudo emailer-light emailer:doctor:run --json
 
 The health command distinguishes structural installation completion from sending readiness. Deferred SMTP is compatible with structural completion and blocks actual sending. Doctor retains its original sending gates and severity. Open Doctor after changing mail or MFA settings; installer Check does not remove the operational hold.
 
-Fresh redacted diagnostics are under `/var/lib/emailer-light-installer/last-error.json`. Managed operations use `/etc/emailer-light/installer/<edition>/1.1.0/last-error.json`. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status.
+Fresh redacted diagnostics are under `/var/lib/emailer-light-installer/last-error.json`. Managed operations use `/etc/emailer-light/installer/<edition>/1.2.0/last-error.json`. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status.
 
 ## Error reference
 
 | Category or message | Resolution |
 | --- | --- |
-| Unsupported OS/architecture/systemd | Use the stated Debian VPS profile; no application is installed on rejected hosts. |
+| Unsupported OS/architecture/systemd | Use one of the stated Ubuntu Apache or Debian Nginx profiles; rejected hosts receive no application. |
 | Missing host permission | Rerun the documented sudo setup action with a host account authorized to install services. |
-| Port owned by another service | Preserve that service. Use a supported Nginx host or a separate VPS; do not automatically stop the owner. |
+| Port owned by another service | Preserve that service. Use the matching supported Apache/Nginx profile or a separate VPS; setup does not automatically stop a port owner. |
 | Occupied path/service/account/database | Do not delete the existing resource. Check whether this is a supported existing install; otherwise use an isolated VPS. Setup cannot assume an unrelated resource belongs to it. |
 | DNS / trusted HTTPS failure | Correct all A/AAAA records, inbound provider firewall and reachability. Keep the same package and rerun; the account/database remain recorded. No trusted certificate is claimed on failure. |
 | APT signature/clock/network/lock | Correct the named clock, signed repository, connection or running package task. Never disable package authentication. |
@@ -94,4 +108,4 @@ The signed SHA256SUMS inventory covers the released files. Advanced maintainers 
 
 ## Validation limits
 
-Acceptance uses disposable native Debian VMs and isolated synthetic SMTP, including real ACME HTTP-01 validation against a local test CA. This validates issuance/retry integration; it does not claim a rehearsal of public DNS or Let's Encrypt issuance for your domain. The installer performs real trusted issuance on your host and fails closed if it cannot complete. No production deployment is part of this release job.
+Acceptance uses disposable Ubuntu/Debian VMs and isolated synthetic SMTP. Local ACME HTTP-01 tests verify routing, certificate deployment, HTTPS and retry integration against a local validating CA. No dedicated non-production public hostname/DNS access was available: public ACME staging issuance remains unverified. This limitation does not claim a trusted public certificate; the real installer must successfully obtain and validate one for the customer hostname before completion. Production installations and production DNS were untouched.

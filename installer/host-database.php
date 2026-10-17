@@ -13,6 +13,30 @@ try {
     }
     require $input['bootstrap'].'/vendor/autoload.php';
     $connection = \Doctrine\DBAL\DriverManager::getConnection((new \Doctrine\DBAL\Tools\DsnParser(['mysql' => 'pdo_mysql']))->parse($input['maintenance_url']));
+    if ('verify-endpoint' === $input['action'] && isset($input['expected_endpoint'])) {
+        $proof = $input['expected_endpoint'];
+        $observed = $connection->fetchAssociative('SELECT @@hostname h, @@port p, @@server_id i, @@socket s, @@datadir d');
+        if (!\is_array($proof) || ($proof['source_url_sha256'] ?? null) !== hash('sha256', $input['source_url']) || ($proof['server'] ?? null) !== $observed) {
+            throw new RuntimeException();
+        }
+        echo json_encode($proof, JSON_THROW_ON_ERROR)."\n";
+        exit(0);
+    }
+    if (\in_array($input['action'], ['verify-endpoint', 'drain'], true)) {
+        $parameters = (new \Doctrine\DBAL\Tools\DsnParser(['mysql' => 'pdo_mysql']))->parse($input['source_url']);
+        $application = \Doctrine\DBAL\DriverManager::getConnection($parameters);
+        try {
+            if ($application->getDatabase() !== $connection->getDatabase() || $application->fetchAssociative('SELECT @@hostname h, @@port p, @@server_id i, @@socket s, @@datadir d') !== $connection->fetchAssociative('SELECT @@hostname h, @@port p, @@server_id i, @@socket s, @@datadir d')) {
+                throw new RuntimeException();
+            }
+        } finally {
+            $application->close();
+        }
+        if ('verify-endpoint' === $input['action']) {
+            echo json_encode(['source_url_sha256' => hash('sha256', $input['source_url']), 'server' => $connection->fetchAssociative('SELECT @@hostname h, @@port p, @@server_id i, @@socket s, @@datadir d')], JSON_THROW_ON_ERROR)."\n";
+            exit(0);
+        }
+    }
     if ('drain' === $input['action']) {
         $connection->executeStatement("UPDATE delivery_runtime SET accepting_work=0, updated_at=UTC_TIMESTAMP(6) WHERE singleton_key='1'");
         $until = microtime(true) + 120;
@@ -63,7 +87,7 @@ try {
         $parameters['host'] = $host;
         $application = \Doctrine\DBAL\DriverManager::getConnection($parameters);
         try {
-            if ($application->getDatabase() !== $database || $application->fetchAssociative('SELECT @@hostname h, @@port p, @@server_id i') !== $connection->fetchAssociative('SELECT @@hostname h, @@port p, @@server_id i')) {
+            if ($application->getDatabase() !== $database || $application->fetchAssociative('SELECT @@hostname h, @@port p, @@server_id i, @@socket s, @@datadir d') !== $connection->fetchAssociative('SELECT @@hostname h, @@port p, @@server_id i, @@socket s, @@datadir d')) {
                 throw new RuntimeException();
             }
         } finally {
@@ -91,6 +115,9 @@ try {
     }
     echo "verified\n";
 } catch (Throwable) {
+    if (isset($input['action']) && 'verify-endpoint' === $input['action']) {
+        echo json_encode(['installer_error' => 'database_endpoint'], JSON_THROW_ON_ERROR)."\n";
+    }
     fwrite(STDERR, "The dedicated database handoff could not be verified. Existing data and credentials were preserved.\n");
     exit(1);
 }

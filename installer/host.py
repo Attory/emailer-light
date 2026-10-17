@@ -18,7 +18,7 @@ class HostHandoff:
     def __init__(self, manager):
         self.m = manager
         self.host = manager.installer
-        self.name = manager.prefix + '-' + manager.installer.product.removeprefix('emailer-') + '-110'
+        self.name = manager.prefix + '-' + manager.installer.product.removeprefix('emailer-') + '-' + getattr(manager.installer, 'version', '1.1.0').replace('.', '')
         self.configuration = Path('/etc') / self.name
         self.runtime = self.configuration / 'runtime.env'
         self.hold = self.configuration / 'installer-hold.json'
@@ -28,56 +28,34 @@ class HostHandoff:
         raise self.m.error(message)
 
     def database(self, action):
-        values = {'action': action, 'bootstrap': str(self.m.bootstrap), 'maintenance_url': self.m.environment['DATABASE_URL']}
+        values = {'action': action, 'bootstrap': str(self.m.bootstrap), 'maintenance_url': self.m.environment['DATABASE_URL'], 'source_url': self.m.source_values['DATABASE_URL']}
         if action != 'drain':
             values.update(self.state['database'])
             values['source_url'] = self.m.source_values['DATABASE_URL']
         return self.m.call(['/usr/bin/php8.4', str(self.m.package.parent / 'host-database.php')], data=json.dumps(values))
 
+    def web(self):
+        from hosting import WebServer
+        return WebServer(self.state.get('web_server', getattr(getattr(self.host, 'web', None), 'kind', 'nginx')), self.m.error)
+
     def site_text(self, *, maintenance):
         state = self.state
-        address = state['hostname']
-        restriction = 'allow 127.0.0.1; allow ::1; deny all;\n    error_page 403 =503 @installing;\n    location @installing { return 503 "Emailer setup is finishing. Please try again shortly."; }' if maintenance else ''
-        return f'''server {{
-    listen 80;
-    server_name {address};
-    access_log off;
-    {''.join(state.get('acme_locations', []))}
-    location / {{ return 301 https://{address}$request_uri; }}
-}}
-server {{
-    listen 443 ssl;
-    server_name {address};
-    ssl_certificate {state['certificate']};
-    ssl_certificate_key {state['certificate_key']};
-    root {self.m.releases}/current/public;
-    index index.php;
-    access_log off;
-    {restriction}
-    location = /index.php {{
-        include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
-        fastcgi_param HTTP_PROXY "";
-        fastcgi_param HTTPS on;
-        fastcgi_param REQUEST_SCHEME https;
-        fastcgi_pass unix:/run/{self.name}-fpm/php.sock;
-    }}
-    location / {{ try_files $uri /index.php$is_args$args; }}
-    location ~ \\.php$ {{ return 404; }}
-    location ~ (^|/)\\. {{ return 404; }}
-    location ~* \\.(?:env|log|sql|dump|backup|bak|key|pem|p12|pfx)$ {{ return 404; }}
-}}
-'''
+        acme = state.get('acme_webroot')
+        if not acme:
+            roots = re.findall(r'root\s+(/[A-Za-z0-9_./-]+);', ' '.join(state.get('acme_locations', [])))
+            acme = roots[0] if roots else None
+        return self.web().site(hostname=state['hostname'], name=self.name, public=str(self.m.releases / 'current/public'), webroot=acme,
+                               certificate=state['certificate'], certificate_key=state['certificate_key'], maintenance=maintenance)
 
     def apply_site(self, text):
         path = Path(self.state['site'])
         previous = path.read_bytes()
         self.host.durable(path, text, 0o644)
-        check = subprocess.run(['nginx', '-t'], capture_output=True)
+        check = subprocess.run(self.web().check_command, capture_output=True)
         if check.returncode:
             self.host.durable(path, previous, 0o644)
-            self.fail('The proposed Emailer website failed Nginx validation. Its previous configuration was restored and Nginx was not reloaded. Keep the saved operation and correct the website conflict before Finish.')
-        self.m.call(['systemctl', 'reload', 'nginx'])
+            self.fail('The proposed Emailer website failed web-server validation. Its previous configuration was restored and the web server was not reloaded. Keep the saved operation and correct the website conflict before Finish.')
+        self.m.call(['systemctl', 'reload', self.web().service])
 
     @staticmethod
     def references(line, markers):
@@ -118,30 +96,12 @@ server {{
             uri = urllib.parse.urlsplit(m.values['DEFAULT_URI'])
             if uri.scheme != 'https' or uri.port or uri.path not in ('', '/') or not uri.hostname or not re.fullmatch(r'[a-z0-9.-]+', uri.hostname):
                 self.fail('This update hosting profile requires an existing HTTPS hostname without a custom port or application subfolder.')
-            sites = []
-            for enabled in Path('/etc/nginx/sites-enabled').iterdir():
-                path = enabled.resolve()
-                if not path.is_file():
-                    continue
-                text = path.read_text()
-                if re.search(r'\broot\s+' + re.escape(str(m.releases / 'current/public')) + r'\s*;', text):
-                    if path in sites:
-                        continue
-                    names = re.findall(r'\bserver_name\s+([^;]+);', text)
-                    if not names or any(value.strip() != uri.hostname for value in names):
-                        self.fail('The Emailer Nginx file also contains other website names. Split only this site into its own file before using this hosting profile; no site was changed.')
-                    sites.append(path)
-            if len(sites) != 1:
-                self.fail('Setup could not identify exactly one dedicated Emailer HTTPS website. No web server was changed.')
-            site = sites[0]
+            web = self.host.web
+            site, certificate, certificate_key, acme_webroot = web.source_site(m.releases, uri.hostname)
             info = site.lstat()
             if info.st_uid != 0 or info.st_mode & 0o022 or info.st_nlink != 1:
                 self.fail('The existing website file is not a protected root-owned file.')
             text = site.read_text()
-            certificate = re.findall(r'\bssl_certificate\s+(/[A-Za-z0-9_./-]+);', text)
-            certificate_key = re.findall(r'\bssl_certificate_key\s+(/[A-Za-z0-9_./-]+);', text)
-            if len(set(certificate)) != 1 or len(set(certificate_key)) != 1:
-                self.fail('The dedicated website needs one existing trusted HTTPS certificate. Its certificate configuration was preserved.')
             for path in (self.configuration, Path('/usr/local/sbin') / self.name):
                 if path.exists() or path.is_symlink():
                     self.fail('The isolated target service name is already in use. It was not reused.')
@@ -157,7 +117,7 @@ server {{
                     self.fail('An isolated target service name is already occupied. No service was changed.')
             original = m.original_configuration
             self.state.update({'phase': 'reserved', 'hostname': uri.hostname, 'site': str(site), 'site_bytes': base64.b64encode(site.read_bytes()).decode(),
-                               'acme_locations': re.findall(r'location\s+\^~\s+/\.well-known/acme-challenge/\s*\{\s*root\s+/[A-Za-z0-9_./-]+;\s*\}', text), 'certificate': certificate[0], 'certificate_key': certificate_key[0], 'source_configuration': str(original),
+                               'web_server': web.kind, 'acme_webroot': acme_webroot, 'certificate': certificate, 'certificate_key': certificate_key, 'source_configuration': str(original),
                                'source_configuration_sha256': hashlib.sha256(original.read_bytes()).hexdigest(),
                                'source_version': m.source_version, 'source_product': m.product,
                                'installation_uuid': json.loads((m.private / 'install.lock').read_text())['installation_uuid'],
@@ -180,6 +140,9 @@ server {{
         except KeyError:
             m.call(['useradd', '--system', '--user-group', '--home-dir', str(m.private.parent), '--shell', '/usr/sbin/nologin', self.name])
             account = pwd.getpwnam(self.name)
+        source_query = urllib.parse.parse_qs(urllib.parse.urlsplit(m.source_values['DATABASE_URL']).query)
+        if source_query.get('unix_socket') == ['/run/emailer-database/mysql.sock']:
+            m.call(['usermod', '--append', '--groups', 'emailer-db', self.name])
         if account.pw_uid == 0 or account.pw_name != self.name or grp.getgrgid(account.pw_gid).gr_name != self.name:
             self.fail('The reserved service identity has unexpected ownership.')
         from provision import root_directory
@@ -422,6 +385,7 @@ server {{
         host.base = m.releases.parent
         host.release = (m.releases / 'current').resolve(strict=True)
         host.php = '/usr/bin/php8.4'
+        host.database_profile = 'isolated' if urllib.parse.parse_qs(original_url.query).get('unix_socket') == ['/run/emailer-database/mysql.sock'] else 'shared'
         host.services()
         launcher = Path('/usr/local/sbin') / m.prefix
         generated = Path('/usr/local/sbin') / self.name

@@ -39,8 +39,9 @@ try {
     if (!is_string($options['predecessors'] ?? null)) {
         throw new RuntimeException('The self-contained installer requires its authenticated predecessor package set.');
     }
-    $priorArchives = ['emailer-light-1.0.0.zip'];
+    $priorArchives = ['emailer-light-1.0.0.zip', 'emailer-light-1.1.0.zip'];
     (new App\Module\Release\Application\PackageInspector($options['public-key'], '1.0.0'))->inspectInstalledSource($options['predecessors'].'/'.$priorArchives[0]);
+    (new App\Module\Release\Application\PackageInspector($options['public-key'], '1.1.0'))->inspectInstalledSource($options['predecessors'].'/emailer-light-1.1.0.zip');
     foreach ($priorArchives as $prior) {
         foreach (['', '.manifest.json', '.sha256', '.spdx.json', '.sig'] as $suffix) {
             $path = $options['predecessors'].'/'.$prior.$suffix;
@@ -55,7 +56,7 @@ try {
             $contents[$prior.$suffix] = $bytes;
         }
     }
-    foreach (['provision.py', 'command.py', 'manage.py', 'runtime_env.py', 'host.py', 'host-database.php'] as $file) {
+    foreach (['provision.py', 'command.py', 'manage.py', 'runtime_env.py', 'hosting.py', 'packages.py', 'isolated_database.py', 'ubuntu-php.asc', 'apt-guard.py', 'host.py', 'host-database.php'] as $file) {
         $contents[$file] = (string) file_get_contents(__DIR__.'/'.$file);
     }
     $contents['verify-package.php'] = (string) file_get_contents($root.'/tools/release/verify-package.php');
@@ -66,7 +67,7 @@ try {
     $manifest = json_encode(['format' => 'emailer-installer-v1', 'product' => $product, 'test_only' => $testOnly, 'schema_version' => '20261014000000', 'version' => $options['version'], 'source_commit' => $options['source'], 'archive' => $archive, 'files' => $digests], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n";
     $contents['installer.json'] = $manifest;
     $contents['installer.json.sig'] = sodium_crypto_sign_detached($manifest, $key);
-    $contents['setup'] = str_replace(['@PUBLIC_KEY@', '@PRODUCT@'], [$public, $product], (string) file_get_contents(__DIR__.'/setup.in'));
+    $contents['setup'] = str_replace(['@PUBLIC_KEY@', '@PRODUCT@', '@BOOTSTRAP@'], [$public, $product, (string) file_get_contents(__DIR__.'/bootstrap.sh.in')], (string) file_get_contents(__DIR__.'/setup.in'));
     $zip = new ZipArchive();
     if (true !== $zip->open($options['output'], ZipArchive::CREATE | ZipArchive::EXCL)) {
         throw new RuntimeException('Bundle output must not already exist.');
@@ -78,11 +79,26 @@ try {
         $zip->setExternalAttributesName($name, ZipArchive::OPSYS_UNIX, ('setup' === $name ? 0o100755 : 0o100644) << 16);
     }
     $zip->close();
-    $payload = file_get_contents($options['output']);
-    if (false === $payload || false === file_put_contents($options['output'], $contents['setup']."\n".$payload)) {
-        throw new RuntimeException('Self-contained setup file could not be assembled.');
+    $launcher = $contents['setup']."\n";
+    unset($contents);
+    $payload = fopen($options['output'], 'rb');
+    $temporary = $options['output'].'.assembling';
+    $assembled = fopen($temporary, 'xb');
+    if (false === $payload || false === $assembled) {
+        throw new RuntimeException('Self-contained setup output could not be opened.');
     }
-    chmod($options['output'], 0o755);
+    try {
+        $size = fstat($payload);
+        if (false === $size || strlen($launcher) !== fwrite($assembled, $launcher) || $size['size'] !== stream_copy_to_stream($payload, $assembled) || !fflush($assembled) || !fsync($assembled)) {
+            throw new RuntimeException('Self-contained setup file could not be assembled completely.');
+        }
+    } finally {
+        fclose($payload);
+        fclose($assembled);
+    }
+    if (!rename($temporary, $options['output']) || !chmod($options['output'], 0o755)) {
+        throw new RuntimeException('Self-contained setup file could not be published.');
+    }
 } finally {
     sodium_memzero($key);
 }

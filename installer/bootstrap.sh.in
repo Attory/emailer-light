@@ -1,0 +1,158 @@
+# This shell-only bootstrap is part of the entry point obtained from the official
+# HTTPS release. It installs only missing distro verification tools; no bytes
+# from the unverified payload are executed. It also works when Python is absent.
+bootstrap_root=/var/lib/emailer-bootstrap-installer
+bootstrap_policy=/usr/sbin/policy-rc.d
+bootstrap_lock=/run/lock/emailer-package-task.lock
+bootstrap_stop() {
+    printf '%s Start this same setup file again after correcting the problem.\n' "$1" >&2
+    exit 1
+}
+bootstrap_safe_directory() {
+    [ -d "$bootstrap_root" ] && [ ! -L "$bootstrap_root" ] && [ "$(stat -c '%u:%a' "$bootstrap_root")" = '0:700' ] || bootstrap_stop 'The verification-tool recovery directory is unsafe; it was preserved.'
+}
+bootstrap_release_lock() {
+    # A surviving dpkg/script keeps the inherited descriptor. A NEW open-file
+    # description must acquire the lock before the original policy is restored.
+    exec 9>&-
+    exec 9<>"$bootstrap_lock"
+    flock -n 9 || bootstrap_stop 'An interrupted package subprocess is still running. The temporary service fence and recovery record were retained; let that task finish.'
+}
+bootstrap_restore() {
+    if [ ! -e "$bootstrap_root" ] && [ ! -L "$bootstrap_root" ]; then return 0; fi
+    bootstrap_safe_directory
+    [ -f "$bootstrap_root/receipt" ] || bootstrap_stop 'Verification-tool recovery material is incomplete. Keep that directory and use the operator recovery reference.'
+    bootstrap_current=absent
+    if [ -e "$bootstrap_policy" ] || [ -L "$bootstrap_policy" ]; then
+        [ ! -L "$bootstrap_policy" ] && [ -f "$bootstrap_policy" ] && [ "$(stat -c '%u:%h' "$bootstrap_policy")" = '0:1' ] || bootstrap_stop 'The host package service policy changed; it was preserved together with the recovery record.'
+        bootstrap_current="$(sha256sum "$bootstrap_policy" | cut -d ' ' -f 1)"
+    fi
+    bootstrap_temporary="$(cat "$bootstrap_root/temporary-sha256")"
+    bootstrap_original="$(cat "$bootstrap_root/original-sha256")"
+    case "$bootstrap_current" in "$bootstrap_temporary"|"$bootstrap_original") ;; *) bootstrap_stop 'The host package service policy changed; setup will not overwrite it. Keep the protected verification-tool recovery directory.' ;; esac
+    if [ -f "$bootstrap_root/original" ]; then
+        [ "$(sha256sum "$bootstrap_root/original" | cut -d ' ' -f 1)" = "$bootstrap_original" ] || bootstrap_stop 'The retained host policy checksum differs; no host policy was replaced.'
+        bootstrap_restored="$(mktemp /usr/sbin/.emailer-policy-restore.XXXXXX)"
+        cp --preserve=all "$bootstrap_root/original" "$bootstrap_restored"
+        sync -f "$bootstrap_restored"
+        mv -fT "$bootstrap_restored" "$bootstrap_policy"
+        sync -f /usr/sbin
+    elif [ "$bootstrap_current" != absent ]; then
+        rm -- "$bootstrap_policy"
+        sync -f /usr/sbin
+    fi
+    # Recovery is repeatable if interrupted after policy restoration. Original
+    # bytes plus ALL metadata are restored again before deleting this receipt.
+    bootstrap_retired="$(mktemp -d /var/lib/.emailer-bootstrap-restored.XXXXXX)"
+    rmdir "$bootstrap_retired"
+    mv -T "$bootstrap_root" "$bootstrap_retired"
+    sync -f /var/lib
+    rm -f -- "$bootstrap_retired/receipt" "$bootstrap_retired/original" "$bootstrap_retired/original-sha256" "$bootstrap_retired/temporary-sha256" "$bootstrap_retired/temporary" "$bootstrap_retired/plan" "$bootstrap_retired/guard"
+    rmdir "$bootstrap_retired"
+}
+bootstrap_finish() {
+    bootstrap_status=$?
+    trap - EXIT HUP INT TERM
+    bootstrap_release_lock
+    bootstrap_restore
+    exec 9>&-
+    exit "$bootstrap_status"
+}
+bootstrap_main() {
+    bootstrap_packages=''
+    command -v python3 >/dev/null 2>&1 || bootstrap_packages="$bootstrap_packages python3"
+    command -v openssl >/dev/null 2>&1 || bootstrap_packages="$bootstrap_packages openssl"
+    [ -r /etc/ssl/certs/ca-certificates.crt ] || bootstrap_packages="$bootstrap_packages ca-certificates"
+    [ -n "$bootstrap_packages" ] || [ -e "$bootstrap_root" ] || [ -L "$bootstrap_root" ] || return 0
+    for bootstrap_command in apt-get dpkg-query dpkg-deb flock stat sha256sum sync cp awk mktemp; do
+        command -v "$bootstrap_command" >/dev/null 2>&1 || bootstrap_stop "The supported OS verification bootstrap needs its standard $bootstrap_command tool. Restore that OS tool before retrying; no package was installed."
+    done
+    # Sticky root /run/lock plus exclusive creation prevents symlink replacement
+    # by an unprivileged local account. Existing lock identity is checked first.
+    if [ ! -e "$bootstrap_lock" ] && [ ! -L "$bootstrap_lock" ]; then
+        (umask 077; set -C; : > "$bootstrap_lock") 2>/dev/null || bootstrap_stop 'Another host package task is creating its lock; retry after it finishes.'
+    fi
+    [ ! -L "$bootstrap_lock" ] && [ -f "$bootstrap_lock" ] && [ "$(stat -c '%u:%a:%h' "$bootstrap_lock")" = '0:600:1' ] || bootstrap_stop 'The shared package-task lock is unsafe; it was not used.'
+    exec 9<>"$bootstrap_lock"
+    flock -n 9 || bootstrap_stop 'Another Emailer package task is still running; let it finish before retrying.'
+    bootstrap_restore
+    [ -n "$bootstrap_packages" ] || { exec 9>&-; return 0; }
+    [ ! -e /var/lib/emailer-host-installer/package-service-policy.json ] || bootstrap_stop 'A previous application package task has a retained service fence. Resume its original setup to restore that policy before installing missing verification tools.'
+    export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l NEEDRESTART_SUSPEND=1
+    if ! bootstrap_output=$(apt-get --error-on=any -o Acquire::Retries=0 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10 update 2>&1); then
+        case "$bootstrap_output" in
+            *'NO_PUBKEY'*|*'EXPKEYSIG'*|*'not signed'*|*'signature verification failed'*) bootstrap_reason='The OS could not authenticate its verification-tool catalogue. Restore OS repository signing; setup will not bypass verification.' ;;
+            *'not valid yet'*|*'expired'*) bootstrap_reason='The signed OS catalogue is expired or dated in the future. Check the server clock and mirror freshness.' ;;
+            *) bootstrap_reason='The OS could not retrieve a usable signed verification-tool catalogue. Check repository connectivity, DNS, clock and mirror configuration.' ;;
+        esac
+        bootstrap_stop "$bootstrap_reason"
+    fi
+    if ! bootstrap_output=$(apt-get --simulate --no-remove install -y --no-install-recommends $bootstrap_packages 2>&1); then
+        bootstrap_stop 'The OS cannot resolve its missing verification tools. Finish any interrupted OS package task or restore the standard supported repositories; shared packages were preserved.'
+    fi
+    # No installed package may change in this early path. The main authenticated
+    # provisioner owns the separately reviewed PHP metadata/library exceptions.
+    printf '%s\n' "$bootstrap_output" | awk '/^(Remv|Purg) / {exit 1} /^Inst [^ ]+ \[/ {exit 1}' || bootstrap_stop 'Installing verification tools would change existing host packages. Complete that host maintenance separately before retrying; no package was installed.'
+    bootstrap_staging="$(mktemp -d /var/lib/.emailer-bootstrap.XXXXXX)"
+    chmod 0700 "$bootstrap_staging"
+    bootstrap_original=absent
+    if [ -e "$bootstrap_policy" ] || [ -L "$bootstrap_policy" ]; then
+        [ ! -L "$bootstrap_policy" ] && [ -f "$bootstrap_policy" ] && [ "$(stat -c '%u:%h' "$bootstrap_policy")" = '0:1' ] || bootstrap_stop 'The host package service policy is unsafe; no verification tool was installed.'
+        bootstrap_mode="$(stat -c '%a' "$bootstrap_policy")"
+        [ $((0$bootstrap_mode & 022)) -eq 0 ] || bootstrap_stop 'The host package policy is writable by other accounts; it was preserved.'
+        cp --preserve=all "$bootstrap_policy" "$bootstrap_staging/original"
+        bootstrap_original="$(sha256sum "$bootstrap_policy" | cut -d ' ' -f 1)"
+    fi
+    printf '%s\n' '#!/bin/sh' '# Temporary Emailer verification-tool package task.' 'exit 101' > "$bootstrap_staging/temporary"
+    chmod 0755 "$bootstrap_staging/temporary"
+    sha256sum "$bootstrap_staging/temporary" | cut -d ' ' -f 1 > "$bootstrap_staging/temporary-sha256"
+    printf '%s\n' "$bootstrap_original" > "$bootstrap_staging/original-sha256"
+    printf '%s\n' "$bootstrap_output" | awk '/^Inst / {name=$2; version=$3; sub(/^\(/,"",version); print name "|" version}' > "$bootstrap_staging/plan"
+    cat > "$bootstrap_staging/guard" <<'GUARD'
+#!/bin/sh
+set -eu
+while IFS= read -r archive; do
+    [ -n "$archive" ] || continue
+    name=$(dpkg-deb --field "$archive" Package)
+    version=$(dpkg-deb --field "$archive" Version)
+    architecture=$(dpkg-deb --field "$archive" Architecture)
+    case "$architecture" in amd64|all) ;; *) printf 'EMAILER_BOOTSTRAP_PLAN_CHANGED\n' >&2; exit 1 ;; esac
+    awk -F '|' -v name="$name" -v version="$version" '$1==name && $2==version {found=1} END {exit !found}' /var/lib/emailer-bootstrap-installer/plan || { printf 'EMAILER_BOOTSTRAP_PLAN_CHANGED\n' >&2; exit 1; }
+    current=$(dpkg-query -W '-f=${Status}\n${Version}' "$name" 2>/dev/null || true)
+    case "$current" in
+        '') ;;
+        'deinstall ok config-files'*) ;;
+        'unknown ok not-installed'*) ;;
+        'install ok installed'*) [ "$current" = "$(printf 'install ok installed\n%s' "$version")" ] || { printf 'EMAILER_BOOTSTRAP_PLAN_CHANGED\n' >&2; exit 1; } ;;
+        *) printf 'EMAILER_BOOTSTRAP_PLAN_CHANGED\n' >&2; exit 1 ;;
+    esac
+done
+GUARD
+    chmod 0700 "$bootstrap_staging/guard"
+    printf '%s\n' 'emailer-verification-bootstrap-v1' > "$bootstrap_staging/receipt"
+    sync -f "$bootstrap_staging"
+    mv -T "$bootstrap_staging" "$bootstrap_root"
+    sync -f /var/lib
+    trap bootstrap_finish EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' HUP TERM
+    bootstrap_published="$(mktemp /usr/sbin/.emailer-policy.XXXXXX)"
+    cp --preserve=all "$bootstrap_root/temporary" "$bootstrap_published"
+    sync -f "$bootstrap_published"
+    mv -fT "$bootstrap_published" "$bootstrap_policy"
+    sync -f /usr/sbin
+    if ! bootstrap_output=$(apt-get -o APT::Keep-Fds::=9 -o DPkg::Pre-Install-Pkgs::=/var/lib/emailer-bootstrap-installer/guard -o Acquire::Retries=0 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10 install -y --no-remove --no-install-recommends $bootstrap_packages 2>&1); then
+        case "$bootstrap_output" in
+            *EMAILER_BOOTSTRAP_PLAN_CHANGED*) bootstrap_reason='The verification-tool package transaction changed after validation. No package was unpacked. Let other OS package tasks finish and retry.' ;;
+            *'Could not get lock'*|*'Unable to acquire'*|*'dpkg was interrupted'*) bootstrap_reason='Finish the running or interrupted OS package task, then retry.' ;;
+            *'No space left'*|*'not enough free space'*) bootstrap_reason='Free disk space for the verification tools, then retry.' ;;
+            *) bootstrap_reason='The OS verification-tool package task did not finish. Check its repository connection and /var/log/apt/term.log, then retry.' ;;
+        esac
+        bootstrap_stop "$bootstrap_reason"
+    fi
+    trap - EXIT HUP INT TERM
+    bootstrap_release_lock
+    bootstrap_restore
+    exec 9>&-
+}
+bootstrap_main

@@ -26,7 +26,7 @@ class SetupError(Exception):
 
 def run(args, *, data=None, capture=True, allowed=(0,)):
     result = subprocess.run(args, input=data, text=True, stdout=subprocess.PIPE if capture else None,
-                            stderr=subprocess.PIPE if capture else None, env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive', 'NEEDRESTART_MODE': 'l'})
+                            stderr=subprocess.PIPE if capture else None, env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive', 'NEEDRESTART_MODE': 'l', 'NEEDRESTART_SUSPEND': '1'})
     if result.returncode not in allowed:
         # Commands may handle credentials: never render argv, SQL, environment or raw output.
         raise SetupError('A required host operation did not finish. Your progress is saved. Retry setup; if it repeats, use the troubleshooting reference for this step.')
@@ -93,6 +93,7 @@ def root_directory(path, group, mode):
 
 class Installer:
     def __init__(self, bundle):
+        self.error = SetupError
         self.php = '/usr/bin/php8.4'
         self.database_cli = ['mariadb', '--no-defaults', '--protocol=socket', '--socket=/run/mysqld/mysqld.sock', '--user=root']
         self.database_environment = {'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8'}
@@ -105,6 +106,7 @@ class Installer:
         self.version = self.meta['version']
         self.base = Path('/srv') / self.name
         self.state_dir = Path('/var/lib') / (self.name + '-installer')
+        self.package_policy_directory = Path('/var/lib/emailer-host-installer')
         self.config = Path('/etc') / self.name
         self.private = Path('/var/lib') / self.name / 'private'
         self.keys = self.private.parent / 'keys'
@@ -134,10 +136,11 @@ class Installer:
             raise SetupError('Start setup with sudo. This grants permission once for server provisioning; Emailer itself runs as a dedicated account.')
         values = dict(line.split('=', 1) for line in Path('/etc/os-release').read_text().splitlines() if '=' in line)
         system = (values.get('ID', '').strip('"'), values.get('VERSION_ID', '').strip('"'))
-        if system != ('debian', '13'):
-            raise SetupError('This installer supports Debian 13 on an amd64 VPS with systemd. This host is unsupported; nothing has been installed.')
+        from hosting import WebServer
+        self.system = system
+        self.web = WebServer.discover(system, SetupError)
         if platform.machine() != 'x86_64' or not Path('/run/systemd/system').is_dir():
-            raise SetupError('Setup needs an amd64 Debian 13 VPS booted with systemd. File-upload hosting cannot run the required background services.')
+            raise SetupError('Setup needs an amd64 supported VPS booted with systemd. File-upload hosting cannot run the required background services.')
         if shutil.disk_usage('/').free < 2 * 1024 ** 3:
             raise SetupError('At least 2 GiB of free disk space is needed before setup can continue.')
         if not self.journal.exists() and not managing:
@@ -150,18 +153,19 @@ class Installer:
                 pass
             else:
                 raise SetupError('The dedicated service account already exists. Setup will not reuse an unrelated account.')
-        if shutil.which('apache2') or shutil.which('caddy'):
-            raise SetupError('This installation path supports Nginx. Apache or Caddy was detected; no website has been changed. Use a separate supported VPS until that coexistence profile is verified.')
         if not managing:
-            if shutil.which('mariadb'):
+            from isolated_database import DatabaseProfile
+            DatabaseProfile(self).preflight()
+            if self.database_profile == 'shared' and shutil.which('mariadb'):
                 self.database_authority()
                 version = self.database_run(['--batch', '--skip-column-names', '-e', 'SELECT VERSION()']).strip()
                 if not re.match(r'(10\.11\.|11\.8\.)', version) or 'MariaDB' not in version:
                     raise SetupError('The existing database is not a supported MariaDB 10.11 or 11.8 server. It will not be replaced or upgraded.')
-            elif shutil.which('mysqld') or shutil.which('mysql'):
+            elif self.database_profile == 'shared' and (shutil.which('mysqld') or shutil.which('mysql')):
                 raise SetupError('An unrecognised database server already exists. Setup will not replace shared database software.')
-        if shutil.which('nginx'):
-            result = run(['nginx', '-T'])
+        if shutil.which(self.web.kind):
+            result = self.web.configuration()
+        if self.web.kind == 'nginx' and shutil.which('nginx'):
             if re.search(r'listen\s+[^;]*(?:\b80\b|\b443\b)', result):
                 # Arbitrary scoped/default address changes need separate profile tests.
                 if re.search(r'listen\s+(?!\[::\]:|80\b|443\b|0\.0\.0\.0:)[^;]*:(?:80|443)\b', result):
@@ -183,10 +187,11 @@ class Installer:
                             listeners.setdefault(port, set()).add(fields[9])
             if not listeners:
                 return
-            service = subprocess.run(['systemctl', 'show', 'nginx.service', '--property=MainPID', '--value'], capture_output=True, text=True)
+            web_kind = getattr(getattr(self, 'web', None), 'kind', 'nginx')
+            service = subprocess.run(['systemctl', 'show', web_kind + '.service', '--property=MainPID', '--value'], capture_output=True, text=True)
             pid = service.stdout.strip()
             owned = set()
-            if service.returncode == 0 and pid.isdecimal() and int(pid) > 0 and Path('/proc/' + pid + '/comm').read_text().strip() == 'nginx':
+            if service.returncode == 0 and pid.isdecimal() and int(pid) > 0 and Path('/proc/' + pid + '/comm').read_text().strip() == web_kind:
                 for descriptor in Path('/proc/' + pid + '/fd').iterdir():
                     try:
                         target = os.readlink(descriptor)
@@ -197,7 +202,7 @@ class Installer:
                         owned.add(match.group(1))
             for port, inodes in listeners.items():
                 if not inodes.issubset(owned):
-                    raise SetupError(f'Port {port} is occupied by a service outside the existing Nginx website service. Setup kept it running. Free that port for Nginx or use a separate supported VPS, then start setup again.')
+                    raise SetupError(f'Port {port} is occupied by a service outside the selected {web_kind} website service. Setup kept it running. Free that port for {web_kind} or use a separate supported VPS, then start setup again.')
         except OSError:
             raise SetupError('Setup could not safely identify the services using web ports 80 and 443. Retain existing websites and restore normal Linux /proc service inspection before retrying; no website was changed.') from None
 
@@ -253,18 +258,28 @@ class Installer:
                           'database': self.name.replace('-', '_') + '_' + secrets.token_hex(3),
                           'package_sha256': self.meta['files'][self.meta['archive']], 'database_owner': secrets.token_hex(24), 'completed': []}
             self.save()
+        if self.state.get('web_server', self.web.kind) != self.web.kind:
+            raise SetupError('The host web server differs from the saved installation. Its websites were preserved; resume on the original supported profile.')
+        self.state.setdefault('web_preexisting', bool(shutil.which(self.web.kind)))
+        self.state['web_server'] = self.web.kind
+        self.state['database_profile'] = self.database_profile
+        self.save()
         self.php = '/usr/bin/php8.4'
         self.release = self.base / 'releases' / self.version
-        self.site = Path('/etc/nginx/sites-available') / (self.name + '.conf')
+        self.site = self.web.directory / 'sites-available' / (self.name + '.conf')
         print(f"\nInstalling {self.product} {self.version} at https://{self.state['hostname']}\nApplication files: {self.base}\nAn existing website, if present, will retain its PHP runtime and settings.")
 
     def dependencies(self, runtime_only=False):
         packages = ['ca-certificates', 'curl', 'unzip', 'openssl', 'certbot', 'php8.4-cli', 'php8.4-fpm', 'php8.4-curl',
                     'php8.4-gd', 'php8.4-intl', 'php8.4-mbstring', 'php8.4-mysql', 'php8.4-xml', 'php8.4-zip']
-        if not runtime_only and not shutil.which('nginx'):
-            packages.append('nginx')
-        if not runtime_only and not shutil.which('mariadb'):
+        from packages import ubuntu_php_source
+        ubuntu_php_source(self)
+        if not runtime_only and not shutil.which(self.web.kind):
+            packages.append(self.web.kind)
+        if not runtime_only and self.database_profile == 'shared' and not shutil.which('mariadb'):
             packages.append('mariadb-server')
+        if not runtime_only and self.database_profile == 'isolated':
+            packages.extend(['libaio1', 'libncurses6', 'libnuma1'])
         if runtime_only:
             packages = [package for package in packages if package.startswith('php8.4-') or package in ('ca-certificates', 'openssl', 'curl', 'unzip')]
         # No global PHP alternatives switch; no automatic unrelated service restart.
@@ -279,7 +294,8 @@ class Installer:
             installed_php_version = common.stdout.split()[-1]
             missing = [package + '=' + installed_php_version if package.startswith('php8.4-') else package for package in missing]
         # Inspect registered selections even when /run links have disappeared after boot.
-        # Retain original receipts across an interrupted APT task and already-installed reruns.
+        # Retain original receipts only across an unfinished APT task, including one
+        # that installed all packages before interruption.
         retained = []
         for name, link, package in selections:
             record = self.preserve_php_selection(link, missing, name=name, package=package)
@@ -291,9 +307,15 @@ class Installer:
         finally:
             for name, link, record in retained:
                 self.verify_php_selection(name, link, record)
+        for name, link, record in retained:
+            self.retire_php_selection(name, record)
         run([self.php, '-r', 'foreach (["curl","dom","gd","intl","mbstring","pdo_mysql","sodium","zip","posix"] as $e) {if (!extension_loaded($e)) exit(1);}'])
         if not runtime_only:
-            run(['systemctl', 'start', 'mariadb'])
+            if self.database_profile == 'isolated':
+                from isolated_database import DatabaseProfile
+                DatabaseProfile(self).provision()
+            else:
+                run(['systemctl', 'start', 'mariadb'])
 
     def preserve_php_selection(self, link, missing, *, name='php', package='php8.4-cli'):
         receipt = self.state_dir / (name.replace('.', '-') + '-selection.json')
@@ -308,6 +330,14 @@ class Installer:
             record = json.loads(receipt.read_text())
             if not isinstance(record, dict) or record.get('policy') != 'keep_existing_version' or record.get('previous_mode') not in ('auto', 'manual') or not isinstance(record.get('previous_value'), str) or not record['previous_value'].startswith('/'):
                 raise SetupError('The saved PHP selection is invalid. It was not replaced.')
+            if record.get('format') is None and self.completed_legacy_dependencies():
+                # Published 1.1.0 left receipts behind after successful setup.
+                # Its durable completed phase proves these are historical, not
+                # evidence from an interrupted transaction in this installer.
+                self.retire_php_selection(name, record)
+                return self.preserve_php_selection(link, missing, name=name, package=package)
+            if record.get('format') not in (None, 'emailer-php-selection-v2'):
+                raise SetupError('The saved PHP selection format is unsupported. It was retained.')
             if selection.returncode or not current or not mode or current.group(1) != record['previous_value']:
                 raise SetupError('The registered PHP selection differs from the saved installation record. No PHP packages were installed. Restore the recorded selection before resuming setup.')
         else:
@@ -319,7 +349,7 @@ class Installer:
                 raise SetupError('The existing PHP command or shared FPM socket is outside Debian’s alternatives system. No PHP packages were installed. Register that existing selection as a Debian alternative or use a separate supported VPS; setup will not replace it.')
             if not current or not mode:
                 raise SetupError('The registered PHP command or shared FPM socket selection is ambiguous. No PHP packages were installed.')
-            record = {'previous_value': current.group(1), 'previous_mode': mode.group(1), 'policy': 'keep_existing_version'}
+            record = {'format': 'emailer-php-selection-v2', 'previous_value': current.group(1), 'previous_mode': mode.group(1), 'policy': 'keep_existing_version'}
             self.state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
             metadata = self.state_dir.lstat()
             if self.state_dir.is_symlink() or metadata.st_uid != 0 or metadata.st_mode & 0o077:
@@ -331,6 +361,28 @@ class Installer:
             # Prevent even a temporary global command/socket switch during Debian package hooks.
             run(['update-alternatives', '--set', name, record['previous_value']])
         return record
+
+    def completed_legacy_dependencies(self):
+        journal = self.state_dir / 'state.json'
+        if not journal.exists():
+            return False
+        metadata = journal.lstat()
+        if journal.is_symlink() or not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != 0 or metadata.st_nlink != 1 or metadata.st_mode & 0o077:
+            raise SetupError('The previous dependency completion record is unsafe. It was retained.')
+        saved = json.loads(journal.read_text())
+        return isinstance(saved, dict) and isinstance(saved.get('completed'), list) and 'Installing supported dependencies' in saved['completed']
+
+    def retire_php_selection(self, name, record):
+        receipt = self.state_dir / (name.replace('.', '-') + '-selection.json')
+        metadata = receipt.lstat()
+        if receipt.is_symlink() or not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != 0 or metadata.st_nlink != 1 or metadata.st_mode & 0o077 or json.loads(receipt.read_text()) != record:
+            raise SetupError('The saved PHP selection changed before completion. It was retained.')
+        receipt.unlink()
+        descriptor = os.open(self.state_dir, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
 
     def verify_php_selection(self, name, link, record):
         selection = subprocess.run(['update-alternatives', '--query', name], capture_output=True, text=True)
@@ -354,31 +406,49 @@ class Installer:
             if re.search(r'Could not get lock|Unable to acquire.*lock', evidence, re.I):
                 reason = 'Another operating-system package task is running. Let it finish before starting setup again.'
             elif re.search(r'expired|not valid yet|created after.*not-after|not live until', evidence, re.I):
-                reason = 'The signed operating-system package catalogue is expired or not yet valid. Check the server clock and Debian mirror freshness.'
+                reason = 'The signed operating-system package catalogue is expired or not yet valid. Check the server clock and configured mirror freshness.'
             elif re.search(r'NO_PUBKEY|EXPKEYSIG|not signed|signatures.*verified', evidence, re.I):
-                reason = 'The operating system could not authenticate its package catalogue. Restore the Debian repository signing configuration; setup will not bypass signature checks.'
+                reason = 'The operating system could not authenticate its package catalogue. Restore the operating-system repository signing configuration; setup will not bypass signature checks.'
             elif re.search(r'Could not resolve|Temporary failure resolving', evidence, re.I):
-                reason = 'The server could not resolve its Debian package server. Restore working DNS for the configured Debian repositories.'
+                reason = 'The server could not resolve its configured package server. Restore working DNS for the configured operating-system repositories.'
             else:
-                reason = 'The server could not reach a usable signed Debian package catalogue. Check its internet connection, package-download proxy and configured Debian repository addresses.'
+                reason = 'The server could not reach a usable signed operating-system package catalogue. Check its internet connection, package-download proxy and configured operating-system repository addresses.'
             raise SetupError(reason + ' Then start the same setup package again; completed steps are retained.')
-        installation = subprocess.run(['apt-get', 'install', '-y', '--no-install-recommends', '-o', 'Dpkg::Options::=--force-confold', *missing],
-                                      capture_output=True, text=True, env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive', 'NEEDRESTART_MODE': 'l'})
+        from packages import validate_plan, ServicePolicy
+        plan = subprocess.run(['apt-get', '--simulate', 'install', '--no-install-recommends', *missing], capture_output=True, text=True)
+        if plan.returncode and any(name.startswith('php8.4-') and '=' in name for name in missing):
+            raise SetupError('The matching PHP 8.4 patch packages are unavailable. Setup kept that PHP version unchanged. Restore matching signed extension packages or arrange normal maintenance for the existing PHP runtime, then retry.')
+        if plan.returncode:
+            raise SetupError('The supported package transaction could not be resolved. No packages were installed; inspect apt-cache policy for the required PHP 8.4 packages and retain the current host packages.')
+        validate_plan(plan.stdout, SetupError, ('php-common', 'libgd3') if getattr(self, 'system', ('debian', '13'))[0] == 'ubuntu' else ())
+        planned = {}
+        for line in plan.stdout.splitlines():
+            match = re.match(r'^Inst ([A-Za-z0-9+.:~-]+)(?: \[([^]]+)\])? \(([^ ]+)', line)
+            if match:
+                planned[match.group(1)] = {'version': match.group(3), 'previous': match.group(2)}
+        receipt = self.state_dir / 'apt-plan.json'
+        durable(receipt, json.dumps({'format': 'emailer-apt-plan-v1', 'packages': planned}) + '\n')
+        gate = '/usr/bin/python3 ' + str(self.bundle / 'apt-guard.py') + ' ' + str(receipt)
+        with ServicePolicy(self) as policy:
+            installation = subprocess.run(['apt-get', '-o', 'APT::Keep-Fds::=' + str(policy.descriptor), '-o', 'DPkg::Pre-Install-Pkgs::=' + gate, 'install', '-y', '--no-remove', '--no-install-recommends', '-o', 'Dpkg::Options::=--force-confold', *missing],
+                                      capture_output=True, text=True, pass_fds=(policy.descriptor,), env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive', 'NEEDRESTART_MODE': 'l', 'NEEDRESTART_SUSPEND': '1'})
         if installation.returncode:
             evidence = installation.stdout + installation.stderr
             pinned_php = any(name.startswith('php8.4-') and '=' in name for name in missing)
-            if pinned_php and re.search(r'was not found|not available|no installation candidate|unmet dependencies|held broken packages', evidence, re.I):
-                reason = 'Debian no longer offers extensions matching the PHP 8.4 patch already used on this server. Setup kept that PHP version unchanged to protect existing websites. Restore the matching signed Debian packages, or arrange a coordinated PHP patch update for those websites, then run setup again. A separate supported VPS also avoids this conflict.'
+            if 'EMAILER_APT_PLAN_CHANGED' in evidence:
+                reason = 'The actual host package transaction changed after validation. No package was unpacked. Let other operating-system package tasks finish, then rerun setup.'
+            elif pinned_php and re.search(r'was not found|not available|no installation candidate|unmet dependencies|held broken packages', evidence, re.I):
+                reason = 'The configured repositories no longer offer extensions matching the PHP 8.4 patch already used on this server. Setup kept that PHP version unchanged to protect existing websites. Restore the matching signed packages, or arrange a coordinated PHP patch update for those websites, then run setup again. A separate supported VPS also avoids this conflict.'
             elif re.search(r'Could not get lock|Unable to acquire.*lock|dpkg was interrupted', evidence, re.I):
-                reason = 'Another operating-system package task is running, or an earlier task was interrupted. Finish that Debian package task before starting setup again.'
+                reason = 'Another operating-system package task is running, or an earlier task was interrupted. Finish that operating-system package task before starting setup again.'
             elif re.search(r'Unable to locate package|no installation candidate', evidence, re.I):
-                reason = 'The configured Debian repositories do not offer the required supported packages. Enable the standard Debian 13 main and security repositories, then start setup again; setup will not add an untrusted third-party repository.'
+                reason = 'The configured operating-system repositories do not offer the required supported packages. Enable the supported OS repositories and the documented Ubuntu PHP source, then start setup again; setup will not add an unauthenticated repository.'
             elif re.search(r'No space left|not enough free space', evidence, re.I):
                 reason = 'The operating system has insufficient free space for the missing packages. Free space on the reported filesystem before starting setup again.'
             elif re.search(r'Could not resolve|Temporary failure resolving|Failed to fetch|Connection failed|Connection timed out', evidence, re.I):
-                reason = 'Debian could not download a required package. Restore its repository connection, DNS or package-download proxy, then start setup again.'
+                reason = 'The package manager could not download a required package. Restore its repository connection, DNS or package-download proxy, then start setup again.'
             else:
-                reason = 'Debian could not install the missing supported packages. Its package manager records details in /var/log/apt/term.log. Resolve that reported package error, then start setup again.'
+                reason = 'The package manager could not install the missing supported packages. Its package manager records details in /var/log/apt/term.log. Resolve that reported package error, then start setup again.'
             raise SetupError(reason + ' Completed setup steps and existing configuration files were retained.')
 
     def verify_runtime(self):
@@ -389,19 +459,19 @@ class Installer:
 
     def resources(self):
         if not self.state.get('resources_reserved'):
-            reserved = [self.site, Path('/etc/nginx/sites-enabled') / ('zzzz-' + self.site.name),
+            reserved = [self.site, self.web.directory / 'sites-enabled' / ('zzzz-' + self.site.name),
                         Path('/usr/local/sbin') / self.name, Path('/etc/letsencrypt/renewal-hooks/deploy') / self.name,
                         Path('/var/lib') / (self.name + '-acme')]
             reserved += [Path('/etc/systemd/system') / (self.name + '-' + suffix) for suffix in ('fpm.service', 'worker.service', 'scheduler.service', 'scheduler.timer', 'operations.service', 'operations.timer')]
             for path in reserved:
                 if path.exists() or path.is_symlink():
                     raise SetupError('An Emailer website, command or service name is already in use. Setup will not overwrite it.')
-            configuration = run(['nginx', '-T'])
+            configuration = self.web.configuration()
             host = self.state['hostname']
-            declarations = [name for declaration in re.findall(r'server_name\s+([^;]+);', configuration) for name in declaration.split()]
+            declarations = self.web.names(configuration)
             if any(name.startswith('~') for name in declarations):
                 raise SetupError('Nginx uses a regular-expression website address rule that this profile cannot safely assign around. Keep that site running; use a dedicated standard hostname configuration or a separate supported VPS. No site was changed.')
-            while any(name == host or (name.startswith('*.') and host.endswith(name[1:])) or (name.startswith('.') and (host == name[1:] or host.endswith(name))) or (name.endswith('.*') and host.startswith(name[:-1])) for name in declarations):
+            while self.web.conflicts(host, declarations):
                 print('That address already serves another website. It has been kept unchanged. Choose a different dedicated address for Emailer.')
                 host = ask_hostname()
                 self.state['hostname'] = host
@@ -410,7 +480,7 @@ class Installer:
                 loaded = run(['systemctl', 'show', self.name + '-' + suffix, '--property=LoadState'])
                 if 'LoadState=not-found' not in loaded:
                     raise SetupError('An Emailer service name is already used by an existing host service. It was not replaced.')
-            names = sorted(path.name for path in Path('/etc/nginx/sites-enabled').iterdir())
+            names = sorted(path.name for path in (self.web.directory / 'sites-enabled').iterdir())
             link_name = 'zzzz-' + self.site.name
             if names and names[-1] >= link_name:
                 link_name = names[-1] + '-' + self.name
@@ -424,6 +494,8 @@ class Installer:
         except KeyError:
             run(['useradd', '--system', '--user-group', '--home-dir', str(self.private.parent), '--shell', '/usr/sbin/nologin', self.user])
         account = pwd.getpwnam(self.user)
+        if self.database_profile == 'isolated':
+            run(['usermod', '--append', '--groups', 'emailer-db', self.user])
         root_directory(self.private.parent, 0, 0o755)
         for path in (self.private, self.keys, self.backups, self.private / 'locks'):
             path.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -440,7 +512,7 @@ class Installer:
             version = re.match(r'(10\.11\.\d+|11\.8\.\d+)', server)
             if not version:
                 raise SetupError('The database version is unsupported. It has not been changed.')
-            dsn = f'mysql://{db}:{password}@127.0.0.1:3306/{db}?serverVersion={version.group(1)}-MariaDB&charset=utf8mb4'
+            dsn = (f'mysql://{db}:{password}@localhost/{db}?unix_socket=/run/emailer-database/mysql.sock&serverVersion={version.group(1)}-MariaDB&charset=utf8mb4' if self.database_profile == 'isolated' else f'mysql://{db}:{password}@127.0.0.1:3306/{db}?serverVersion={version.group(1)}-MariaDB&charset=utf8mb4')
             values = {'APP_ENV': 'prod', 'APP_DEBUG': '0', 'APP_SECRET': secrets.token_hex(32), 'DEFAULT_URI': 'https://' + self.state['hostname'],
                       'DATABASE_URL': dsn, 'EMAILER_RUNTIME_CONFIGURATION_FILE': str(runtime), 'EMAILER_PRIVATE_DIR': str(self.private), 'EMAILER_RUNTIME_DIR': str(self.private),
                       'EMAILER_SECRET_KEY_FILE': str(self.keys / 'master.key'), 'EMAILER_RECOVERY_KEY_FILE': str(self.keys / 'recovery-key.enxkey'),
@@ -470,7 +542,8 @@ class Installer:
                 raise SetupError('The selected dedicated database name is already in use. No existing database or account was changed.')
             self.state['database_reserved'] = True
             self.save()
-        sql = f"CREATE DATABASE IF NOT EXISTS `{db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS '{db}'@'127.0.0.1' IDENTIFIED BY '{password}'; GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, TRIGGER ON `{db}`.* TO '{db}'@'127.0.0.1';"
+        database_host = 'localhost' if 'unix_socket' in urllib.parse.parse_qs(params.query) else '127.0.0.1'
+        sql = f"CREATE DATABASE IF NOT EXISTS `{db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS '{db}'@'{database_host}' IDENTIFIED BY '{password}'; GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, TRIGGER ON `{db}`.* TO '{db}'@'{database_host}';"
         self.database_run(['--batch'], data=sql)
         owner = self.state['database_owner']
         self.database_run(['--batch'], data=f"CREATE TABLE IF NOT EXISTS `{db}`.`_emailer_provisioning` (operation_token CHAR(48) PRIMARY KEY); INSERT IGNORE INTO `{db}`.`_emailer_provisioning` VALUES ('{owner}');")
@@ -536,8 +609,26 @@ class Installer:
             raise SetupError(reason + 'Start this same setup action again after correcting the problem; your completed steps and account are retained. Redacted diagnostics: ' + str(self.state_dir / 'last-error.json'))
         return result.stdout or ''
 
+    def application_completed(self):
+        path = self.private / 'install.lock'
+        if not path.exists() and not path.is_symlink():
+            return False
+        info = path.lstat()
+        account = pwd.getpwnam(self.user)
+        if path.is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != account.pw_uid or info.st_mode & 0o077:
+            raise SetupError('The account-completion record has unsafe ownership or permissions. It was retained; no background services or website were installed.')
+        metadata = json.loads(path.read_text())
+        identity = metadata.get('installation_uuid')
+        if metadata.get('product_id') != self.product or metadata.get('product_version') != self.version or not isinstance(identity, str) or not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', identity):
+            raise SetupError('The account-completion record does not match this installation. It was preserved; retain its state and use the setup-recovery reference.')
+        db = self.state['database']
+        verified = self.database_run(['-NBe', f"SELECT COUNT(*) FROM `{db}`.installation_state s JOIN `{db}`.product_identity p ON p.singleton_key='1' WHERE s.singleton_key='1' AND s.completed_at IS NOT NULL AND s.installation_uuid='{identity}' AND p.installation_uuid=s.installation_uuid AND p.product_id='{self.product}' AND p.product_version='{self.version}' AND (SELECT COUNT(*) FROM `{db}`.app_user WHERE active=1)=1 AND (SELECT COUNT(*) FROM `{db}`.app_user)=1"]).strip()
+        if verified != '1':
+            raise SetupError('Account setup is not complete in the saved application database. Your data was retained; start this same setup file again to finish account setup before background services and the website are enabled.')
+        return True
+
     def application(self):
-        if (self.private / 'install.lock').exists():
+        if self.application_completed():
             return
         db = self.state['database']
         # A failed baseline DDL is recoverable only before ANY administrator/input data exists.
@@ -561,12 +652,15 @@ class Installer:
         self.console(['doctrine:migrations:migrate', '--no-interaction'])
         self.database_run(['--batch'], data=f'DROP TABLE IF EXISTS `{db}`._emailer_provisioning;')
         self.console(['emailer:setup:install', '--guided'], interactive=True)
+        if not self.application_completed():
+            raise SetupError('Account setup was interrupted before completion. Your saved settings were retained. Start this same setup file again to finish; background services and the public website were not enabled.')
 
     def service_file(self, name, content):
         durable(Path('/etc/systemd/system') / name, content, 0o644)
 
     def services(self):
         runtime = self.config / 'runtime.env'
+        database_service = 'emailer-database.service' if self.database_profile == 'isolated' else 'mariadb.service'
         socket_path = f'/run/{self.name}-fpm/php.sock'
         durable(self.config / 'fpm.conf', f'''[global]
 pid = /run/{self.name}-fpm/php.pid
@@ -598,7 +692,8 @@ ReadWritePaths={self.private} {self.keys} {self.backups}
 '''
         self.service_file(self.name + '-fpm.service', f'''[Unit]
 Description={self.product} isolated PHP runtime
-After=network.target mariadb.service
+After=network.target {database_service}
+Wants={database_service}
 [Service]
 ExecStart=/usr/sbin/php-fpm8.4 --nodaemonize --fpm-config {self.config}/fpm.conf
 EnvironmentFile={runtime}
@@ -623,7 +718,7 @@ WantedBy=multi-user.target
             commands[role] = command + (' --wait-for-configuration' if role == 'scheduler' else '')
         for role, command in commands.items():
             worker = role == 'worker'
-            self.service_file(self.name + '-' + role + '.service', f'[Unit]\nDescription={self.product} {role}\nAfter=mariadb.service\n[Service]\nType=' + ('simple' if worker else 'oneshot') + '\n' + common + f'ExecStart={self.php} {self.base}/releases/current/bin/console {command}\n' + ('Restart=always\nRestartSec=5\n[Install]\nWantedBy=multi-user.target\n' if worker else ''))
+            self.service_file(self.name + '-' + role + '.service', f'[Unit]\nDescription={self.product} {role}\nAfter={database_service}\nWants={database_service}\n[Service]\nType=' + ('simple' if worker else 'oneshot') + '\n' + common + f'ExecStart={self.php} {self.base}/releases/current/bin/console {command}\n' + ('Restart=always\nRestartSec=5\n[Install]\nWantedBy=multi-user.target\n' if worker else ''))
             if not worker:
                 interval = '60s' if role == 'scheduler' else '15min'
                 self.service_file(self.name + '-' + role + '.timer', f'[Unit]\nDescription={self.product} {role} timer\n[Timer]\nOnBootSec=60s\nOnUnitActiveSec={interval}\nPersistent=true\n[Install]\nWantedBy=timers.target\n')
@@ -644,7 +739,7 @@ WantedBy=multi-user.target
         if linked:
             enabled.symlink_to(self.site)
         try:
-            run(['nginx', '-t'])
+            run(self.web.check_command)
         except SetupError:
             if previous is None:
                 self.site.unlink(missing_ok=True)
@@ -652,25 +747,19 @@ WantedBy=multi-user.target
                 durable(self.site, previous, 0o644)
             if linked:
                 enabled.unlink(missing_ok=True)
-            raise SetupError('The proposed Emailer website failed Nginx validation. Its previous file was restored; Nginx was not reloaded. Correct the reported website conflict and start setup again.') from None
+            raise SetupError('The proposed Emailer website failed web-server validation. Its previous file was restored; the web server was not reloaded. Correct the reported website conflict and start setup again.') from None
 
     def website(self):
         host = self.state['hostname']
         webroot = Path('/var/lib') / (self.name + '-acme')
         for directory in (webroot, webroot / '.well-known', webroot / '.well-known/acme-challenge'):
             root_directory(directory, 0, 0o755)
-        base = f'''server {{
-    listen 80;
-    server_name {host};
-    location ^~ /.well-known/acme-challenge/ {{ root {webroot}; }}
-    access_log off;
-    location / {{ return 503; }}
-}}
-'''
-        enabled = Path('/etc/nginx/sites-enabled') / self.state.get('site_link_name', 'zzzz-' + self.site.name)
+        self.web.modules(run)
+        base = self.web.site(hostname=host, name=self.name, public=str(self.base / 'releases/current/public'), webroot=str(webroot))
+        enabled = self.web.directory / 'sites-enabled' / self.state.get('site_link_name', 'zzzz-' + self.site.name)
         self.validated_site(base, enabled)
-        run(['systemctl', 'enable', '--now', 'nginx'])
-        run(['systemctl', 'reload', 'nginx'])
+        run(['systemctl', 'start', self.web.service] if self.state.get('web_preexisting') else ['systemctl', 'enable', '--now', self.web.service])
+        run(['systemctl', 'reload', self.web.service])
         try:
             socket.getaddrinfo(host, 443)
         except socket.gaierror:
@@ -678,31 +767,10 @@ WantedBy=multi-user.target
         result = subprocess.run(['certbot', 'certonly', '--webroot', '-w', str(webroot), '-d', host, '--non-interactive', '--agree-tos', '--register-unsafely-without-email'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if result.returncode:
             raise SetupError(f'Trusted HTTPS could not be issued for {host}. Check that every A/AAAA record reaches this VPS and ports 80 and 443 are reachable, then run setup again. Your progress is saved. No trusted certificate is claimed.')
-        https = f'''server {{
-    listen 443 ssl;
-    server_name {host};
-    ssl_certificate /etc/letsencrypt/live/{host}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/{host}/privkey.pem;
-    root {self.base}/releases/current/public;
-    index index.php;
-    access_log off;
-    location = /index.php {{
-        include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
-        fastcgi_param HTTP_PROXY "";
-        fastcgi_param HTTPS on;
-        fastcgi_param REQUEST_SCHEME https;
-        fastcgi_pass unix:/run/{self.name}-fpm/php.sock;
-    }}
-    location / {{ try_files $uri /index.php$is_args$args; }}
-    location ~ \\.php$ {{ return 404; }}
-    location ~ (^|/)\\. {{ return 404; }}
-    location ~* \\.(?:env|log|sql|dump|backup|bak|key|pem|p12|pfx)$ {{ return 404; }}
-}}
-'''
-        self.validated_site(base.replace('return 503;', 'return 301 https://' + host + '$request_uri;') + https)
-        run(['systemctl', 'reload', 'nginx'])
-        durable('/etc/letsencrypt/renewal-hooks/deploy/' + self.name, '#!/bin/sh\nnginx -t && systemctl reload nginx\n', 0o755)
+        https = self.web.site(hostname=host, name=self.name, public=str(self.base / 'releases/current/public'), webroot=str(webroot), certificate=f'/etc/letsencrypt/live/{host}/fullchain.pem', certificate_key=f'/etc/letsencrypt/live/{host}/privkey.pem')
+        self.validated_site(https)
+        run(['systemctl', 'reload', self.web.service])
+        durable('/etc/letsencrypt/renewal-hooks/deploy/' + self.name, '#!/bin/sh\n' + ' '.join(self.web.check_command) + ' && systemctl reload ' + self.web.service + '\n', 0o755)
         run(['systemctl', 'enable', '--now', 'certbot.timer'])
 
     def recovery(self):
@@ -752,6 +820,8 @@ WantedBy=multi-user.target
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise SetupError('Another setup process is running for this installation. Let it finish, then retry.') from None
+        from packages import ServicePolicy
+        ServicePolicy(self).recover()
         self.preflight()
         self.initialize()
         if 'Checking application health and initial backup' in self.state['completed']:
@@ -770,8 +840,11 @@ def main():
     try:
         installer = Installer(sys.argv[1])
         from manage import dispatch
-        if not dispatch(installer, SetupError):
-            installer.execute()
+        from packages import HostLock, ServicePolicy
+        with HostLock('/run/lock/emailer-host-installation.lock', SetupError):
+            ServicePolicy(installer).recover()
+            if not dispatch(installer, SetupError):
+                installer.execute()
     except (SetupError, OSError, ValueError, KeyError) as error:
         print('\nSetup stopped during: ' + (installer.step if installer else 'Package validation'), file=sys.stderr)
         print(str(error) if isinstance(error, SetupError) else 'A protected file or host prerequisite could not be read. Existing resources have been retained; see the troubleshooting reference.', file=sys.stderr)

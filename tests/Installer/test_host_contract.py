@@ -96,7 +96,7 @@ class HostingIsolationContract(unittest.TestCase):
         self.assertNotEqual(first.runtime, second.runtime)
 
     def test_maintenance_and_final_sites_preserve_acme_webroot(self):
-        manager = types.SimpleNamespace(prefix='emailer-light', installer=types.SimpleNamespace(product='emailer-light'), record={}, releases=Path('/srv/emailer-light/releases'))
+        manager = types.SimpleNamespace(prefix='emailer-light', installer=types.SimpleNamespace(product='emailer-light'), record={}, releases=Path('/srv/emailer-light/releases'), error=ManagementError)
         handoff = HostHandoff(manager)
         challenge = 'location ^~ /.well-known/acme-challenge/ { root /var/lib/emailer-light-acme; }'
         handoff.state.update(hostname='mailer.example.test', certificate='/etc/letsencrypt/live/mailer/fullchain.pem', certificate_key='/etc/letsencrypt/live/mailer/privkey.pem', acme_locations=[challenge])
@@ -146,7 +146,7 @@ class RecoveryAndDiagnosticContract(unittest.TestCase):
 
 
 class PackageFailureGuidance(unittest.TestCase):
-    def test_registered_socket_survives_missing_run_link_interruption_and_completed_rerun(self):
+    def test_registered_socket_survives_missing_run_link_and_interrupted_rerun(self):
         instance = object.__new__(Installer)
         with tempfile.TemporaryDirectory() as directory:
             instance.state_dir = Path(directory)
@@ -172,6 +172,35 @@ class PackageFailureGuidance(unittest.TestCase):
                 drift = after.replace('Value: /run/php/php8.3-fpm.sock', 'Value: /run/php/php8.4-fpm.sock')
                 with patch('provision.subprocess.run', return_value=types.SimpleNamespace(returncode=0, stdout=drift)), self.assertRaisesRegex(SetupError, 'differs from the saved'):
                     instance.preserve_php_selection('/run/php/php-fpm.sock', [], name='php-fpm.sock', package='php8.4-fpm')
+
+    @unittest.skipUnless(os.geteuid() == 0, 'Protected completion records require root')
+    def test_completed_legacy_receipt_allows_later_operator_selection_and_new_transaction(self):
+        instance = object.__new__(Installer)
+        with tempfile.TemporaryDirectory() as directory:
+            instance.state_dir = Path(directory)
+            receipt = instance.state_dir / 'php-selection.json'
+            legacy = {'policy': 'keep_existing_version', 'previous_value': '/usr/bin/php8.1', 'previous_mode': 'auto'}
+            receipt.write_text(json.dumps(legacy)); receipt.chmod(0o600)
+            journal = instance.state_dir / 'state.json'
+            journal.write_text(json.dumps({'completed': ['Installing supported dependencies']})); journal.chmod(0o600)
+            output = 'Name: php\nStatus: manual\nValue: /usr/bin/php8.3\nBest: /usr/bin/php8.4\n'
+            with patch('provision.subprocess.run', return_value=types.SimpleNamespace(returncode=0, stdout=output)), patch('provision.os.path.lexists', return_value=False), patch('provision.run') as commands:
+                # Check/update with every package installed accepts current host policy.
+                self.assertIsNone(instance.preserve_php_selection('/usr/bin/php', []))
+                self.assertFalse(receipt.exists())
+                record = instance.preserve_php_selection('/usr/bin/php', ['php8.4-cli'])
+                self.assertEqual('/usr/bin/php8.3', record['previous_value'])
+                self.assertEqual('emailer-php-selection-v2', record['format'])
+                # An unfinished NEW transaction must retain its binding despite
+                # the old installation's completed dependency phase.
+                drift = output.replace('Value: /usr/bin/php8.3', 'Value: /usr/bin/php8.4')
+                with patch('provision.subprocess.run', return_value=types.SimpleNamespace(returncode=0, stdout=drift)), self.assertRaisesRegex(SetupError, 'differs from the saved'):
+                    instance.preserve_php_selection('/usr/bin/php', [])
+                self.assertTrue(receipt.exists())
+                instance.verify_php_selection('php', '/usr/bin/php', record)
+                instance.retire_php_selection('php', record)
+                self.assertFalse(receipt.exists())
+                commands.assert_not_called()
 
     def test_unregistered_existing_fpm_socket_refuses_package_installation(self):
         instance = object.__new__(Installer)
