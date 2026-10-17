@@ -60,6 +60,14 @@ final class SetupCommandsTest extends TestCase
             $this->clock,
             $this->publicDirectory,
         );
+        foreach ([2, 15, 1] as $signal) {
+            self::assertSame(128 + $signal, $command->handleSignal($signal));
+            if (\defined('SIGINT')) {
+                self::assertContains($signal, $command->getSubscribedSignals());
+            } else {
+                self::assertSame([], $command->getSubscribedSignals());
+            }
+        }
         $tester = new CommandTester($command);
 
         self::assertSame(Command::SUCCESS, $tester->execute([]));

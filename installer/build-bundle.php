@@ -79,11 +79,26 @@ try {
         $zip->setExternalAttributesName($name, ZipArchive::OPSYS_UNIX, ('setup' === $name ? 0o100755 : 0o100644) << 16);
     }
     $zip->close();
-    $payload = file_get_contents($options['output']);
-    if (false === $payload || false === file_put_contents($options['output'], $contents['setup']."\n".$payload)) {
-        throw new RuntimeException('Self-contained setup file could not be assembled.');
+    $launcher = $contents['setup']."\n";
+    unset($contents);
+    $payload = fopen($options['output'], 'rb');
+    $temporary = $options['output'].'.assembling';
+    $assembled = fopen($temporary, 'xb');
+    if (false === $payload || false === $assembled) {
+        throw new RuntimeException('Self-contained setup output could not be opened.');
     }
-    chmod($options['output'], 0o755);
+    try {
+        $size = fstat($payload);
+        if (false === $size || strlen($launcher) !== fwrite($assembled, $launcher) || $size['size'] !== stream_copy_to_stream($payload, $assembled) || !fflush($assembled) || !fsync($assembled)) {
+            throw new RuntimeException('Self-contained setup file could not be assembled completely.');
+        }
+    } finally {
+        fclose($payload);
+        fclose($assembled);
+    }
+    if (!rename($temporary, $options['output']) || !chmod($options['output'], 0o755)) {
+        throw new RuntimeException('Self-contained setup file could not be published.');
+    }
 } finally {
     sodium_memzero($key);
 }

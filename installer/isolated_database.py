@@ -22,6 +22,7 @@ VERSION = '10.11.19'
 ARCHIVE = 'mariadb-' + VERSION + '-linux-systemd-x86_64.tar.gz'
 URL = 'https://archive.mariadb.org/mariadb-' + VERSION + '/bintar-linux-systemd-x86_64/' + ARCHIVE
 SHA256 = '7efb257927f31f4422f496246b32590d0b7617f3d9dd900e575de761b302d919'
+SIZE = 357390930
 BASE = Path('/opt/emailer-database')
 RELEASE = BASE / VERSION
 ROOT = Path('/var/lib/emailer-database')
@@ -95,31 +96,47 @@ class DatabaseProfile:
             if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or info.st_mode & 0o022:
                 raise self.i.error('The cached database archive is unsafe. It was preserved.')
         else:
-            print('Retrieving authenticated MariaDB ' + VERSION + ' for an isolated, socket-only Emailer service (about 341 MB). Shared database software is retained.',flush=True)
+            print('Retrieving MariaDB ' + VERSION + ' for an isolated, socket-only Emailer service (about 360 MB). Shared database software is retained.',flush=True)
             temporary=cache / (ARCHIVE + '.part')
             if temporary.exists() or temporary.is_symlink():
                 info=temporary.lstat()
                 if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1 or info.st_mode & 0o077:
                     raise self.i.error('The partial database download is unsafe; it was preserved and not used.')
             offset=temporary.stat().st_size if temporary.exists() else 0
-            request=urllib.request.Request(URL,headers={'Range': 'bytes=' + str(offset) + '-'} if offset else {})
             try:
-                with urllib.request.urlopen(request,timeout=60) as response:
-                    continued=offset and response.status==206 and response.headers.get('Content-Range','').startswith('bytes ' + str(offset) + '-')
-                    if response.status not in (200,206) or (response.status==206 and not continued):
-                        raise self.i.error('The database download server returned an invalid resume range. Keep the partial file; retry when its official service is healthy.')
-                    flags=os.O_WRONLY|os.O_CREAT|os.O_NOFOLLOW|(os.O_APPEND if continued else os.O_TRUNC)
-                    fd=os.open(temporary,flags,0o600)
-                    with os.fdopen(fd,'wb') as output:
-                        total=offset if continued else 0
-                        while True:
-                            chunk=response.read(1024*1024)
-                            if not chunk: break
-                            total+=len(chunk)
-                            if total>500*1024**2: raise self.i.error('The database download exceeded its authenticated release size limit.')
-                            output.write(chunk)
-                        output.flush();os.fsync(output.fileno())
+                # A crash after the final fsync but before rename needs no HTTP
+                # request (an HTTP Range at EOF would otherwise return 416).
+                if offset<SIZE:
+                    request=urllib.request.Request(URL,headers={'Range': 'bytes=' + str(offset) + '-'} if offset else {})
+                    with urllib.request.urlopen(request,timeout=60) as response:
+                        continued=bool(offset and response.status==206)
+                        if response.status not in (200,206) or (response.status==206 and (not continued or response.headers.get('Content-Range')!=f'bytes {offset}-{SIZE-1}/{SIZE}')):
+                            raise self.i.error('The database download server returned an invalid resume range. Keep the partial file; retry when its official service is healthy.')
+                        expected=SIZE-(offset if continued else 0)
+                        length=response.headers.get('Content-Length')
+                        if length is not None and (not length.isdecimal() or int(length)!=expected):
+                            raise self.i.error('The official database server returned a different release size. Downloaded bytes were retained; retry when its release service is healthy.')
+                        flags=os.O_WRONLY|os.O_CREAT|os.O_NOFOLLOW|(os.O_APPEND if continued else os.O_TRUNC)
+                        fd=os.open(temporary,flags,0o600)
+                        with os.fdopen(fd,'wb') as output:
+                            total=offset if continued else 0
+                            reported=total//(32*1024**2)
+                            while True:
+                                chunk=response.read(1024*1024)
+                                if not chunk: break
+                                total+=len(chunk)
+                                if total>SIZE: raise self.i.error('The database download exceeded its authenticated release size limit. It was not extracted or executed.')
+                                output.write(chunk)
+                                if total//(32*1024**2)>reported:
+                                    output.flush();os.fsync(output.fileno());reported=total//(32*1024**2)
+                                    print(f'Database download: {total//(1024**2)} MiB received. Progress is saved.',flush=True)
+                            output.flush();os.fsync(output.fileno())
+                        if total!=SIZE:
+                            raise self.i.error('The database download ended early. Downloaded bytes were retained; start this same setup file again to continue. Shared databases were untouched.')
                 os.rename(temporary,path)
+                descriptor=os.open(cache,os.O_RDONLY|os.O_DIRECTORY)
+                try:os.fsync(descriptor)
+                finally:os.close(descriptor)
             except OSError:
                 raise self.i.error('The official isolated MariaDB download could not finish. Restore outbound HTTPS to archive.mariadb.org, then rerun setup; downloaded bytes and completed phases were retained and shared databases were untouched.') from None
         with path.open('rb') as stream:
@@ -129,6 +146,7 @@ class DatabaseProfile:
             if rejected.exists(): rejected=cache / ('rejected-' + digest + '-' + os.urandom(8).hex() + '.tar.gz')
             os.rename(path,rejected)
             raise self.i.error('The isolated MariaDB archive failed its pinned SHA-256 check. It was retained under /var/cache/emailer-database/rejected-* and was not extracted or executed. Start the same setup action again to download a fresh official copy.')
+        print('Database archive verified against the release’s pinned SHA-256.',flush=True)
         return path
 
     @staticmethod

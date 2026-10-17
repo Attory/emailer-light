@@ -576,8 +576,26 @@ class Installer:
             raise SetupError(reason + 'Start this same setup action again after correcting the problem; your completed steps and account are retained. Redacted diagnostics: ' + str(self.state_dir / 'last-error.json'))
         return result.stdout or ''
 
+    def application_completed(self):
+        path = self.private / 'install.lock'
+        if not path.exists() and not path.is_symlink():
+            return False
+        info = path.lstat()
+        account = pwd.getpwnam(self.user)
+        if path.is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != account.pw_uid or info.st_mode & 0o077:
+            raise SetupError('The account-completion record has unsafe ownership or permissions. It was retained; no background services or website were installed.')
+        metadata = json.loads(path.read_text())
+        identity = metadata.get('installation_uuid')
+        if metadata.get('product_id') != self.product or metadata.get('product_version') != self.version or not isinstance(identity, str) or not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', identity):
+            raise SetupError('The account-completion record does not match this installation. It was preserved; retain its state and use the setup-recovery reference.')
+        db = self.state['database']
+        verified = self.database_run(['-NBe', f"SELECT COUNT(*) FROM `{db}`.installation_state s JOIN `{db}`.product_identity p ON p.singleton_key='1' WHERE s.singleton_key='1' AND s.completed_at IS NOT NULL AND s.installation_uuid='{identity}' AND p.installation_uuid=s.installation_uuid AND p.product_id='{self.product}' AND p.product_version='{self.version}' AND (SELECT COUNT(*) FROM `{db}`.app_user WHERE active=1)=1 AND (SELECT COUNT(*) FROM `{db}`.app_user)=1"]).strip()
+        if verified != '1':
+            raise SetupError('Account setup is not complete in the saved application database. Your data was retained; start this same setup file again to finish account setup before background services and the website are enabled.')
+        return True
+
     def application(self):
-        if (self.private / 'install.lock').exists():
+        if self.application_completed():
             return
         db = self.state['database']
         # A failed baseline DDL is recoverable only before ANY administrator/input data exists.
@@ -601,6 +619,8 @@ class Installer:
         self.console(['doctrine:migrations:migrate', '--no-interaction'])
         self.database_run(['--batch'], data=f'DROP TABLE IF EXISTS `{db}`._emailer_provisioning;')
         self.console(['emailer:setup:install', '--guided'], interactive=True)
+        if not self.application_completed():
+            raise SetupError('Account setup was interrupted before completion. Your saved settings were retained. Start this same setup file again to finish; background services and the public website were not enabled.')
 
     def service_file(self, name, content):
         durable(Path('/etc/systemd/system') / name, content, 0o644)

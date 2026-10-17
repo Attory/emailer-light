@@ -90,6 +90,7 @@ final readonly class NativeSchemaUpdate
         NativeUpdateJournal::directory($base);
         $sourceVersion = NativeUpdateJournal::text($source['version']);
         $targetVersion = NativeUpdateJournal::text($target['version']);
+        $versions = new NativeVersionBinding($sourceVersion, $targetVersion);
         $journalPath = $base.'/light-'.$sourceVersion.'-to-'.$targetVersion.'.json';
         $sourceRoot = $this->releasesDirectory.'/'.$sourceVersion;
         $targetRoot = $this->releasesDirectory.'/'.$targetVersion;
@@ -154,7 +155,7 @@ final readonly class NativeSchemaUpdate
             if ([] === $record) {
                 throw new \RuntimeException('There is no retained operation to recover.');
             }
-            $this->recover($journalPath, $record, $sourceRoot, $targetRoot, $target);
+            $this->recover($journalPath, $record, $sourceRoot, $targetRoot, $target, $versions);
 
             return 'recovered';
         }
@@ -176,7 +177,7 @@ final readonly class NativeSchemaUpdate
             throw new \RuntimeException('The source installation identity is inconsistent.');
         }
         $id = Identity::uuidV7();
-        $record = ['format' => 'emailer-light-native-update-v1', 'id' => $id, 'phase' => 'preparing', 'retain_source_fence' => $this->retainSourceFence, 'binding' => $binding, 'source_sha256' => hash_file('sha256', $sourceArchive), 'target_sha256' => hash_file('sha256', $targetArchive), 'schema' => $this->schema(), 'account' => $this->fence->identify(), 'files' => $this->captureFiles($base.'/'.$id), 'identity' => $identity];
+        $record = ['format' => 'emailer-light-native-update-v1', 'id' => $id, 'phase' => 'preparing', 'retain_source_fence' => $this->retainSourceFence, 'binding' => $binding, 'source_sha256' => hash_file('sha256', $sourceArchive), 'target_sha256' => hash_file('sha256', $targetArchive), 'schema' => $this->schema(), 'account' => $this->fence->identify(), 'files' => $this->captureFiles($base.'/'.$id, $versions), 'identity' => $identity];
         $this->save($journalPath, $record);
         $this->connection->insert('release_operation', ['id' => $id, 'operation' => 'update', 'source_version' => $sourceVersion, 'target_version' => $targetVersion, 'package_sha256' => $record['target_sha256'], 'status' => 'started', 'detail_code' => 'verified', 'started_at' => Identity::now(), 'finished_at' => null]);
         $this->connection->executeStatement("UPDATE delivery_runtime SET accepting_work=0 WHERE singleton_key='1'");
@@ -191,11 +192,11 @@ final readonly class NativeSchemaUpdate
         }
         $this->backups->verify($backup['path']);
         $record['backup'] = $backup;
-        $record['data'] = $this->data();
+        $record['data'] = $this->data($versions);
         $record['assets'] = $this->assets();
         $record['phase'] = 'checkpointed';
         $this->save($journalPath, $record);
-        $this->assertStable($record, $sourceRoot);
+        $this->assertStable($record, $sourceRoot, $versions);
         if (is_dir($targetRoot)) {
             $this->installed($targetRoot, $target);
         } else {
@@ -206,12 +207,12 @@ final readonly class NativeSchemaUpdate
         $this->switch($targetRoot);
         $record['phase'] = 'activated';
         $this->save($journalPath, $record);
-        $this->assertStable($record, $targetRoot);
+        $this->assertStable($record, $targetRoot, $versions);
         if (true !== $this->runtime->verifyRuntime(true)['runtime_verified']) {
             throw new \RuntimeException('The application failed structural verification. Choose Recover; delivery remains held.');
         }
         $this->connection->update('product_identity', ['product_version' => $targetVersion], ['singleton_key' => '1']);
-        $this->versionLock($targetVersion);
+        $this->versionLock($targetVersion, $versions);
         $this->connection->update('release_operation', ['status' => 'succeeded', 'detail_code' => 'health_passed', 'finished_at' => Identity::now()], ['id' => $id]);
         $record['phase'] = 'completed';
         $this->save($journalPath, $record);
@@ -227,7 +228,7 @@ final readonly class NativeSchemaUpdate
     /** @param array<string, mixed> $record
      * @param array<string, mixed> $target
      */
-    private function recover(string $path, array $record, string $sourceRoot, string $targetRoot, array $target): void
+    private function recover(string $path, array $record, string $sourceRoot, string $targetRoot, array $target, NativeVersionBinding $versions): void
     {
         $this->connection->executeStatement("UPDATE delivery_runtime SET accepting_work=0 WHERE singleton_key='1'");
         if (0 !== NativeUpdateJournal::integer($this->connection->fetchOne("SELECT active_claims FROM delivery_runtime WHERE singleton_key='1'"))) {
@@ -238,7 +239,7 @@ final readonly class NativeSchemaUpdate
         if (!\in_array($current, [$sourceRoot, $targetRoot], true)) {
             throw new \RuntimeException('The active release is outside the recorded operation.');
         }
-        $this->assertStable($record, NativeUpdateJournal::text($current));
+        $this->assertStable($record, NativeUpdateJournal::text($current), $versions);
         // This pair has no DDL or user-data mutation. Recover only the exact
         // installation metadata and pointer; a changed dataset requires investigation.
         $identity = $record['identity'] ?? null;
@@ -246,7 +247,7 @@ final readonly class NativeSchemaUpdate
             throw new \RuntimeException('The source installation identity is unavailable.');
         }
         $this->connection->update('product_identity', ['product_version' => basename($sourceRoot)], ['singleton_key' => '1']);
-        $this->versionLock(basename($sourceRoot));
+        $this->versionLock(basename($sourceRoot), $versions);
         $this->switch($sourceRoot);
         $this->connection->executeStatement("INSERT INTO release_operation (id,operation,source_version,target_version,package_sha256,status,detail_code,started_at,finished_at) VALUES (?,'update',?,?,?,'failed','verified_source_recovered',?,?) ON DUPLICATE KEY UPDATE status='failed', detail_code='verified_source_recovered', finished_at=VALUES(finished_at)", [NativeUpdateJournal::text($record['id']), basename($sourceRoot), basename($targetRoot), NativeUpdateJournal::text($record['target_sha256']), Identity::now(), Identity::now()]);
         if (is_dir($targetRoot)) {
@@ -261,14 +262,17 @@ final readonly class NativeSchemaUpdate
         $this->save($path, $record);
     }
 
-    private function versionLock(string $version): void
+    private function versionLock(string $version, NativeVersionBinding $versions): void
     {
         $path = $this->privateDirectory.'/install.lock';
         NativeUpdateJournal::regular($path);
         $s = stat($path);
-        $value = json_decode(NativeUpdateJournal::text(file_get_contents($path)), true, 16, JSON_THROW_ON_ERROR);
-        if (!\is_array($value) || !\in_array($value['product_version'] ?? null, ['1.0.0', '1.1.0', '1.2.0'], true)) {
-            throw new \RuntimeException('The installation lock version has drifted.');
+        $bytes = NativeUpdateJournal::text(file_get_contents($path));
+        $versions->lock($bytes);
+        $versions->canonical($version);
+        $value = json_decode($bytes, true, 16, JSON_THROW_ON_ERROR);
+        if (!\is_array($value)) {
+            throw new \RuntimeException('The installation lock is invalid.');
         }
         $value['product_version'] = $version;
         $temporary = \dirname($path).'/.native-lock-'.bin2hex(random_bytes(12));
@@ -300,7 +304,7 @@ final readonly class NativeSchemaUpdate
     }
 
     /** @param array<string, mixed> $record */
-    private function assertStable(array $record, string $current): void
+    private function assertStable(array $record, string $current, NativeVersionBinding $versions): void
     {
         if ($current !== realpath($this->releasesDirectory.'/current') || ($record['schema'] ?? null) !== $this->schema()) {
             throw new \RuntimeException('The source schema, ledger or current pointer has drifted. Recovery will not overwrite it.');
@@ -320,12 +324,7 @@ final readonly class NativeSchemaUpdate
             }
             $bytes = NativeUpdateJournal::text(file_get_contents($path));
             if ($path === $this->privateDirectory.'/install.lock') {
-                $value = json_decode($bytes, true, 16, JSON_THROW_ON_ERROR);
-                if (!\is_array($value) || !\in_array($value['product_version'] ?? null, ['1.0.0', '1.1.0', '1.2.0'], true)) {
-                    throw new \RuntimeException('Installation lock binding is invalid.');
-                }
-                $value['product_version'] = '1.0.0';
-                $bytes = json_encode($value, JSON_THROW_ON_ERROR);
+                $bytes = $versions->lock($bytes);
             }
             if (hash('sha256', $bytes) !== ($evidence['sha256'] ?? null)) {
                 throw new \RuntimeException('Protected runtime or cryptographic material has changed.');
@@ -341,13 +340,13 @@ final readonly class NativeSchemaUpdate
         if (isset($record['assets']) && $record['assets'] !== $this->assets()) {
             throw new \RuntimeException('Application assets have changed outside the operation. Retain the verified backup and investigate.');
         }
-        if (isset($record['data']) && $record['data'] !== $this->data()) {
+        if (isset($record['data']) && $record['data'] !== $this->data($versions)) {
             throw new \RuntimeException('Application data has changed outside the update. Retain fencing and investigate; no data was restored.');
         }
     }
 
     /** @return array<string, array{sha256: string, uid: int, gid: int, mode: int, public: bool}> */
-    private function captureFiles(string $directory): array
+    private function captureFiles(string $directory, NativeVersionBinding $versions): array
     {
         NativeUpdateJournal::directory($directory);
         $paths = [$this->runtimeConfigurationFile, $this->masterKeyFile, $this->privateDirectory.'/install.lock'];
@@ -366,7 +365,7 @@ final readonly class NativeSchemaUpdate
                 throw new \RuntimeException('Protected runtime metadata is unavailable.');
             }
             if ($path === $this->privateDirectory.'/install.lock') {
-                $bytes = json_encode(json_decode($bytes, true, 16, JSON_THROW_ON_ERROR), JSON_THROW_ON_ERROR);
+                $bytes = $versions->lock($bytes, true);
             }
             $result[$path] = ['sha256' => hash('sha256', $bytes), 'uid' => $s['uid'], 'gid' => $s['gid'], 'mode' => $s['mode'], 'public' => $public];
         }
@@ -400,7 +399,7 @@ final readonly class NativeSchemaUpdate
         return hash('sha256', serialize([$definitions, $triggers, $views, $ledger]));
     }
 
-    private function data(): string
+    private function data(NativeVersionBinding $versions): string
     {
         $hash = hash_init('sha256');
         $tables = $this->connection->createSchemaManager()->listTableNames();
@@ -417,10 +416,7 @@ final readonly class NativeSchemaUpdate
             hash_update($hash, serialize($table));
             foreach ($this->connection->executeQuery('SELECT * FROM '.$this->connection->quoteSingleIdentifier($table).' ORDER BY '.$order)->iterateAssociative() as $row) {
                 if ('product_identity' === $table) {
-                    if (!\in_array($row['product_version'] ?? null, ['1.0.0', '1.1.0', '1.2.0'], true)) {
-                        throw new \RuntimeException('The product identity has drifted.');
-                    }
-                    $row['product_version'] = '1.0.0';
+                    $row['product_version'] = $versions->canonical($row['product_version'] ?? null);
                 }
                 hash_update($hash, serialize($row));
             }

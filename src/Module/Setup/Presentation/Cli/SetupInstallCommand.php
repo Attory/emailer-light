@@ -126,6 +126,23 @@ final class SetupInstallCommand extends Command
         }
     }
 
+    /** @return list<int> */
+    public function getSubscribedSignals(): array
+    {
+        if (!\defined('SIGINT') || !\defined('SIGTERM') || !\defined('SIGHUP')) {
+            return [];
+        }
+
+        return [\SIGINT, \SIGTERM, \SIGHUP];
+    }
+
+    public function handleSignal(int $signal, int|false $previousExitCode = 0): int
+    {
+        // Symfony's default dispatched signal exit is zero. Interruption must
+        // never look like completed account setup to a host provisioner.
+        return 128 + $signal;
+    }
+
     private function completeInstallation(InputInterface $input, OutputInterface $output, SymfonyStyle $io): int
     {
         $databaseSetup = $this->databaseSetup;
