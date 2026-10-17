@@ -294,7 +294,8 @@ class Installer:
             installed_php_version = common.stdout.split()[-1]
             missing = [package + '=' + installed_php_version if package.startswith('php8.4-') else package for package in missing]
         # Inspect registered selections even when /run links have disappeared after boot.
-        # Retain original receipts across an interrupted APT task and already-installed reruns.
+        # Retain original receipts only across an unfinished APT task, including one
+        # that installed all packages before interruption.
         retained = []
         for name, link, package in selections:
             record = self.preserve_php_selection(link, missing, name=name, package=package)
@@ -306,6 +307,8 @@ class Installer:
         finally:
             for name, link, record in retained:
                 self.verify_php_selection(name, link, record)
+        for name, link, record in retained:
+            self.retire_php_selection(name, record)
         run([self.php, '-r', 'foreach (["curl","dom","gd","intl","mbstring","pdo_mysql","sodium","zip","posix"] as $e) {if (!extension_loaded($e)) exit(1);}'])
         if not runtime_only:
             if self.database_profile == 'isolated':
@@ -327,6 +330,14 @@ class Installer:
             record = json.loads(receipt.read_text())
             if not isinstance(record, dict) or record.get('policy') != 'keep_existing_version' or record.get('previous_mode') not in ('auto', 'manual') or not isinstance(record.get('previous_value'), str) or not record['previous_value'].startswith('/'):
                 raise SetupError('The saved PHP selection is invalid. It was not replaced.')
+            if record.get('format') is None and self.completed_legacy_dependencies():
+                # Published 1.1.0 left receipts behind after successful setup.
+                # Its durable completed phase proves these are historical, not
+                # evidence from an interrupted transaction in this installer.
+                self.retire_php_selection(name, record)
+                return self.preserve_php_selection(link, missing, name=name, package=package)
+            if record.get('format') not in (None, 'emailer-php-selection-v2'):
+                raise SetupError('The saved PHP selection format is unsupported. It was retained.')
             if selection.returncode or not current or not mode or current.group(1) != record['previous_value']:
                 raise SetupError('The registered PHP selection differs from the saved installation record. No PHP packages were installed. Restore the recorded selection before resuming setup.')
         else:
@@ -338,7 +349,7 @@ class Installer:
                 raise SetupError('The existing PHP command or shared FPM socket is outside Debian’s alternatives system. No PHP packages were installed. Register that existing selection as a Debian alternative or use a separate supported VPS; setup will not replace it.')
             if not current or not mode:
                 raise SetupError('The registered PHP command or shared FPM socket selection is ambiguous. No PHP packages were installed.')
-            record = {'previous_value': current.group(1), 'previous_mode': mode.group(1), 'policy': 'keep_existing_version'}
+            record = {'format': 'emailer-php-selection-v2', 'previous_value': current.group(1), 'previous_mode': mode.group(1), 'policy': 'keep_existing_version'}
             self.state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
             metadata = self.state_dir.lstat()
             if self.state_dir.is_symlink() or metadata.st_uid != 0 or metadata.st_mode & 0o077:
@@ -350,6 +361,28 @@ class Installer:
             # Prevent even a temporary global command/socket switch during Debian package hooks.
             run(['update-alternatives', '--set', name, record['previous_value']])
         return record
+
+    def completed_legacy_dependencies(self):
+        journal = self.state_dir / 'state.json'
+        if not journal.exists():
+            return False
+        metadata = journal.lstat()
+        if journal.is_symlink() or not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != 0 or metadata.st_nlink != 1 or metadata.st_mode & 0o077:
+            raise SetupError('The previous dependency completion record is unsafe. It was retained.')
+        saved = json.loads(journal.read_text())
+        return isinstance(saved, dict) and isinstance(saved.get('completed'), list) and 'Installing supported dependencies' in saved['completed']
+
+    def retire_php_selection(self, name, record):
+        receipt = self.state_dir / (name.replace('.', '-') + '-selection.json')
+        metadata = receipt.lstat()
+        if receipt.is_symlink() or not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != 0 or metadata.st_nlink != 1 or metadata.st_mode & 0o077 or json.loads(receipt.read_text()) != record:
+            raise SetupError('The saved PHP selection changed before completion. It was retained.')
+        receipt.unlink()
+        descriptor = os.open(self.state_dir, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
 
     def verify_php_selection(self, name, link, record):
         selection = subprocess.run(['update-alternatives', '--query', name], capture_output=True, text=True)
