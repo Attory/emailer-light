@@ -2,6 +2,7 @@
 """Emailer native-host provisioner. Executed only from a verified, root-frozen bundle."""
 import fcntl
 import getpass
+import grp
 import hashlib
 import json
 import os
@@ -54,6 +55,11 @@ def durable(path, content, mode=0o600):
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+
+
+def generated_launcher(bundle, name, user, runtime, current):
+    command = (Path(bundle) / 'command.py').read_text().replace('@NAME@', name).replace('@USER@', user).replace('@RUNTIME_FILE@', str(runtime)).replace('@CURRENT_RELEASE@', str(current))
+    return '#!/usr/bin/python3\n' + (Path(bundle) / 'runtime_env.py').read_text() + '\n' + command.partition('\n')[2]
 
 
 def ask_hostname():
@@ -127,6 +133,10 @@ class Installer:
             print('Already completed; keeping existing settings.')
             return
         action()
+        if name == 'Preparing dedicated resources':
+            # Business settings later edit runtime.env through the authenticated application.
+            self.claims().settle(self.config / 'runtime.env')
+            self.state.get('resource_claims', {}).pop(str(self.config / 'runtime.env'), None)
         self.state['completed'].append(name)
         self.save()
         print('Done.', flush=True)
@@ -457,15 +467,30 @@ class Installer:
              '--public-key=' + str(self.bundle / 'release.pub'), '--current-version=' + self.version,
              '--expected-version=' + self.version, '--expected-source=' + self.meta['source_commit']])
 
+    def claims(self):
+        from resources import ResourceClaims
+        if hasattr(self, 'resource_claims'):
+            return self.resource_claims
+        return ResourceClaims(self.state.setdefault('resource_claims', {}), self.save, SetupError)
+
+    def reserved_files(self):
+        paths = [self.site, self.web.directory / 'sites-enabled' / self.state.get('site_link_name', 'zzzz-' + self.site.name),
+                 Path('/usr/local/sbin') / self.name, Path('/etc/letsencrypt/renewal-hooks/deploy') / self.name,
+                 self.config / 'fpm.conf', self.config / 'release-signing.pub']
+        if 'Preparing dedicated resources' not in self.state.get('completed', []):
+            paths.append(self.config / 'runtime.env')
+        return paths + [Path('/etc/systemd/system') / (self.name + '-' + suffix) for suffix in ('fpm.service', 'worker.service', 'scheduler.service', 'scheduler.timer', 'operations.service', 'operations.timer')]
+
+    def check_unit(self, name):
+        path = Path('/etc/systemd/system') / name
+        self.claims().check(path)
+        status = run(['systemctl', 'show', name, '--property=LoadState,FragmentPath,DropInPaths'])
+        values = dict(line.split('=', 1) for line in status.splitlines() if '=' in line)
+        if values.get('LoadState') != 'not-found' and (values.get('FragmentPath') != str(path) or values.get('DropInPaths') or self.claims().proof(path) is None):
+            raise SetupError('An Emailer service name is occupied by another loaded host service or a custom override. It was preserved. Move that conflicting service to another name, then retry this setup file.')
+
     def resources(self):
         if not self.state.get('resources_reserved'):
-            reserved = [self.site, self.web.directory / 'sites-enabled' / ('zzzz-' + self.site.name),
-                        Path('/usr/local/sbin') / self.name, Path('/etc/letsencrypt/renewal-hooks/deploy') / self.name,
-                        Path('/var/lib') / (self.name + '-acme')]
-            reserved += [Path('/etc/systemd/system') / (self.name + '-' + suffix) for suffix in ('fpm.service', 'worker.service', 'scheduler.service', 'scheduler.timer', 'operations.service', 'operations.timer')]
-            for path in reserved:
-                if path.exists() or path.is_symlink():
-                    raise SetupError('An Emailer website, command or service name is already in use. Setup will not overwrite it.')
             configuration = self.web.configuration()
             host = self.state['hostname']
             declarations = self.web.names(configuration)
@@ -476,10 +501,6 @@ class Installer:
                 host = ask_hostname()
                 self.state['hostname'] = host
                 self.save()
-            for suffix in ('fpm.service', 'worker.service', 'scheduler.service', 'scheduler.timer', 'operations.service', 'operations.timer'):
-                loaded = run(['systemctl', 'show', self.name + '-' + suffix, '--property=LoadState'])
-                if 'LoadState=not-found' not in loaded:
-                    raise SetupError('An Emailer service name is already used by an existing host service. It was not replaced.')
             names = sorted(path.name for path in (self.web.directory / 'sites-enabled').iterdir())
             link_name = 'zzzz-' + self.site.name
             if names and names[-1] >= link_name:
@@ -489,11 +510,23 @@ class Installer:
             self.state['site_link_name'] = link_name
             self.state['resources_reserved'] = True
             self.save()
+        self.claims().reserve(self.reserved_files())
+        for suffix in ('fpm.service', 'worker.service', 'scheduler.service', 'scheduler.timer', 'operations.service', 'operations.timer'):
+            self.check_unit(self.name + '-' + suffix)
+        marker = 'emailer-install-' + self.state['database_owner']
         try:
-            pwd.getpwnam(self.user)
+            account = pwd.getpwnam(self.user)
         except KeyError:
-            run(['useradd', '--system', '--user-group', '--home-dir', str(self.private.parent), '--shell', '/usr/sbin/nologin', self.user])
-        account = pwd.getpwnam(self.user)
+            run(['useradd', '--system', '--user-group', '--comment', marker, '--home-dir', str(self.private.parent), '--shell', '/usr/sbin/nologin', self.user])
+            account = pwd.getpwnam(self.user)
+        if account.pw_uid == 0 or account.pw_gecos != marker or account.pw_dir != str(self.private.parent) or account.pw_shell != '/usr/sbin/nologin' or grp.getgrgid(account.pw_gid).gr_name != self.user:
+            raise SetupError('The dedicated service account belongs to another host operation or has changed. It was preserved; use a different dedicated account name or restore this installation’s original account before retrying.')
+        claims = self.claims()
+        for path, uid, gid, mode in ((self.private.parent, 0, 0, 0o755), (self.private, account.pw_uid, account.pw_gid, 0o700),
+                                     (self.keys, account.pw_uid, account.pw_gid, 0o700), (self.backups, account.pw_uid, account.pw_gid, 0o700),
+                                     (self.private / 'locks', account.pw_uid, account.pw_gid, 0o700), (self.config, 0, account.pw_gid, 0o750),
+                                     (self.base, 0, 0, 0o755), (self.base / 'releases', 0, 0, 0o755)):
+            claims.directory(path, uid, gid, mode)
         if self.database_profile == 'isolated':
             run(['usermod', '--append', '--groups', 'emailer-db', self.user])
         root_directory(self.private.parent, 0, 0o755)
@@ -520,9 +553,8 @@ class Installer:
                       'EMAILER_RELEASE_PUBLIC_KEY_FILE': str(self.config / 'release-signing.pub'), 'EMAILER_RELEASES_DIR': str(self.base / 'releases'),
                       'EMAILER_BACKUP_DESTINATION_DIR': str(self.backups), 'TRUSTED_PROXIES': '', 'EMAILER_HTTP_MODE': 'direct-fpm', 'TRUSTED_HOSTS': '^' + re.escape(self.state['hostname']) + '$',
                       'MAILER_DSN': 'null://null', 'MESSENGER_TRANSPORT_DSN': 'doctrine://default', 'LOCK_DSN': 'flock://' + str(self.private / 'locks')}
-            durable(runtime, ''.join(f"{key}='{value}'\n" for key, value in values.items()), 0o640)
-            os.chown(runtime, 0, account.pw_gid)
-        durable(self.config / 'release-signing.pub', (self.bundle / 'release.pub').read_text(), 0o644)
+            self.claims().write(runtime, ''.join(f"{key}='{value}'\n" for key, value in values.items()), 0o640, gid=account.pw_gid)
+        self.claims().write(self.config / 'release-signing.pub', (self.bundle / 'release.pub').read_text(), 0o644)
         # Recovery credentials and package evidence are outside web/private state, root controlled.
         evidence = self.state_dir / 'packages' / self.version
         evidence.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -535,18 +567,41 @@ class Installer:
         password = params.password
         if not re.fullmatch(r'[a-z0-9_]+', db) or not password or not re.fullmatch(r'[a-f0-9]+', password):
             raise SetupError('Saved database configuration is inconsistent. It has not been changed.')
-        if not self.state.get('database_reserved'):
-            count = self.database_run(['-NBe', f"SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='{db}'"]).strip()
-            users = self.database_run(['-NBe', f"SELECT COUNT(*) FROM mysql.user WHERE User='{db}'"]).strip()
-            if count != '0' or users != '0':
-                raise SetupError('The selected dedicated database name is already in use. No existing database or account was changed.')
-            self.state['database_reserved'] = True
-            self.save()
+        count = self.database_run(['-NBe', f"SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='{db}'"]).strip()
+        if count == '1':
+            ownership = self.database_run(['-NBe', f"SELECT SCHEMA_COMMENT FROM information_schema.schemata WHERE schema_name='{db}'"]).strip()
+            if ownership != 'emailer-operation-' + self.state['database_owner']:
+                raise SetupError('The reserved database name is occupied by another operation. It was preserved; resolve the database name conflict before retrying.')
+            marker = self.database_run(['-NBe', f"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{db}' AND table_name='_emailer_provisioning'"]).strip()
+            if marker == '0':
+                owner = self.state['database_owner']
+                self.database_run(['--batch'], data=f"CREATE TABLE `{db}`.`_emailer_provisioning` (operation_token CHAR(48) PRIMARY KEY); INSERT INTO `{db}`.`_emailer_provisioning` VALUES ('{owner}');")
+            elif marker == '1' and self.database_run(['-NBe', f"SELECT COUNT(*) FROM `{db}`._emailer_provisioning"]).strip() == '0':
+                owner = self.state['database_owner']
+                self.database_run(['--batch'], data=f"INSERT INTO `{db}`.`_emailer_provisioning` VALUES ('{owner}');")
+            elif marker != '1' or self.database_run(['-NBe', f"SELECT operation_token FROM `{db}`._emailer_provisioning"]).strip() != self.state['database_owner']:
+                raise SetupError('The reserved database name is now occupied without this operation’s ownership marker. It was preserved. Use the database conflict recovery reference before retrying; setup will not adopt or reset it.')
+        elif count == '0':
+            if self.state.get('database_created'):
+                raise SetupError('This operation’s previously created database is missing. Restore its saved database before retrying; setup will not silently recreate it.')
+            # CREATE has no IF NOT EXISTS: a competing host task can never be adopted.
+            owner = self.state['database_owner']
+            self.database_run(['--batch'], data=f"CREATE DATABASE `{db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT='emailer-operation-{owner}'; CREATE TABLE `{db}`.`_emailer_provisioning` (operation_token CHAR(48) PRIMARY KEY); INSERT INTO `{db}`.`_emailer_provisioning` VALUES ('{owner}');")
+        else:
+            raise SetupError('The reserved database identity could not be checked. No existing database was changed.')
+        self.state['database_created'] = True
+        self.save()
         database_host = 'localhost' if 'unix_socket' in urllib.parse.parse_qs(params.query) else '127.0.0.1'
-        sql = f"CREATE DATABASE IF NOT EXISTS `{db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS '{db}'@'{database_host}' IDENTIFIED BY '{password}'; GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, TRIGGER ON `{db}`.* TO '{db}'@'{database_host}';"
-        self.database_run(['--batch'], data=sql)
-        owner = self.state['database_owner']
-        self.database_run(['--batch'], data=f"CREATE TABLE IF NOT EXISTS `{db}`.`_emailer_provisioning` (operation_token CHAR(48) PRIMARY KEY); INSERT IGNORE INTO `{db}`.`_emailer_provisioning` VALUES ('{owner}');")
+        users = self.database_run(['-NBe', f"SELECT COUNT(*) FROM mysql.user WHERE User='{db}'"]).strip()
+        if users == '0':
+            self.database_run(['--batch'], data=f"CREATE USER '{db}'@'{database_host}' IDENTIFIED BY '{password}';")
+        elif users != '1':
+            raise SetupError('The dedicated database account name is already in use. Existing accounts and privileges were preserved.')
+        owned = self.database_run(['-NBe', f"SELECT COUNT(*) FROM mysql.user WHERE User='{db}' AND Host='{database_host}' AND plugin='mysql_native_password' AND authentication_string=PASSWORD('{password}')"]).strip()
+        grants = self.database_run(['-NBe', f"SHOW GRANTS FOR '{db}'@'{database_host}'"]).splitlines() if owned == '1' else []
+        if owned != '1' or not grants or any('WITH GRANT OPTION' in grant or (not grant.startswith('GRANT USAGE ON *.* TO ') and f' ON `{db}`.* TO ' not in grant) for grant in grants):
+            raise SetupError('The reserved database account does not match this operation or has unrelated privileges. It was preserved; restore this operation’s original dedicated account before retrying.')
+        self.database_run(['--batch'], data=f"GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, TRIGGER ON `{db}`.* TO '{db}'@'{database_host}';")
 
     def environment(self):
         values = {}
@@ -630,6 +685,10 @@ class Installer:
     def application(self):
         if self.application_completed():
             return
+        if self.state.get('empty_baseline_reset'):
+            self.database()  # Only a durably verified empty baseline reset can recreate an absent DB.
+            self.state.pop('empty_baseline_reset')
+            self.save()
         db = self.state['database']
         # A failed baseline DDL is recoverable only before ANY administrator/input data exists.
         # Ownership marker belongs solely to this fresh-install operation, never an existing app.
@@ -644,8 +703,13 @@ class Installer:
             app_table = self.database_run(['-NBe', f"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{db}' AND table_name='app_user'"]).strip()
             if app_table == '1' and self.database_run(['-NBe', f'SELECT COUNT(*) FROM `{db}`.app_user']).strip() != '0':
                 raise SetupError('An account exists in an incomplete schema. It was preserved; use the recovery reference before continuing.')
-            self.database_run(['--batch'], data=f'DROP DATABASE `{db}`; CREATE DATABASE `{db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;')
+            self.state['database_created'] = False
+            self.state['empty_baseline_reset'] = True
+            self.save()  # Empty baseline recreation may resume after DROP but before CREATE.
+            self.database_run(['--batch'], data=f'DROP DATABASE `{db}`;')
             self.database()
+            self.state.pop('empty_baseline_reset')
+            self.save()
             print('Recovered this operation’s interrupted empty baseline schema. No administrator or campaign data existed.')
         self.state['migration_started'] = True
         self.save()
@@ -656,13 +720,17 @@ class Installer:
             raise SetupError('Account setup was interrupted before completion. Your saved settings were retained. Start this same setup file again to finish; background services and the public website were not enabled.')
 
     def service_file(self, name, content):
-        durable(Path('/etc/systemd/system') / name, content, 0o644)
+        self.check_unit(name)
+        self.claims().write(Path('/etc/systemd/system') / name, content, 0o644)
 
     def services(self):
         runtime = self.config / 'runtime.env'
         database_service = 'emailer-database.service' if self.database_profile == 'isolated' else 'mariadb.service'
         socket_path = f'/run/{self.name}-fpm/php.sock'
-        durable(self.config / 'fpm.conf', f'''[global]
+        self.claims().check_all()
+        for suffix in ('fpm.service', 'worker.service', 'scheduler.service', 'scheduler.timer', 'operations.service', 'operations.timer'):
+            self.check_unit(self.name + '-' + suffix)
+        self.claims().write(self.config / 'fpm.conf', f'''[global]
 pid = /run/{self.name}-fpm/php.pid
 error_log = syslog
 daemonize = no
@@ -723,36 +791,42 @@ WantedBy=multi-user.target
                 interval = '60s' if role == 'scheduler' else '15min'
                 self.service_file(self.name + '-' + role + '.timer', f'[Unit]\nDescription={self.product} {role} timer\n[Timer]\nOnBootSec=60s\nOnUnitActiveSec={interval}\nPersistent=true\n[Install]\nWantedBy=timers.target\n')
         run(['/usr/sbin/php-fpm8.4', '--test', '--fpm-config', str(self.config / 'fpm.conf')])
+        self.claims().check_all()
+        for suffix in ('fpm.service', 'worker.service', 'scheduler.service', 'scheduler.timer', 'operations.service', 'operations.timer'):
+            self.check_unit(self.name + '-' + suffix)
         run(['systemctl', 'daemon-reload'])
         for unit in ('fpm.service', 'worker.service', 'scheduler.timer', 'operations.timer'):
             run(['systemctl', 'enable', '--now', self.name + '-' + unit])
         run(['systemctl', 'start', self.name + '-scheduler.service'])
         # Self-contained least-privilege command launcher, no shell expansion of runtime secrets.
-        command = (self.bundle / 'command.py').read_text().replace('@NAME@', self.name).replace('@USER@', self.user).replace('@RUNTIME_FILE@', str(runtime)).replace('@CURRENT_RELEASE@', str(self.base / 'releases/current'))
-        launcher = '#!/usr/bin/python3\n' + (self.bundle / 'runtime_env.py').read_text() + '\n' + command.partition('\n')[2]
-        durable('/usr/local/sbin/' + self.name, launcher, 0o755)
+        launcher = generated_launcher(self.bundle, self.name, self.user, runtime, self.base / 'releases/current')
+        self.claims().write('/usr/local/sbin/' + self.name, launcher, 0o755)
 
     def validated_site(self, text, enabled=None):
+        claims = self.claims()
+        claims.check_all()
+        self.web.check_assignment(self.state['hostname'], self.site)
         previous = self.site.read_bytes() if self.site.exists() else None
-        linked = enabled is not None and not enabled.exists()
-        durable(self.site, text, 0o644)
-        if linked:
-            enabled.symlink_to(self.site)
+        linked = enabled is not None and claims.proof(enabled) is None
+        claims.write(self.site, text, 0o644)
+        if enabled is not None:
+            claims.write(enabled, str(self.site), link=True)
         try:
             run(self.web.check_command)
         except SetupError:
             if previous is None:
-                self.site.unlink(missing_ok=True)
+                claims.remove(self.site)
             else:
-                durable(self.site, previous, 0o644)
+                claims.write(self.site, previous, 0o644)
             if linked:
-                enabled.unlink(missing_ok=True)
+                claims.remove(enabled)
             raise SetupError('The proposed Emailer website failed web-server validation. Its previous file was restored; the web server was not reloaded. Correct the reported website conflict and start setup again.') from None
 
     def website(self):
         host = self.state['hostname']
         webroot = Path('/var/lib') / (self.name + '-acme')
         for directory in (webroot, webroot / '.well-known', webroot / '.well-known/acme-challenge'):
+            self.claims().directory(directory, 0, 0, 0o755)
             root_directory(directory, 0, 0o755)
         self.web.modules(run)
         base = self.web.site(hostname=host, name=self.name, public=str(self.base / 'releases/current/public'), webroot=str(webroot))
@@ -770,7 +844,7 @@ WantedBy=multi-user.target
         https = self.web.site(hostname=host, name=self.name, public=str(self.base / 'releases/current/public'), webroot=str(webroot), certificate=f'/etc/letsencrypt/live/{host}/fullchain.pem', certificate_key=f'/etc/letsencrypt/live/{host}/privkey.pem')
         self.validated_site(https)
         run(['systemctl', 'reload', self.web.service])
-        durable('/etc/letsencrypt/renewal-hooks/deploy/' + self.name, '#!/bin/sh\n' + ' '.join(self.web.check_command) + ' && systemctl reload ' + self.web.service + '\n', 0o755)
+        self.claims().write('/etc/letsencrypt/renewal-hooks/deploy/' + self.name, '#!/bin/sh\n' + ' '.join(self.web.check_command) + ' && systemctl reload ' + self.web.service + '\n', 0o755)
         run(['systemctl', 'enable', '--now', 'certbot.timer'])
 
     def recovery(self):
@@ -824,6 +898,7 @@ WantedBy=multi-user.target
         ServicePolicy(self).recover()
         self.preflight()
         self.initialize()
+        self.claims().reserve(self.reserved_files() + [Path('/var/lib') / (self.name + '-acme'), self.base, self.base / 'releases', self.private.parent, self.private, self.keys, self.backups, self.config])
         if 'Checking application health and initial backup' in self.state['completed']:
             self.state['completed'].remove('Checking application health and initial backup')
         for name, action in [('Installing supported dependencies', self.dependencies), ('Verifying the production runtime', self.verify_runtime),

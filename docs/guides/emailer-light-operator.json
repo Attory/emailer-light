@@ -1,6 +1,6 @@
 {
   "title": "Light operator and troubleshooting reference",
-  "subtitle": "Version 1.2.0 | Exceptional hosting, updates and recovery",
+  "subtitle": "Version 1.2.1 | Exceptional hosting, updates and recovery",
   "blocks": [
     {
       "type": "p",
@@ -140,7 +140,7 @@
     },
     {
       "type": "p",
-      "text": "Fresh redacted diagnostics are under <code>/var/lib/emailer-light-installer/last-error.json</code>. Managed operations use <code>/etc/emailer-light/installer/&lt;edition&gt;/1.2.0/last-error.json</code>. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status."
+      "text": "Fresh redacted diagnostics are under <code>/var/lib/emailer-light-installer/last-error.json</code>. Managed operations use <code>/etc/emailer-light/installer/&lt;edition&gt;/1.2.1/last-error.json</code>. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status."
     },
     {
       "type": "h2",
@@ -267,6 +267,14 @@
     {
       "type": "p",
       "text": "Acceptance uses disposable Ubuntu/Debian VMs and isolated synthetic SMTP. Local ACME HTTP-01 tests verify routing, certificate deployment, HTTPS and retry integration against a local validating CA. No dedicated non-production public hostname/DNS access was available: public ACME staging issuance remains unverified. This limitation does not claim a trusted public certificate; the real installer must successfully obtain and validate one for the customer hostname before completion. Production installations and production DNS were untouched."
+    },
+    {
+      "type": "h2",
+      "text": "A reserved resource changed between setup runs"
+    },
+    {
+      "type": "p",
+      "text": "If setup says a reserved host resource is occupied or changed, it has kept that file, link, service, directory or account unchanged. Keep this setup file and its saved operation. Restore the original operation-owned resource, or move the unrelated conflicting resource to another name, then retry. Do not delete the setup journal or edit its ownership receipts. A custom pre-existing Emailer command launcher is also preserved; keep a copy under a different command name before updating. The installer generates the supported replacement automatically."
     }
   ]
 }

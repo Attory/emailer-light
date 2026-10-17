@@ -40,6 +40,22 @@ class WebServer:
             return re.findall(r'(?:namevhost|alias|wild alias|default server)\s+([^\s(]+)', configuration) + re.findall(r'(?m)^\s*[^\s]+:(?:80|443)\s+([^\s(]+)\s+\(', configuration)
         return [name for declaration in re.findall(r'server_name\s+([^;]+);', configuration) for name in declaration.split()]
 
+    def check_assignment(self, hostname, owned_site):
+        # Parsed inventories include other files added while setup was interrupted.
+        own = False
+        foreign = []
+        for line in self.configuration().splitlines():
+            if self.kind == 'apache2':
+                source = re.search(r'\((/.*):[0-9]+\)', line)
+            else:
+                source = re.match(r'# configuration file (/.*):$', line)
+            if source:
+                own = Path(source.group(1)).resolve() == Path(owned_site).resolve()
+            if not own:
+                foreign.append(line)
+        if self.conflicts(hostname, self.names('\n'.join(foreign))):
+            raise self.error('The saved Emailer address is now assigned to another website. That website was preserved. Remove the conflicting hostname assignment or restore the original dedicated Emailer address, then retry this setup file.')
+
     @staticmethod
     def conflicts(host, names):
         import fnmatch

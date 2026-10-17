@@ -51,7 +51,7 @@ class Manager:
             product = selected.get('product', '')
             if not re.fullmatch(r'emailer-[a-z]+', product):
                 raise ManagementError('The active installation edition is invalid.')
-            candidates = [Path('/etc') / (self.root.name + '-' + product.removeprefix('emailer-') + '-' + suffix) / 'runtime.env' for suffix in ('110', '120')]
+            candidates = [Path('/etc') / (self.root.name + '-' + product.removeprefix('emailer-') + '-' + suffix) / 'runtime.env' for suffix in ('110', '120', '121')]
             expected = Path(selected.get('runtime', ''))
             if selected.get('format') != 'emailer-active-installation-v1' or expected not in candidates:
                 raise ManagementError('The active installation pointer is invalid. It was preserved.')
@@ -95,6 +95,34 @@ class Manager:
         self.bootstrap = None
         self.package = None
         self.environment = None
+        self.validate_launcher()
+
+    def validate_launcher(self):
+        launcher = Path('/usr/local/sbin') / self.prefix
+        if not os.path.lexists(launcher):
+            return  # Published pre-automated installations did not require this launcher.
+        from provision import generated_launcher
+        values = read_environment(self.configuration)
+        account = pwd.getpwuid(Path(values['EMAILER_SECRET_KEY_FILE']).stat().st_uid)
+        expected = generated_launcher(self.installer.bundle, self.configuration.parent.name, account.pw_name, self.configuration, self.releases / 'current')
+        actual = protected(launcher, public=True).read_bytes()
+        if actual == expected.encode():
+            return
+        handoff = self.record.get('host_handoff', {})
+        entry = handoff.get('resource_claims', {}).get(str(launcher))
+        if entry is not None:
+            from resources import ResourceClaims
+            ResourceClaims(handoff['resource_claims'], self.save, ManagementError).check(launcher)
+            name = self.prefix + '-' + self.installer.product.removeprefix('emailer-') + '-' + self.installer.version.replace('.', '')
+            candidates = [(name, name, Path('/etc') / name / 'runtime.env')]
+            source_user = handoff.get('source_user')
+            if isinstance(source_user, str) and re.fullmatch(r'[a-z_][a-z0-9_-]*', source_user):
+                candidates.append((self.original_configuration.parent.name, source_user, self.original_configuration))
+            for candidate_name, user, configuration in candidates:
+                candidate = generated_launcher(self.installer.bundle, candidate_name, user, configuration, self.releases / 'current')
+                if actual == candidate.encode():
+                    return
+        raise ManagementError('The Emailer command name is occupied by an unrelated or custom launcher. It was preserved and was not executed. Move that command to another name or restore the original generated Emailer launcher, then retry setup; no replacement launcher needs to be assembled.')
 
     def save(self):
         self.installer.durable(self.record_file, json.dumps(self.record, indent=2) + '\n')
@@ -342,8 +370,8 @@ class Manager:
         operation = self.root / ('native-updates/light-' + source_version + '-to-' + self.installer.version + '.json')
         if self.source_version == self.installer.version and choice == '1' and not operation.exists():
             raise ManagementError('This release is already installed. Choose Check the installation.')
-        if source_version not in ('1.0.0', '1.1.0'):
-            raise ManagementError('This installer supports native Light updates from 1.0.0 or 1.1.0.')
+        if source_version not in ('1.0.0', '1.1.0', '1.2.0'):
+            raise ManagementError('This installer supports native Light updates from 1.0.0, 1.1.0 or 1.2.0.')
         self.record['native_source'] = source_version
         self.save()
         source = self.package.parent / ('emailer-light-' + source_version + '.zip')

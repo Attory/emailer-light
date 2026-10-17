@@ -124,6 +124,8 @@ class RecoveryAndDiagnosticContract(unittest.TestCase):
                 handoff.state.update(phase='prepared', site_bytes=base64.b64encode(b'source site').decode(), source_active_pointer={'bytes': base64.b64encode(previous).decode(), 'mode': 0o600, 'uid': os.getuid(), 'gid': os.getgid()} if existed else None)
                 handoff.hold = root / 'hold'
                 handoff.apply_site = lambda text: None
+                handoff.owned_target_units = lambda: []
+                handoff.claims = lambda: types.SimpleNamespace(remove=lambda path: path.unlink(missing_ok=True), write=lambda path, content, mode=0o600, **kwargs: write(path, content, mode))
                 with patch('host.subprocess.run'):
                     handoff.recover_host()
                 if existed:
