@@ -20,7 +20,7 @@ final readonly class NativeSchemaUpdate
 
     public static function supports(string $source, string $target): bool
     {
-        return ('1.0.0' === $source && '1.1.0' === $target) || (\in_array($source, ['1.0.0', '1.1.0'], true) && '1.2.0' === $target);
+        return ('1.0.0' === $source && '1.1.0' === $target) || (\in_array($source, ['1.0.0', '1.1.0'], true) && '1.2.0' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0'], true) && '1.2.1' === $target);
     }
 
     /** @return array{status: string, delivery_held: bool} */
@@ -436,31 +436,8 @@ final readonly class NativeSchemaUpdate
                 $roots[$name] = $root;
             }
         }
-        ksort($roots);
-        $files = [];
-        foreach ($roots as $name => $root) {
-            if (is_link($root) || !is_dir($root) || realpath($root) !== $root) {
-                throw new \RuntimeException('An asset root is missing or linked.');
-            }
-            $paths = [$root];
-            $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS), \RecursiveIteratorIterator::SELF_FIRST);
-            foreach ($iterator as $entry) {
-                if (!$entry instanceof \SplFileInfo || $entry->isLink() || (!$entry->isFile() && !$entry->isDir())) {
-                    throw new \RuntimeException('An asset path is unsafe.');
-                }
-                $paths[] = $entry->getPathname();
-            }
-            sort($paths, SORT_STRING);
-            foreach ($paths as $path) {
-                $stat = lstat($path);
-                if (!\is_array($stat)) {
-                    throw new \RuntimeException('Asset metadata is unavailable.');
-                }
-                $files[$name.substr($path, \strlen($root))] = [$stat['uid'], $stat['gid'], $stat['mode'], is_file($path) ? hash_file('sha256', $path) : 'directory'];
-            }
-        }
 
-        return hash('sha256', serialize($files));
+        return NativeAssetInventory::capture($roots, $this->privateDirectory);
     }
 
     /** @param array<string, mixed> $manifest */

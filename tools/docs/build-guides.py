@@ -54,7 +54,7 @@ styles.add(ParagraphStyle(name='CaptionGuide', fontName='Guide', fontSize=8, lea
 styles.add(ParagraphStyle(name='CodeGuide', fontName='GuideCode', fontSize=8, leading=12, backColor=colors.HexColor('#eef3f0'), borderPadding=10, spaceBefore=8, spaceAfter=14))
 styles.add(ParagraphStyle(name='TableGuide', parent=styles['BodyText'], fontSize=8, leading=12, spaceAfter=0))
 
-release_base = 'https://github.com/' + json.loads((root / 'composer.json').read_text())['name'] + '/releases/download/v1.2.0/'
+release_base = 'https://github.com/' + json.loads((root / 'composer.json').read_text())['name'] + '/releases/download/v1.2.1/'
 local_guides = {path.stem + '.html' for path in (root / 'docs/guides').glob('*.json')}
 
 def pdftext(text):
@@ -69,7 +69,7 @@ def footer(canvas, doc):
     canvas.line(44, 42, 551, 42)
     canvas.setFont('Guide', 8)
     canvas.setFillColor(colors.HexColor('#526762'))
-    canvas.drawString(44, 28, doc.title + ' | 1.2.0')
+    canvas.drawString(44, 28, doc.title + ' | 1.2.1')
     canvas.drawRightString(551, 28, str(doc.page))
     canvas.restoreState()
 

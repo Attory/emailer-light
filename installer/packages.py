@@ -1,4 +1,5 @@
 """Authenticated Ubuntu PHP source and non-destructive package transactions."""
+from contextlib import contextmanager
 from pathlib import Path
 import os
 import re
@@ -57,6 +58,42 @@ def validate_plan(output, error, compatible_packages=()):
         if match and match.group(1).startswith('php8.4-'):
             # The existing pool can belong to another website; keep its patch too.
             raise error('The required PHP 8.4 extensions need a different patch than an existing PHP 8.4 installation. Setup kept that runtime unchanged; restore matching signed packages or arrange its normal host maintenance first.')
+
+
+@contextmanager
+def retained_preferences(output, compatible, directory, error):
+    """Per-command constraints avoid APT's optional upgrades; host policy stays intact."""
+    retained = {}
+    for line in output.splitlines():
+        match = re.match(r'^Inst ([a-z0-9][a-z0-9+.:~-]*) \[([a-zA-Z0-9+.:~_-]+)\]', line)
+        if match and match.group(1) not in compatible and not match.group(1).startswith('php8.4-'):
+            retained[match.group(1)] = match.group(2)
+    if not retained:
+        yield []
+        return
+    original = Path('/etc/apt/preferences')
+    content = b''
+    if original.exists() or original.is_symlink():
+        metadata = original.lstat()
+        if original.is_symlink() or not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != 0 or metadata.st_nlink != 1 or metadata.st_mode & 0o022 or metadata.st_size > 1048576:
+            raise error('The host APT preference file is unsafe. It was preserved; restore protected root-owned package preferences before retrying.')
+        descriptor = os.open(original, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(descriptor, 'rb') as stream:
+            content = stream.read()
+    for package, version in sorted(retained.items()):
+        content += f'\n\nPackage: {package}\nPin: version {version}\nPin-Priority: 1001\n'.encode()
+    descriptor, temporary = tempfile.mkstemp(prefix='retained-host-packages-', suffix='.pref', dir=directory)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, 'wb') as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        # The normal preferences.d directory remains active. The original main
+        # preferences are copied verbatim above; no global APT file is changed.
+        yield ['-o', 'Dir::Etc::preferences=' + temporary]
+    finally:
+        os.unlink(temporary)
 
 
 class HostLock:
