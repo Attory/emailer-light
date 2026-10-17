@@ -436,6 +436,7 @@ final readonly class NativeSchemaUpdate
                 $roots[$name] = $root;
             }
         }
+
         return NativeAssetInventory::capture($roots, $this->privateDirectory);
     }
 
