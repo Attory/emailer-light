@@ -430,36 +430,44 @@ class Installer:
             raise SetupError('The matching PHP 8.4 patch packages are unavailable. Setup kept that PHP version unchanged. Restore matching signed extension packages or arrange normal maintenance for the existing PHP runtime, then retry.')
         if plan.returncode:
             raise SetupError('The supported package transaction could not be resolved. No packages were installed; inspect apt-cache policy for the required PHP 8.4 packages and retain the current host packages.')
-        validate_plan(plan.stdout, SetupError, ('php-common', 'libgd3') if getattr(self, 'system', ('debian', '13'))[0] == 'ubuntu' else ())
-        planned = {}
-        for line in plan.stdout.splitlines():
-            match = re.match(r'^Inst ([A-Za-z0-9+.:~-]+)(?: \[([^]]+)\])? \(([^ ]+)', line)
-            if match:
-                planned[match.group(1)] = {'version': match.group(3), 'previous': match.group(2)}
-        receipt = self.state_dir / 'apt-plan.json'
-        durable(receipt, json.dumps({'format': 'emailer-apt-plan-v1', 'packages': planned}) + '\n')
-        gate = '/usr/bin/python3 ' + str(self.bundle / 'apt-guard.py') + ' ' + str(receipt)
-        with ServicePolicy(self) as policy:
-            installation = subprocess.run(['apt-get', '-o', 'APT::Keep-Fds::=' + str(policy.descriptor), '-o', 'DPkg::Pre-Install-Pkgs::=' + gate, 'install', '-y', '--no-remove', '--no-install-recommends', '-o', 'Dpkg::Options::=--force-confold', *missing],
-                                      capture_output=True, text=True, pass_fds=(policy.descriptor,), env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive', 'NEEDRESTART_MODE': 'l', 'NEEDRESTART_SUSPEND': '1'})
-        if installation.returncode:
-            evidence = installation.stdout + installation.stderr
-            pinned_php = any(name.startswith('php8.4-') and '=' in name for name in missing)
-            if 'EMAILER_APT_PLAN_CHANGED' in evidence:
-                reason = 'The actual host package transaction changed after validation. No package was unpacked. Let other operating-system package tasks finish, then rerun setup.'
-            elif pinned_php and re.search(r'was not found|not available|no installation candidate|unmet dependencies|held broken packages', evidence, re.I):
-                reason = 'The configured repositories no longer offer extensions matching the PHP 8.4 patch already used on this server. Setup kept that PHP version unchanged to protect existing websites. Restore the matching signed packages, or arrange a coordinated PHP patch update for those websites, then run setup again. A separate supported VPS also avoids this conflict.'
-            elif re.search(r'Could not get lock|Unable to acquire.*lock|dpkg was interrupted', evidence, re.I):
-                reason = 'Another operating-system package task is running, or an earlier task was interrupted. Finish that operating-system package task before starting setup again.'
-            elif re.search(r'Unable to locate package|no installation candidate', evidence, re.I):
-                reason = 'The configured operating-system repositories do not offer the required supported packages. Enable the supported OS repositories and the documented Ubuntu PHP source, then start setup again; setup will not add an unauthenticated repository.'
-            elif re.search(r'No space left|not enough free space', evidence, re.I):
-                reason = 'The operating system has insufficient free space for the missing packages. Free space on the reported filesystem before starting setup again.'
-            elif re.search(r'Could not resolve|Temporary failure resolving|Failed to fetch|Connection failed|Connection timed out', evidence, re.I):
-                reason = 'The package manager could not download a required package. Restore its repository connection, DNS or package-download proxy, then start setup again.'
-            else:
-                reason = 'The package manager could not install the missing supported packages. Its package manager records details in /var/log/apt/term.log. Resolve that reported package error, then start setup again.'
-            raise SetupError(reason + ' Completed setup steps and existing configuration files were retained.')
+        from packages import retained_preferences
+        compatible = ('php-common', 'libgd3') if getattr(self, 'system', ('debian', '13'))[0] == 'ubuntu' else ()
+        retained = ', '.join(name + '=' + version for name, version in re.findall(r'^Inst ([a-z0-9][a-z0-9+.:~-]*) \[([a-zA-Z0-9+.:~_-]+)\]', plan.stdout, re.M) if name not in compatible and not name.startswith('php8.4-'))
+        with retained_preferences(plan.stdout, compatible, self.state_dir, SetupError) as preferences:
+            if preferences:
+                plan = subprocess.run(['apt-get', *preferences, '--simulate', 'install', '--no-install-recommends', *missing], capture_output=True, text=True)
+                if plan.returncode:
+                    raise SetupError('The required dependencies cannot be installed while retaining these existing host package versions: ' + retained + '. No packages were changed. Arrange normal host maintenance for that specific dependency, or use a separate supported VPS; setup will not upgrade shared services.')
+            validate_plan(plan.stdout, SetupError, compatible)
+            planned = {}
+            for line in plan.stdout.splitlines():
+                match = re.match(r'^Inst ([A-Za-z0-9+.:~-]+)(?: \[([^]]+)\])? \(([^ ]+)', line)
+                if match:
+                    planned[match.group(1)] = {'version': match.group(3), 'previous': match.group(2)}
+            receipt = self.state_dir / 'apt-plan.json'
+            durable(receipt, json.dumps({'format': 'emailer-apt-plan-v1', 'packages': planned}) + '\n')
+            gate = '/usr/bin/python3 ' + str(self.bundle / 'apt-guard.py') + ' ' + str(receipt)
+            with ServicePolicy(self) as policy:
+                installation = subprocess.run(['apt-get', *preferences, '-o', 'APT::Keep-Fds::=' + str(policy.descriptor), '-o', 'DPkg::Pre-Install-Pkgs::=' + gate, 'install', '-y', '--no-remove', '--no-install-recommends', '-o', 'Dpkg::Options::=--force-confold', *missing],
+                                          capture_output=True, text=True, pass_fds=(policy.descriptor,), env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive', 'NEEDRESTART_MODE': 'l', 'NEEDRESTART_SUSPEND': '1'})
+            if installation.returncode:
+                evidence = installation.stdout + installation.stderr
+                pinned_php = any(name.startswith('php8.4-') and '=' in name for name in missing)
+                if 'EMAILER_APT_PLAN_CHANGED' in evidence:
+                    reason = 'The actual host package transaction changed after validation. No package was unpacked. Let other operating-system package tasks finish, then rerun setup.'
+                elif pinned_php and re.search(r'was not found|not available|no installation candidate|unmet dependencies|held broken packages', evidence, re.I):
+                    reason = 'The configured repositories no longer offer extensions matching the PHP 8.4 patch already used on this server. Setup kept that PHP version unchanged to protect existing websites. Restore the matching signed packages, or arrange a coordinated PHP patch update for those websites, then run setup again. A separate supported VPS also avoids this conflict.'
+                elif re.search(r'Could not get lock|Unable to acquire.*lock|dpkg was interrupted', evidence, re.I):
+                    reason = 'Another operating-system package task is running, or an earlier task was interrupted. Finish that operating-system package task before starting setup again.'
+                elif re.search(r'Unable to locate package|no installation candidate', evidence, re.I):
+                    reason = 'The configured operating-system repositories do not offer the required supported packages. Enable the supported OS repositories and the documented Ubuntu PHP source, then start setup again; setup will not add an unauthenticated repository.'
+                elif re.search(r'No space left|not enough free space', evidence, re.I):
+                    reason = 'The operating system has insufficient free space for the missing packages. Free space on the reported filesystem before starting setup again.'
+                elif re.search(r'Could not resolve|Temporary failure resolving|Failed to fetch|Connection failed|Connection timed out', evidence, re.I):
+                    reason = 'The package manager could not download a required package. Restore its repository connection, DNS or package-download proxy, then start setup again.'
+                else:
+                    reason = 'The package manager could not install the missing supported packages. Its package manager records details in /var/log/apt/term.log. Resolve that reported package error, then start setup again.'
+                raise SetupError(reason + ' Completed setup steps and existing configuration files were retained.')
 
     def verify_runtime(self):
         archive = self.bundle / self.meta['archive']

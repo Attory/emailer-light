@@ -356,3 +356,29 @@ class ResourceOwnership(unittest.TestCase):
             installer.application()
         self.assertEqual(['resume-owned-database', 'save', 'schema-query'], events)
         self.assertNotIn('empty_baseline_reset', installer.state)
+
+    def test_unnecessary_apt_upgrade_is_constrained_without_changing_host_preferences(self):
+        from packages import retained_preferences
+        original = self.root / 'host.preferences'
+        original.write_text('Package: unrelated\nPin: release o=Ubuntu\nPin-Priority: 500\n')
+        original_bytes = original.read_bytes()
+        real_path = Path
+        def selected_path(value):
+            return original if str(value) == '/etc/apt/preferences' else real_path(value)
+        plan = 'Inst zstd [1.5.5+dfsg2-2build1] (1.5.5+dfsg2-2build1.1 Ubuntu)\nInst php-common [2:92] (2:101 PPA)\n'
+        with patch('packages.Path', side_effect=selected_path):
+            with retained_preferences(plan, ('php-common', 'libgd3'), self.root, SetupError) as options:
+                preferences = Path(options[1].split('=', 1)[1])
+                text = preferences.read_text()
+                self.assertTrue(text.startswith(original_bytes.decode()))
+                self.assertIn('Package: zstd\nPin: version 1.5.5+dfsg2-2build1', text)
+                self.assertNotIn('Package: php-common', text)
+                self.assertEqual(0o600, stat.S_IMODE(preferences.stat().st_mode))
+                self.assertEqual(original_bytes, original.read_bytes())
+            self.assertFalse(preferences.exists())
+            with self.assertRaises(InterruptedError):
+                with retained_preferences(plan, (), self.root, SetupError) as options:
+                    interrupted = Path(options[1].split('=', 1)[1])
+                    raise InterruptedError()
+            self.assertFalse(interrupted.exists())
+        self.assertEqual(original_bytes, original.read_bytes())

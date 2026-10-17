@@ -34,3 +34,16 @@ required before publication. Earlier 1.2.0 results remain recorded separately an
 are not presented as final 1.2.1 acceptance. Public ACME staging issuance remains
 unverified: no dedicated non-production public DNS authority has been supplied.
 All host tests use owned disposable VMs and synthetic data only.
+
+The Ubuntu24 dependency rehearsal also detected APT unnecessarily proposing an
+existing zstd upgrade. A private per-command preference snapshot retains installed
+versions instead; simulation and the exact locked pre-unpack guard still reject
+any incompatible or changed transaction. No global package preferences or APT
+automatic/manual marks are modified. Actual constrained Ubuntu24 MariaDB package
+simulation passed without installing packages.
+
+The fresh-Light120 native update rehearsal found that never-uploaded templates
+legitimately have no template-assets directory. The native asset fingerprint now
+represents that exact protected absent directory without creating it. Unknown,
+linked or traversing asset roots remain unsupported. The existing populated-tree
+fingerprint is unchanged, preserving earlier recovery records.
