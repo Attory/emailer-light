@@ -66,6 +66,35 @@ SSLCertificateKeyFile /etc/letsencrypt/live/mailer/privkey.pem
             site.write_text(base)
             self.assertEqual(site,web.source_site(Path('/srv/emailer-light/releases'),'mailer.example.test')[0])
 
+    def test_handoff_preserves_custom_routes_and_accepts_generated_sites(self):
+        releases=Path('/srv/emailer-light/releases');host='mailer.example.test'
+        for kind in ('apache2','nginx'):
+            with self.subTest(kind=kind),tempfile.TemporaryDirectory() as directory:
+                web=WebServer(kind,SetupError);web.directory=Path(directory)
+                (web.directory/'sites-enabled').mkdir()
+                site=web.directory/'sites-enabled/emailer.conf'
+                for maintenance in (False,True):
+                    text=web.site(hostname=host,name='emailer-light',public=releases/'current/public',webroot='/var/lib/emailer-acme',certificate='/etc/tls/fullchain.pem',certificate_key='/etc/tls/key.pem',maintenance=maintenance)
+                    site.write_text(text)
+                    self.assertEqual(site,web.source_site(releases,host)[0])
+                if kind=='apache2':
+                    extras=['VirtualDocumentRoot /srv/unrelated/%0','VirtualScriptAliasIP /srv/unrelated/%0','RewriteRule ^/legacy/(.*)$ /srv/unrelated/$1 [L]','RewriteRule ^ - [H=application/x-httpd-php,L]','RewriteRule ^ index.php [P,L]', '<Location /legacy/>\nSetHandler "proxy:http://127.0.0.1:8080"\n</Location>']
+                    for extra in extras:
+                        changed=text.replace('</VirtualHost>',extra+'\n</VirtualHost>',1);site.write_text(changed)
+                        with self.subTest(extra=extra),self.assertRaises(SetupError):web.source_site(releases,host)
+                        self.assertEqual(changed,site.read_text())
+                else:
+                    extras=['location /legacy/ { proxy_pass http://127.0.0.1:8080; }','include /etc/nginx/other-routes.conf;','location /legacy/ { uwsgi_pass unix:/run/unrelated.sock; }','set $fragment "#"; location /legacy/ { proxy_pass http://127.0.0.1:8080; }', 'rewrite ^ /unrelated last;', 'location /legacy/ { fastcgi_pass unix:/run/legacy.sock; fastcgi_param SCRIPT_FILENAME /srv/unrelated/index.php; }']
+                    for extra in extras:
+                        changed=text.replace('server {','server {\n'+extra,1);site.write_text(changed)
+                        with self.subTest(extra=extra),self.assertRaises(SetupError):web.source_site(releases,host)
+                        self.assertEqual(changed,site.read_text())
+                    # The published1.1 installer used this same standard FastCGI
+                    # include and dedicated HTTP/HTTPS shape (no custom routing).
+                    published=(Path(__file__).parent/'fixtures/nginx-1.1.0.conf').read_text()
+                    site.write_text('# Ordinary full-line comment\n'+published.replace('include fastcgi_params;','include fastcgi_params; # Ordinary end-line comment'))
+                    self.assertEqual(site,web.source_site(releases,host)[0])
+
     def test_target_handoff_is_versioned_and_uses_apache_without_nginx(self):
         manager=types.SimpleNamespace(prefix='emailer-light',installer=types.SimpleNamespace(product='emailer-light',version='1.2.0'),record={},error=ManagementError,releases=Path('/srv/emailer-light/releases'))
         handoff=HostHandoff(manager)
@@ -142,6 +171,36 @@ class PackageServiceRecovery(unittest.TestCase):
         self.parent_died()
         with self.assertRaisesRegex(SetupError,'administrator policy'):self.policy.recover()
         self.assertEqual(changed,self.policy.path.read_bytes());self.assertTrue(self.policy.receipt.exists())
+
+    def test_absent_policy_deletion_is_committed_before_receipt_retirement(self):
+        self.policy.__enter__();self.parent_died()
+        sync=self.policy.sync_directory
+        def power_loss(path):
+            if path==self.policy.path.parent:
+                self.assertFalse(self.policy.path.exists())
+                self.assertTrue(self.policy.receipt.exists())
+                raise RuntimeError('power loss before policy deletion commit')
+            sync(path)
+        with patch.object(self.policy,'sync_directory',side_effect=power_loss),self.assertRaisesRegex(RuntimeError,'power loss'):
+            self.policy.recover()
+        self.assertTrue(self.policy.receipt.exists())
+        self.policy.recover();self.assertFalse(self.policy.receipt.exists())
+        self.assertFalse(self.policy.path.exists())
+
+    def test_shared_recovery_reservation_is_durable_before_policy_publication(self):
+        installer=types.SimpleNamespace(state_dir=self.root/'new-shared-state',durable=durable,error=SetupError)
+        policy=ServicePolicy(installer);policy.path=self.root/'policy-new'
+        policy.lock=HostLock(self.root/'other.lock',SetupError)
+        def power_loss(path):
+            self.assertEqual(self.root,path)
+            self.assertTrue((policy.root/'format').exists())
+            self.assertFalse(policy.path.exists())
+            raise RuntimeError('power loss after reservation rename')
+        with patch.object(policy,'sync_directory',side_effect=power_loss),self.assertRaisesRegex(RuntimeError,'reservation rename'):
+            policy.__enter__()
+        self.assertFalse(policy.path.exists());self.assertFalse(policy.receipt.exists())
+        with policy: self.assertTrue(policy.path.exists())
+        self.assertFalse(policy.path.exists())
 
     def test_linked_original_is_rejected_without_following_it(self):
         outside=self.root/'outside';outside.write_bytes(b'protected')

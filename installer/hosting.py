@@ -1,6 +1,7 @@
 """Bounded native web profiles; each generated site owns one hostname only."""
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 
@@ -142,6 +143,25 @@ class WebServer:
 }}
 '''
 
+    @staticmethod
+    def nginx_without_comments(text):
+        # A hash in a quoted/escaped argument is data, not the beginning of a
+        # comment. Keep real directives after it visible to adoption checks.
+        result=[];quote=None;escaped=False;comment=False
+        for char in text:
+            if comment:
+                if char=='\n': comment=False;result.append(char)
+                continue
+            if escaped: result.append(char);escaped=False;continue
+            if char=='\\': result.append(char);escaped=True;continue
+            if quote:
+                result.append(char)
+                if char==quote: quote=None
+            elif char in ('"',"'"): quote=char;result.append(char)
+            elif char=='#': comment=True
+            else: result.append(char)
+        return ''.join(result)
+
     def source_site(self, releases, hostname):
         sites=[]
         for enabled in (self.directory/'sites-enabled').iterdir():
@@ -157,8 +177,24 @@ class WebServer:
                 outside=re.sub(r'(?is)<VirtualHost\s+[^>]+>.*?</VirtualHost\s*>','',clean).strip()
                 listeners=[item[0].strip() for item in blocks]
                 roots=re.findall(r'(?im)^\s*DocumentRoot\s+"?([^\s"]+)"?\s*$',clean)
-                if outside or not blocks or len(set(listeners))!=len(listeners) or '*:443' not in listeners or any(value not in ('*:80','*:443') for value in listeners) or not roots or any(value!=root for value in roots) or re.search(r'(?im)^\s*(?:ProxyPass|ProxyPassMatch|ScriptAlias|AliasMatch|ScriptAliasMatch)\b',clean):
+                if outside or not blocks or len(set(listeners))!=len(listeners) or '*:443' not in listeners or any(value not in ('*:80','*:443') for value in listeners) or not roots or any(value!=root for value in roots) or re.search(r'(?im)^\s*(?:ProxyPass|ProxyPassMatch|ScriptAlias|AliasMatch|ScriptAliasMatch|Virtual(?:DocumentRoot|ScriptAlias)(?:IP)?)\b',clean):
                     raise self.error('The Apache file contains additional listeners, sites or document roots. It was preserved; automatic handoff requires one dedicated Emailer site on standard ports.')
+                for rule in re.findall(r'(?im)^\s*RewriteRule\s+([^\n]+)',clean):
+                    try:
+                        parts=shlex.split(rule)
+                    except ValueError:
+                        parts=[]
+                    allowed=(len(parts)==3 and (
+                        (parts[1]=='-' and parts[2] in ('[R=503,L]','[R=404,END]','[R=404,END,NC]')) or
+                        (parts[1]=='index.php' and parts[2]=='[END]') or
+                        (parts[1]==f'https://{hostname}%{{REQUEST_URI}}' and parts[2]=='[R=301,L,NE]')))
+                    if not allowed:
+                        raise self.error('The Apache file contains custom rewrite routing. It was preserved; isolate Emailer into its dedicated site before automatic handoff.')
+                files=re.findall(r'(?is)<Files\s+index\.php\s*>\s*(SetHandler\s+[^\n]+)\s*</Files\s*>',clean)
+                remainder=re.sub(r'(?is)<Files\s+index\.php\s*>\s*SetHandler\s+[^\n]+\s*</Files\s*>','',clean)
+                directories=re.findall(r'(?im)^\s*<Directory\s+([^>]+)>',clean)
+                if re.search(r'(?im)^\s*(?:SetHandler|AddHandler|Action|Redirect|RedirectMatch|ProxyPassReverse)\b|<\s*(?:Location|LocationMatch|FilesMatch|Proxy)\b',remainder) or len(files)>1 or any(not re.fullmatch(r'SetHandler\s+"proxy:unix:/run/[A-Za-z0-9_.-]+-fpm/php\.sock\|fcgi://localhost/"',value.strip()) for value in files) or any(value.strip('" ')!=root and not re.fullmatch(r'/[A-Za-z0-9_./-]+/\.well-known/acme-challenge',value.strip('" ')) for value in directories):
+                    raise self.error('The Apache file contains custom handlers or directory routing. It was preserved; automatic handoff requires a dedicated Emailer front controller.')
                 aliases=re.findall(r'(?im)^\s*Alias\s+([^\n]+)',clean)
                 if any(not re.fullmatch(r'/\.well-known/acme-challenge/\s+/[A-Za-z0-9_./-]+/\.well-known/acme-challenge/',alias.strip()) for alias in aliases):
                     raise self.error('The Apache file also serves an unrelated alias. It was preserved; isolate Emailer into its dedicated site before using this profile.')
@@ -169,6 +205,15 @@ class WebServer:
                 key=re.findall(r'(?im)^\s*SSLCertificateKeyFile\s+(/[A-Za-z0-9_./-]+)\s*$',text)
                 acme=re.findall(r'(?im)^\s*Alias\s+/\.well-known/acme-challenge/\s+(/[A-Za-z0-9_./-]+)/\.well-known/acme-challenge/\s*$',text)
             else:
+                clean=self.nginx_without_comments(text)
+                text=clean
+                includes=re.findall(r'\binclude\s+([^;]+);',clean)
+                if any(value.strip()!='fastcgi_params' for value in includes) or re.search(r'\b(?:proxy_pass|grpc_pass|uwsgi_pass|scgi_pass|memcached_pass|rewrite)\s+',clean):
+                    raise self.error('The Nginx file contains custom included or proxy routing. It was preserved; isolate Emailer into its dedicated site before automatic handoff.')
+                controllers=re.findall(r'location\s+=\s+/index\.php\s*\{([^{}]*)\}',clean)
+                remainder=re.sub(r'location\s+=\s+/index\.php\s*\{[^{}]*\}','',clean)
+                if len(controllers)!=1 or re.search(r'\bfastcgi_(?:pass|param|store|split_path_info)\s+',remainder) or re.findall(r'\bfastcgi_param\s+SCRIPT_FILENAME\s+([^;]+);',controllers[0])!=['$document_root/index.php'] or len(re.findall(r'\bfastcgi_pass\s+unix:/run/[A-Za-z0-9_./-]+\.sock\s*;',controllers[0]))!=1:
+                    raise self.error('The Nginx file contains custom FastCGI routing. It was preserved; automatic handoff requires only the dedicated Emailer index.php handler.')
                 names=re.findall(r'\bserver_name\s+([^;]+);',text)
                 if not names or any(name.strip()!=hostname for name in names):
                     raise self.error('The Emailer Nginx file also contains other website names. Keep its sites unchanged; this profile needs one dedicated Emailer hostname file.')

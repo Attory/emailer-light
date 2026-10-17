@@ -80,6 +80,12 @@ class DatabaseProfile:
     def save(self, state):
         self.i.durable(self.receipt, json.dumps(state,indent=2)+'\n')
 
+    @staticmethod
+    def sync_directory(path):
+        descriptor=os.open(path,os.O_RDONLY|os.O_DIRECTORY)
+        try:os.fsync(descriptor)
+        finally:os.close(descriptor)
+
     def configure_client(self):
         self.i.database_cli = [str(RELEASE / 'bin/mariadb'), '--no-defaults', '--protocol=socket', '--socket=' + SOCKET, '--user=root']
         self.i.database_environment = {'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8'}
@@ -196,6 +202,7 @@ class DatabaseProfile:
             try:
                 self.i.durable(staging/'installation.json',json.dumps(state)+'\n')
                 os.rename(staging,ROOT)
+                self.sync_directory(ROOT.parent)
             finally:
                 if staging.exists():
                     (staging/'installation.json').unlink(missing_ok=True);staging.rmdir()
@@ -205,6 +212,7 @@ class DatabaseProfile:
             try:
                 self.i.durable(staging/'emailer-owner',state['owner']+'\n')
                 os.chmod(staging,0o755);os.rename(staging,BASE)
+                self.sync_directory(BASE.parent)
             finally:
                 if staging.exists():
                     (staging/'emailer-owner').unlink(missing_ok=True);staging.rmdir()
@@ -258,7 +266,13 @@ log-error=/var/lib/emailer-database/data/error.log
                 if initial.is_symlink() or initial.stat().st_uid!=account.pw_uid:
                     raise self.i.error('The incomplete database staging folder has unexpected ownership. It was retained.')
                 shutil.rmtree(initial)
-            initial.mkdir(mode=0o700);os.chown(initial,account.pw_uid,account.pw_gid)
+            staging=Path(tempfile.mkdtemp(prefix='.initial-data-',dir=ROOT))
+            try:
+                os.chown(staging,account.pw_uid,account.pw_gid)
+                os.rename(staging,initial)
+                self.sync_directory(ROOT)
+            finally:
+                if staging.exists(): staging.rmdir()
             state['phase']='initializing';self.save(state)
             self.call([str(RELEASE/'scripts/mariadb-install-db'),'--defaults-file='+str(CONFIG),'--user='+USER,'--basedir='+str(RELEASE),'--datadir='+str(initial),'--log-error='+str(initial/'error.log'),'--auth-root-authentication-method=socket','--skip-test-db'])
             identity=initial.stat()

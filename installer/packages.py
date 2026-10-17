@@ -104,12 +104,19 @@ class ServicePolicy:
             try:
                 self.i.durable(temporary/'format',marker)
                 os.rename(temporary,self.root)
+                self.sync_directory(self.root.parent)
             finally:
                 if temporary.exists():
                     (temporary/'format').unlink(missing_ok=True);temporary.rmdir()
         metadata=self.root.lstat()
         if self.root.is_symlink() or metadata.st_uid!=0 or metadata.st_mode&0o077 or (self.root/'format').read_text()!=marker:
             raise self.i.error('The shared host installer directory is unsafe. No package policy was changed.')
+
+    @staticmethod
+    def sync_directory(path):
+        descriptor=os.open(path,os.O_RDONLY|os.O_DIRECTORY)
+        try:os.fsync(descriptor)
+        finally:os.close(descriptor)
 
     @staticmethod
     def attributes(path):
@@ -129,7 +136,8 @@ class ServicePolicy:
         current=hashlib.sha256(self.path.read_bytes()).hexdigest() if metadata and stat.S_ISREG(metadata.st_mode) and not self.path.is_symlink() else None
         complete=record['existed'] and current==record['original_sha256'] and (metadata.st_uid,metadata.st_gid,stat.S_IMODE(metadata.st_mode))==(0,record['gid'],record['mode']) and self.attributes(self.path)==record.get('xattrs',{})
         if complete or (not record['existed'] and not self.path.exists()):
-            self.receipt.unlink();self.saved.unlink(missing_ok=True);return
+            self.sync_directory(self.path.parent)
+            self.receipt.unlink();self.saved.unlink(missing_ok=True);self.sync_directory(self.root);return
         if current not in (record['temporary_sha256'],record['original_sha256'] if record['existed'] else None) or current is None:
             raise self.i.error('The temporary package service policy changed after an interrupted task. Retain its protected recovery record; setup will not replace an administrator policy.')
         if record['existed']:
@@ -145,7 +153,8 @@ class ServicePolicy:
             if (final.st_uid,final.st_gid,stat.S_IMODE(final.st_mode))!=(0,record['gid'],record['mode']) or self.attributes(self.path)!=record.get('xattrs',{}):
                 raise self.i.error('The original host service policy metadata could not be restored completely. Its recovery record was retained.')
         else:self.path.unlink()
-        self.receipt.unlink();self.saved.unlink(missing_ok=True)
+        self.sync_directory(self.path.parent)
+        self.receipt.unlink();self.saved.unlink(missing_ok=True);self.sync_directory(self.root)
 
     def __enter__(self):
         import json,hashlib
