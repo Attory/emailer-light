@@ -23,8 +23,10 @@ final class RuntimeSocketSetupTest extends KernelTestCase
         $baseline = self::getContainer()->get(Connection::class);
         self::assertInstanceOf(Connection::class, $baseline);
         self::assertSame('emailer_test', $baseline->getDatabase());
-        self::assertSame('1', (string) $baseline->fetchOne('SELECT 1'));
-        $params = $baseline->getParams();
+        $alive = $baseline->fetchOne('SELECT 1');
+        self::assertTrue(\is_string($alive) || \is_int($alive));
+        self::assertSame('1', (string) $alive);
+        $params = $this->databaseParams($baseline);
         $params['unix_socket'] = sys_get_temp_dir().'/emailer-unavailable-'.bin2hex(random_bytes(12)).'.sock';
         $connection = DriverManager::getConnection($params);
         $factory = DependencyFactory::fromConnection(new ExistingConfiguration(new Configuration()), new ExistingConnection($connection));
@@ -44,7 +46,7 @@ final class RuntimeSocketSetupTest extends KernelTestCase
             self::fail('Guided setup silently used TCP instead of its configured socket.');
         } catch (\RuntimeException $exception) {
             self::assertSame('Database connection verification failed.', $exception->getMessage());
-            self::assertStringNotContainsString((string) $params['password'], $exception->getMessage());
+            self::assertStringNotContainsString($params['password'], $exception->getMessage());
         } finally {
             $connection->close();
         }
@@ -55,19 +57,31 @@ final class RuntimeSocketSetupTest extends KernelTestCase
         self::bootKernel();
         $baseline = self::getContainer()->get(Connection::class);
         self::assertInstanceOf(Connection::class, $baseline);
-        $params = $baseline->getParams();
+        $params = $this->databaseParams($baseline);
         $params['unix_socket'] = '/run/emailer-database/mysql.sock';
         $connection = DriverManager::getConnection($params);
         $factory = DependencyFactory::fromConnection(new ExistingConfiguration(new Configuration()), new ExistingConnection($connection));
         $lifecycle = $this->createMock(SetupLifecycle::class);
         $lifecycle->expects(self::never())->method('mutate');
-        self::assertIsString($params['host']);
-        self::assertIsString($params['dbname']);
-        self::assertIsString($params['user']);
-        self::assertIsString($params['password']);
-        $port = $params['port'] ?? 3306;
-        self::assertTrue(is_numeric($port));
         $this->expectExceptionMessage('Database configuration does not match the external runtime configuration.');
-        (new DatabaseSetup($connection, $factory, $lifecycle))->configure(new DatabaseInput($params['host'], (int) $port, $params['dbname'], $params['user'], $params['password']));
+        (new DatabaseSetup($connection, $factory, $lifecycle))->configure(new DatabaseInput($params['host'], $params['port'], $params['dbname'], $params['user'], $params['password']));
+    }
+
+    /** @return array{driver: 'pdo_mysql', host: string, port: int, dbname: string, user: string, password: string, charset: string} */
+    private function databaseParams(Connection $connection): array
+    {
+        $params = $connection->getParams();
+        $host = $params['host'] ?? null;
+        $database = $params['dbname'] ?? null;
+        $user = $params['user'] ?? null;
+        $password = $params['password'] ?? null;
+        $port = $params['port'] ?? 3306;
+        self::assertIsString($host);
+        self::assertIsString($database);
+        self::assertIsString($user);
+        self::assertIsString($password);
+        self::assertTrue(is_numeric($port));
+
+        return ['driver' => 'pdo_mysql', 'host' => $host, 'port' => (int) $port, 'dbname' => $database, 'user' => $user, 'password' => $password, 'charset' => 'utf8mb4'];
     }
 }

@@ -166,5 +166,9 @@ class ServicePolicy:
             self.lock.__exit__();self.descriptor=None;raise
 
     def __exit__(self,*unused):
-        try:self.restore()
-        finally:self.lock.__exit__();self.descriptor=None
+        # A signal may kill apt while a dpkg/maintainer-script descendant still
+        # holds its inherited open-file description. Drop our copy and acquire
+        # a NEW description before permitting service starts again.
+        self.lock.__exit__();self.descriptor=None
+        with HostLock(self.lock.path,self.i.error):
+            self.restore()

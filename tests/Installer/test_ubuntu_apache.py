@@ -58,6 +58,11 @@ SSLCertificateKeyFile /etc/letsencrypt/live/mailer/privkey.pem
                 text=base+extra;site.write_text(text)
                 with self.assertRaises(SetupError):web.source_site(Path('/srv/emailer-light/releases'),'mailer.example.test')
                 self.assertEqual(text,site.read_text())
+            for directive in ('AliasMatch ^/legacy/(.*)$ /var/www/unrelated/$1', 'ScriptAliasMatch ^/legacy/(.*)$ /var/www/unrelated/$1', 'ScriptAlias /legacy/ /var/www/unrelated/'):
+                text=base.replace('</VirtualHost>',directive+'\n</VirtualHost>');site.write_text(text)
+                with self.subTest(directive=directive),self.assertRaises(SetupError):
+                    web.source_site(Path('/srv/emailer-light/releases'),'mailer.example.test')
+                self.assertEqual(text,site.read_text())
             site.write_text(base)
             self.assertEqual(site,web.source_site(Path('/srv/emailer-light/releases'),'mailer.example.test')[0])
 
@@ -165,6 +170,19 @@ class PackageServiceRecovery(unittest.TestCase):
             self.assertTrue(self.policy.receipt.exists());self.assertTrue(self.policy.path.exists())
         finally:child.terminate();child.wait(timeout=5)
         self.policy.recover();self.assertFalse(self.policy.path.exists())
+
+    def test_exit_during_live_inherited_child_retains_policy_and_receipt(self):
+        import subprocess
+        self.policy.__enter__()
+        child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)'],pass_fds=(self.policy.descriptor,))
+        try:
+            with self.assertRaisesRegex(SetupError,'still running'):
+                self.policy.__exit__(KeyboardInterrupt,KeyboardInterrupt(),None)
+            self.assertTrue(self.policy.receipt.exists())
+            self.assertIn('exit 101',self.policy.path.read_text())
+        finally:child.terminate();child.wait(timeout=5)
+        self.policy.recover()
+        self.assertFalse(self.policy.path.exists());self.assertFalse(self.policy.receipt.exists())
 
 class ActualAptTransaction(unittest.TestCase):
     def guard(self):

@@ -72,6 +72,7 @@ final readonly class DatabaseSetup
                 'driverOptions' => [\PDO::ATTR_TIMEOUT => 5],
             ];
             if (null !== $input->unixSocket) {
+                unset($probeParams['host'], $probeParams['port']);
                 $probeParams['unix_socket'] = $input->unixSocket;
             }
             $probe = DriverManager::getConnection($probeParams);
@@ -80,6 +81,11 @@ final readonly class DatabaseSetup
                 $serverVersion = $probe->fetchOne('SELECT VERSION()');
                 if (!\is_string($serverVersion) || !str_contains($serverVersion, 'MariaDB')) {
                     throw new \RuntimeException('The configured database is not a supported MariaDB server.');
+                }
+                $identitySql = 'SELECT DATABASE() AS database_name, @@hostname AS server_hostname, @@port AS server_port, @@server_id AS server_identity, @@socket AS server_socket, @@datadir AS server_datadir';
+                $probeIdentity = $probe->fetchAssociative($identitySql);
+                if (false === $probeIdentity || $probeIdentity !== $this->connection->fetchAssociative($identitySql)) {
+                    throw new \RuntimeException('The verified database endpoint differs from the application runtime.');
                 }
             } catch (\Throwable) {
                 throw new \RuntimeException('Database connection verification failed.');

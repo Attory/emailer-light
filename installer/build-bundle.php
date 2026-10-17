@@ -67,7 +67,7 @@ try {
     $manifest = json_encode(['format' => 'emailer-installer-v1', 'product' => $product, 'test_only' => $testOnly, 'schema_version' => '20261014000000', 'version' => $options['version'], 'source_commit' => $options['source'], 'archive' => $archive, 'files' => $digests], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n";
     $contents['installer.json'] = $manifest;
     $contents['installer.json.sig'] = sodium_crypto_sign_detached($manifest, $key);
-    $contents['setup'] = str_replace(['@PUBLIC_KEY@', '@PRODUCT@'], [$public, $product], (string) file_get_contents(__DIR__.'/setup.in'));
+    $contents['setup'] = str_replace(['@PUBLIC_KEY@', '@PRODUCT@', '@BOOTSTRAP@'], [$public, $product, (string) file_get_contents(__DIR__.'/bootstrap.sh.in')], (string) file_get_contents(__DIR__.'/setup.in'));
     $zip = new ZipArchive();
     if (true !== $zip->open($options['output'], ZipArchive::CREATE | ZipArchive::EXCL)) {
         throw new RuntimeException('Bundle output must not already exist.');

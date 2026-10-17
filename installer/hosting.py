@@ -157,7 +157,7 @@ class WebServer:
                 outside=re.sub(r'(?is)<VirtualHost\s+[^>]+>.*?</VirtualHost\s*>','',clean).strip()
                 listeners=[item[0].strip() for item in blocks]
                 roots=re.findall(r'(?im)^\s*DocumentRoot\s+"?([^\s"]+)"?\s*$',clean)
-                if outside or not blocks or len(set(listeners))!=len(listeners) or '*:443' not in listeners or any(value not in ('*:80','*:443') for value in listeners) or not roots or any(value!=root for value in roots) or re.search(r'(?im)^\s*(?:ProxyPass|ProxyPassMatch|ScriptAlias)\b',clean):
+                if outside or not blocks or len(set(listeners))!=len(listeners) or '*:443' not in listeners or any(value not in ('*:80','*:443') for value in listeners) or not roots or any(value!=root for value in roots) or re.search(r'(?im)^\s*(?:ProxyPass|ProxyPassMatch|ScriptAlias|AliasMatch|ScriptAliasMatch)\b',clean):
                     raise self.error('The Apache file contains additional listeners, sites or document roots. It was preserved; automatic handoff requires one dedicated Emailer site on standard ports.')
                 aliases=re.findall(r'(?im)^\s*Alias\s+([^\n]+)',clean)
                 if any(not re.fullmatch(r'/\.well-known/acme-challenge/\s+/[A-Za-z0-9_./-]+/\.well-known/acme-challenge/',alias.strip()) for alias in aliases):
