@@ -25,7 +25,7 @@ final readonly class NativeWriterFence
         $application = DriverManager::getConnection($parameters);
         try {
             $identity = NativeUpdateJournal::text($application->fetchOne('SELECT CURRENT_USER()'));
-            if ($application->getDatabase() !== $this->connection->getDatabase() || $identity === $this->connection->fetchOne('SELECT CURRENT_USER()') || $application->fetchAssociative('SELECT @@hostname h, @@port p, @@server_id i') !== $this->connection->fetchAssociative('SELECT @@hostname h, @@port p, @@server_id i')) {
+            if ($application->getDatabase() !== $this->connection->getDatabase() || $identity === $this->connection->fetchOne('SELECT CURRENT_USER()') || $application->fetchAssociative('SELECT @@hostname h, @@port p, @@server_id i, @@socket s, @@datadir d') !== $this->connection->fetchAssociative('SELECT @@hostname h, @@port p, @@server_id i, @@socket s, @@datadir d')) {
                 throw new \RuntimeException('Update needs a separate maintenance identity on the same database server.');
             }
         } finally {

@@ -127,7 +127,7 @@ final readonly class ReleaseManager
             if (!\is_string($targetVersion) || version_compare($targetVersion, $this->currentVersion, '<=')) {
                 throw new \RuntimeException('Release downgrade or same-version update is not allowed.');
             }
-            if ('prod' === $this->environment && '1.0.0' === $this->currentVersion && '1.1.0' === $targetVersion) {
+            if ('prod' === $this->environment && NativeSchemaUpdate::supports($this->currentVersion, $targetVersion)) {
                 throw new \RuntimeException('Use the guided native installer for this schema-preserving Light update, including its persistent writer fencing and recovery journal.');
             }
             $this->assertPlatformAndSchemaCompatibility($manifest);

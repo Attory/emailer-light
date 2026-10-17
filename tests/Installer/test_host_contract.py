@@ -96,7 +96,7 @@ class HostingIsolationContract(unittest.TestCase):
         self.assertNotEqual(first.runtime, second.runtime)
 
     def test_maintenance_and_final_sites_preserve_acme_webroot(self):
-        manager = types.SimpleNamespace(prefix='emailer-light', installer=types.SimpleNamespace(product='emailer-light'), record={}, releases=Path('/srv/emailer-light/releases'))
+        manager = types.SimpleNamespace(prefix='emailer-light', installer=types.SimpleNamespace(product='emailer-light'), record={}, releases=Path('/srv/emailer-light/releases'), error=ManagementError)
         handoff = HostHandoff(manager)
         challenge = 'location ^~ /.well-known/acme-challenge/ { root /var/lib/emailer-light-acme; }'
         handoff.state.update(hostname='mailer.example.test', certificate='/etc/letsencrypt/live/mailer/fullchain.pem', certificate_key='/etc/letsencrypt/live/mailer/privkey.pem', acme_locations=[challenge])

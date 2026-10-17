@@ -51,8 +51,9 @@ class Manager:
             product = selected.get('product', '')
             if not re.fullmatch(r'emailer-[a-z]+', product):
                 raise ManagementError('The active installation edition is invalid.')
-            expected = Path('/etc') / (self.root.name + '-' + product.removeprefix('emailer-') + '-110') / 'runtime.env'
-            if selected.get('format') != 'emailer-active-installation-v1' or selected.get('runtime') != str(expected):
+            candidates = [Path('/etc') / (self.root.name + '-' + product.removeprefix('emailer-') + '-' + suffix) / 'runtime.env' for suffix in ('110', '120')]
+            expected = Path(selected.get('runtime', ''))
+            if selected.get('format') != 'emailer-active-installation-v1' or expected not in candidates:
                 raise ManagementError('The active installation pointer is invalid. It was preserved.')
             self.configuration = expected
         self.values = read_environment(self.configuration)
@@ -111,6 +112,7 @@ class Manager:
             except (ValueError, AttributeError):
                 report = {}
             guidance = {
+                'database_endpoint': 'The application and maintenance sign-ins could not be proved to use the same database server and data directory. No update or account fencing was started. Keep the configured socket/port and provide administrator access to that exact server; do not substitute the shared server.',
                 'finish_required': 'The application update committed. Choose Finish (or Accept for a Light to Ripe upgrade); recovery cannot undo a completed operation.',
                 'completed_operation': 'This operation already completed. Choose Check the installation. Recovery cannot downgrade it.',
                 'delivery_busy': 'Delivery still has active work. Let it finish; no delivery claim was reset. If an operation was recorded, choose Recover before retrying.',
@@ -212,8 +214,9 @@ class Manager:
         database = urllib.parse.unquote(params.path.removeprefix('/'))
         if not re.fullmatch(r'[A-Za-z0-9_]+', database):
             raise ManagementError('The recorded database name is outside the supported hosting profile.')
-        socket_path = Path('/run/mysqld/mysqld.sock')
-        if params.hostname in ('127.0.0.1', 'localhost', '::1') and socket_path.exists():
+        query = urllib.parse.parse_qs(params.query)
+        socket_path = Path(query.get('unix_socket', ['/run/mysqld/mysqld.sock'])[0])
+        if params.hostname in ('127.0.0.1', 'localhost', '::1') and params.port in (None, 3306) and socket_path.is_socket():
             dsn = 'mysql://root@localhost/' + database + '?' + urllib.parse.urlencode({'unix_socket': str(socket_path), 'charset': 'utf8mb4'}, safe='/')
         else:
             dsn = ''
@@ -235,12 +238,18 @@ class Manager:
             password = getpass.getpass('Database administrator password (hidden): ')
             hostname = params.hostname or 'localhost'
             hostname = '[' + hostname + ']' if ':' in hostname else hostname
-            dsn = 'mysql://' + urllib.parse.quote(username, safe='') + ':' + urllib.parse.quote(password, safe='') + '@' + hostname + ':' + str(params.port or 3306) + '/' + database + '?charset=utf8mb4'
+            dsn = 'mysql://' + urllib.parse.quote(username, safe='') + ':' + urllib.parse.quote(password, safe='') + '@' + hostname + ':' + str(params.port or 3306) + '/' + database + '?' + urllib.parse.urlencode({'charset': 'utf8mb4', **({'unix_socket': query['unix_socket'][0]} if 'unix_socket' in query else {})}, safe='/')
             self.call(check, environment=environment(dsn))
             self.installer.durable(self.directory / 'maintenance-url', dsn + '\n')
             self.record['maintenance_credentials'] = True
             self.save()
         self.environment = environment(dsn)
+        endpoint_input = {'action': 'verify-endpoint', 'bootstrap': str(self.bootstrap), 'maintenance_url': dsn, 'source_url': self.source_values['DATABASE_URL']}
+        if self.record.get('database_endpoint'):
+            endpoint_input['expected_endpoint'] = self.record['database_endpoint']
+        proof = self.call(['/usr/bin/php8.4', str(self.package.parent / 'host-database.php')], data=json.dumps(endpoint_input))
+        self.record['database_endpoint'] = json.loads(proof)
+        self.save()
         server = self.console(['dbal:run-sql', 'SELECT VERSION()', '--no-interaction'])
         if not re.search(r'\b(?:10\.11|11\.8)\.\d+[-\w ]*MariaDB', server):
             raise ManagementError('This database server is outside the tested MariaDB 10.11 and 11.8 versions. It was not upgraded or replaced.')
@@ -329,12 +338,16 @@ class Manager:
         source = self.package.parent / ('emailer-light-' + self.source_version + '.zip')
         if self.product != 'emailer-light' or self.installer.product != 'emailer-light':
             raise ManagementError('Use the installation package for the installed edition.')
-        operation = self.root / 'native-updates/light-1.0.0-to-1.1.0.json'
-        if self.source_version == '1.1.0' and choice == '1' and not operation.exists():
+        source_version = self.record.get('native_source', self.source_version)
+        operation = self.root / ('native-updates/light-' + source_version + '-to-' + self.installer.version + '.json')
+        if self.source_version == self.installer.version and choice == '1' and not operation.exists():
             raise ManagementError('This release is already installed. Choose Check the installation.')
-        if self.source_version == '1.1.0' and operation.exists():
-            source = self.package.parent / 'emailer-light-1.0.0.zip'
-            self.environment['EMAILER_UPDATE_SOURCE_VERSION'] = '1.0.0'
+        if source_version not in ('1.0.0', '1.1.0'):
+            raise ManagementError('This installer supports native Light updates from 1.0.0 or 1.1.0.')
+        self.record['native_source'] = source_version
+        self.save()
+        source = self.package.parent / ('emailer-light-' + source_version + '.zip')
+        self.environment['EMAILER_UPDATE_SOURCE_VERSION'] = source_version
         if choice == '2' and operation.exists() and json.loads(protected(operation).read_text()).get('phase') == 'completed':
             raise ManagementError('This update already succeeded. Choose Check; recovery cannot downgrade it.')
         if choice == '3' and not operation.exists():

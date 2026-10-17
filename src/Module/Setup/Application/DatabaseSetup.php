@@ -32,7 +32,11 @@ final readonly class DatabaseSetup
         if (!is_numeric($port)) {
             throw new \RuntimeException('Protected database port is invalid.');
         }
-        $this->configure(new DatabaseInput($params['host'], (int) $port, $params['dbname'], $params['user'], $params['password']));
+        $socket = $params['unix_socket'] ?? null;
+        if (null !== $socket && !\is_string($socket)) {
+            throw new \RuntimeException('Protected database socket is invalid.');
+        }
+        $this->configure(new DatabaseInput($params['host'], (int) $port, $params['dbname'], $params['user'], $params['password'], $socket));
     }
 
     public function configure(DatabaseInput $input): void
@@ -51,12 +55,13 @@ final readonly class DatabaseSetup
             || $input->port !== $activePort
             || $input->database !== $activeDatabase
             || $input->username !== $activeUsername
+            || $input->unixSocket !== ($params['unix_socket'] ?? null)
         ) {
             throw new \RuntimeException('Database configuration does not match the external runtime configuration.');
         }
 
         $this->lifecycle->mutate(function () use ($input): void {
-            $probe = DriverManager::getConnection([
+            $probeParams = [
                 'driver' => 'pdo_mysql',
                 'host' => $input->host,
                 'port' => $input->port,
@@ -65,7 +70,11 @@ final readonly class DatabaseSetup
                 'password' => $input->password,
                 'charset' => 'utf8mb4',
                 'driverOptions' => [\PDO::ATTR_TIMEOUT => 5],
-            ]);
+            ];
+            if (null !== $input->unixSocket) {
+                $probeParams['unix_socket'] = $input->unixSocket;
+            }
+            $probe = DriverManager::getConnection($probeParams);
 
             try {
                 $serverVersion = $probe->fetchOne('SELECT VERSION()');
