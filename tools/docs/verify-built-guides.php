@@ -11,7 +11,12 @@ $directory = realpath($argv[1]);
 if (false === $directory) {
     throw new RuntimeException('Build the reviewed documentation before packaging the release.');
 }
-$manifest = json_decode((string) file_get_contents($directory.'/DOCS-MANIFEST.json'), true, 64, JSON_THROW_ON_ERROR);
+$manifestPath = $directory.'/DOCS-MANIFEST.json';
+$manifestStat = lstat($manifestPath);
+if (!is_array($manifestStat) || 0o100000 !== ($manifestStat['mode'] & 0o170000) || $manifestStat['size'] > 16777216) {
+    throw new RuntimeException('The documentation manifest must be an unlinked regular bounded file.');
+}
+$manifest = json_decode((string) file_get_contents($manifestPath), true, 64, JSON_THROW_ON_ERROR);
 if ('emailer-docs-v1' !== ($manifest['format'] ?? null) || $argv[2] !== ($manifest['source_commit'] ?? null)) {
     throw new RuntimeException('Documentation was not built from the exact release commit.');
 }

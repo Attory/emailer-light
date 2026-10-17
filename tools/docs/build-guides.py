@@ -54,7 +54,7 @@ styles.add(ParagraphStyle(name='CaptionGuide', fontName='Guide', fontSize=8, lea
 styles.add(ParagraphStyle(name='CodeGuide', fontName='GuideCode', fontSize=8, leading=12, backColor=colors.HexColor('#eef3f0'), borderPadding=10, spaceBefore=8, spaceAfter=14))
 styles.add(ParagraphStyle(name='TableGuide', parent=styles['BodyText'], fontSize=8, leading=12, spaceAfter=0))
 
-release_base = 'https://github.com/' + json.loads((root / 'composer.json').read_text())['name'] + '/releases/download/v1.1.0/'
+release_base = 'https://github.com/' + json.loads((root / 'composer.json').read_text())['name'] + '/releases/download/docs-v1.1.0-r1/'
 local_guides = {path.stem + '.html' for path in (root / 'docs/guides').glob('*.json')}
 
 def pdftext(text):

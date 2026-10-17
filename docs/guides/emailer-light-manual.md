@@ -25,7 +25,7 @@ Provider suggestions are conveniences; use your account's current settings. Leav
 
 1. Open Templates and create a template with a recognizable name, email subject and HTML. Plain text is optional; leave it blank to generate it automatically. Preview and save/publish the version you intend to use.
 2. Upload images through the template asset controls and use the returned asset address. Unsafe HTML and remote image sources are removed.
-3. Use the supported fields shown by the editor, such as `{{ contact.first_name }}` and `{{ unsubscribe_url }}`. Older `{{name}}` and `{{email}}` forms are unsupported.
+3. Use the supported fields shown by the editor, such as `{{ recipient.first_name }}` and `{{ unsubscribe_url }}`. Older `{{name}}` and `{{email}}` forms are unsupported.
 
 ![The installed Light templates screen.](images/emailer-light-templates.png)
 
