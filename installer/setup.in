@@ -17,6 +17,13 @@ if [ "$(uname -m)" != x86_64 ]; then
     printf 'This setup supports Debian 13 or Ubuntu 22.04/24.04 on amd64. No application was installed.\n' >&2
     exit 1
 fi
+# A real terminal is required for hidden administrator passwords and guided choices.
+# Check before bootstrap packages so an SSH invocation without -t cannot be
+# mistaken for a failed signature or make host changes before it can ask inputs.
+if ! (: </dev/tty) 2>/dev/null; then
+    printf 'Setup needs an interactive terminal for guided choices and hidden passwords. Open your hosting console, or connect with ssh -t, then run this same setup file. No provisioning was started.\n' >&2
+    exit 1
+fi
 bundle=$0
 @BOOTSTRAP@
 exec python3 - "$bundle" <<'PY'
