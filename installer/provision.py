@@ -175,6 +175,7 @@ class Installer:
                 raise SetupError('An unrecognised database server already exists. Setup will not replace shared database software.')
         if shutil.which(self.web.kind):
             result = self.web.configuration()
+            self.web.check_layout(result)
         if self.web.kind == 'nginx' and shutil.which('nginx'):
             if re.search(r'listen\s+[^;]*(?:\b80\b|\b443\b)', result):
                 # Arbitrary scoped/default address changes need separate profile tests.

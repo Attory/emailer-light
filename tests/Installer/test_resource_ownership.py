@@ -284,12 +284,12 @@ class ResourceOwnership(unittest.TestCase):
         manager.configuration = Path('/etc/emailer-light/runtime.env')
         manager.original_configuration = manager.configuration
         manager.releases = Path('/srv/emailer-light/releases')
-        manager.installer = types.SimpleNamespace(bundle=bundle, product='emailer-pro', version='1.2.1')
+        manager.installer = types.SimpleNamespace(bundle=bundle, product='emailer-pro', version='1.2.2')
         manager.record = {}
         manager.save = lambda: None
         values = {'EMAILER_SECRET_KEY_FILE': str(key)}
         source = generated_launcher(bundle, 'emailer-light', 'root', manager.configuration, manager.releases / 'current')
-        target = generated_launcher(bundle, 'emailer-light-pro-121', 'emailer-light-pro-121', Path('/etc/emailer-light-pro-121/runtime.env'), manager.releases / 'current')
+        target = generated_launcher(bundle, 'emailer-light-pro-122', 'emailer-light-pro-122', Path('/etc/emailer-light-pro-122/runtime.env'), manager.releases / 'current')
         real_path = Path
         def selected_path(value):
             return canonical.parent if value == '/usr/local/sbin' else real_path(value)
@@ -316,7 +316,7 @@ class ResourceOwnership(unittest.TestCase):
             self.assertEqual('foreign replacement', canonical.read_text())
             canonical.write_text(source)
             # Recovery restores source launcher before restoring the original active pointer.
-            manager.configuration = Path('/etc/emailer-light-pro-121/runtime.env')
+            manager.configuration = Path('/etc/emailer-light-pro-122/runtime.env')
             manager.record['host_handoff']['source_user'] = 'root'
             claims.entries[str(canonical)] = {'current': claims.proof(canonical)}
             manager.validate_launcher()

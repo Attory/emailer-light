@@ -1,9 +1,9 @@
-# Emailer Light 1.2.1
+# Emailer Light 1.2.2
 
 Emailer Light is a free, self-hosted campaign mailer for one administrator. Recipients are uploaded by CSV for each campaign; there is no reusable address book, contact list, multiple-user administration, MFA, or security-level switch. The application provides templates, review and approval, scheduling, throttled delivery, suppression and unsubscribe, tracking, reports, encrypted backups, Doctor, and worker/scheduler commands.
 
-The compatible private Ripe 1.2.1 installer supports original Light 1.0.0
-and official Light 1.1.0/1.2.0/1.2.1. It preserves campaign-owned audiences and cryptographic
+The compatible private Ripe 1.2.2 installer supports original Light 1.0.0
+and official Light 1.1.0/1.2.0/1.2.1/1.2.2. It preserves campaign-owned audiences and cryptographic
 contexts; acceptance and delivery resume are explicit. See the
 [public upgrade contract](docs/upgrade/README.md).
 
@@ -18,10 +18,10 @@ websites on Ubuntu 22.04 are preserved. SMTP can be configured later.
 Customers do not need Docker, Composer, Mailpit, verifier source files,
 environment-file preparation or handwritten service definitions.
 
-Download `emailer-light-1.2.1-setup.run` from the official release, then start:
+Download `emailer-light-1.2.2-setup.run` from the official release, then start:
 
 ```bash
-sudo sh emailer-light-1.2.1-setup.run
+sudo sh emailer-light-1.2.2-setup.run
 ```
 
 Setup asks for your public hostname when needed, administrator email and a
@@ -32,7 +32,7 @@ Read the guide for DNS/provider-firewall requirements and initial download trust
 Ordinary file-upload hosting is unsupported because persistent background
 services and private key storage are required. No universal Linux support is claimed.
 
-The same setup file manages supported Light 1.0.0/1.1.0/1.2.0 updates, interrupted operations
+The same setup file manages supported Light 1.0.0/1.1.0/1.2.0/1.2.1 updates, interrupted operations
 and readiness checks. Accounts and existing settings are preserved. Use the
 [operator reference](docs/guides/emailer-light-operator.md) for exceptional hosts.
 
@@ -66,3 +66,5 @@ Unsubscribe links create global suppression records. SMTP failures enter the del
 - [Contributing](CONTRIBUTING.md) and [vulnerability reporting](SECURITY.md)
 
 First-party Light code is licensed under [AGPL-3.0-or-later](LICENSE). Commercial use is permitted; network service operators and redistributors must meet the license's corresponding-source obligations. Third-party components keep their own licenses; see [license inventory](THIRD_PARTY_NOTICES.md).
+
+Apache installations on Ubuntu can coexist with an unrelated Nginx service on port 8081. Setup verifies Apache owns all listeners on 80/443 and preserves Nginx configuration, listener and service. Use the new setup file to retry the 1.2.1 initial-check rejection; keep installation state and database files.

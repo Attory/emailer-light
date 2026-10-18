@@ -1,10 +1,14 @@
 {
   "title": "Install Emailer Light",
-  "subtitle": "Version 1.2.1 | Beginner guide | Ubuntu Apache or Debian Nginx VPS",
+  "subtitle": "Version 1.2.2 | Beginner guide | Ubuntu Apache or Debian Nginx VPS",
   "blocks": [
     {
       "type": "p",
       "text": "Install a usable Emailer Light website with one guided server setup. You need your administrator email, a new password, and the address you want people to use. Email delivery can wait."
+    },
+    {
+      "type": "callout",
+      "text": "Ubuntu Apache can coexist with Nginx on a separate port (tested: 8081). Setup manages only Apache and the new Emailer instance. Every existing listener on ports 80 and 443 must belong to apache2.service. A different service on either port, an address-specific Apache virtual host on those ports, or an overlapping Emailer hostname stops setup with existing services preserved."
     },
     {
       "type": "h2",
@@ -50,7 +54,7 @@
     },
     {
       "type": "p",
-      "text": "Only these OS/web-server combinations are supported. Ubuntu with Nginx, Debian 13 with Apache, ARM, custom website ports/subfolders and ordinary file-upload hosting are outside this installer’s tested scope. On a VPS that also hosts other websites, Emailer needs its own dedicated hostname; existing websites retain their configuration and operation."
+      "text": "Only these OS/web-server combinations are supported. Ubuntu using Nginx as its public web server on ports 80/443, Debian 13 with Apache, ARM, custom website ports/subfolders and ordinary file-upload hosting are outside this installer’s tested scope. On a VPS that also hosts other websites, Emailer needs its own dedicated hostname; existing websites retain their configuration and operation."
     },
     {
       "type": "p",
@@ -82,11 +86,11 @@
     },
     {
       "type": "code",
-      "text": "curl --fail --location --output emailer-light-1.2.1-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.2.1/\\\nemailer-light-1.2.1-setup.run"
+      "text": "curl --fail --location --output emailer-light-1.2.2-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.2.2/\\\nemailer-light-1.2.2-setup.run"
     },
     {
       "type": "p",
-      "text": "Or download <b>emailer-light-1.2.1-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.2.1\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
+      "text": "Or download <b>emailer-light-1.2.2-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.2.2\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
     },
     {
       "type": "p",
@@ -106,7 +110,7 @@
     },
     {
       "type": "code",
-      "text": "sudo sh emailer-light-1.2.1-setup.run"
+      "text": "sudo sh emailer-light-1.2.2-setup.run"
     },
     {
       "type": "p",
