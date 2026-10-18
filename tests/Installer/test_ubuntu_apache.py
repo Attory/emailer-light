@@ -25,8 +25,11 @@ class ApacheProfile(unittest.TestCase):
             self.assertEqual('nginx',WebServer.discover(('debian','13'),SetupError).kind)
             for system in [('ubuntu','20.04'),('ubuntu','26.04'),('debian','12')]:
                 with self.subTest(system=system),self.assertRaises(SetupError):WebServer.discover(system,SetupError)
-        with patch('hosting.shutil.which',side_effect=lambda name:'/usr/sbin/nginx' if name=='nginx' else None),self.assertRaisesRegex(SetupError,'Existing Nginx'):
-            WebServer.discover(('ubuntu','22.04'),SetupError)
+        with patch('hosting.shutil.which',side_effect=lambda name:'/usr/sbin/'+name):
+            for version in ('22.04','24.04'):
+                self.assertEqual('apache2',WebServer.discover(('ubuntu',version),SetupError).kind)
+            with self.assertRaisesRegex(SetupError,'Existing Apache/Caddy'):
+                WebServer.discover(('debian','13'),SetupError)
 
     def test_parsed_apache_inventory_covers_single_vhost_alias_and_default(self):
         web=WebServer('apache2',SetupError)

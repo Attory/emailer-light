@@ -22,8 +22,8 @@ class WebServer:
                 raise error('Debian 13 provisioning supports Nginx. Existing Apache/Caddy was preserved; use the tested Ubuntu Apache profile or a separate supported VPS.')
             return cls('nginx', error)
         if system in (('ubuntu', '22.04'), ('ubuntu', '24.04')):
-            if shutil.which('nginx') or shutil.which('caddy'):
-                raise error('Ubuntu provisioning supports Apache. Existing Nginx/Caddy was preserved; this combination is outside the tested profile.')
+            # Installed or running software on other ports is not a conflict.
+            # preflight separately proves every 80/443 socket belongs to Apache.
             return cls('apache2', error)
         raise error('Setup supports Debian 13 with Nginx, or Ubuntu 22.04/24.04 LTS with Apache, on amd64/systemd. This host is unsupported; nothing has been installed.')
 
@@ -33,6 +33,14 @@ class WebServer:
         if result.returncode:
             raise self.error('The existing web-server configuration is invalid. Correct its configuration check before setup; no website was changed.')
         return result.stdout + result.stderr
+
+    def check_layout(self, configuration):
+        if self.kind == 'apache2':
+            # IP-specific vhosts take precedence over a generated *:80/*:443
+            # site even with a different ServerName. Do not silently shadow it.
+            for address, port in re.findall(r'(?m)^\s*(\S+):(80|443)\s+', configuration):
+                if address != '*':
+                    raise self.error(f'Apache has an address-specific website on {address}:{port}. It takes precedence over the new wildcard Emailer site. This automatic profile requires *:80 and *:443 virtual hosts; the existing site was preserved. Use a separate supported VPS or obtain a scoped Apache configuration review before retrying.')
 
     def names(self, configuration):
         if self.kind == 'apache2':
@@ -44,7 +52,9 @@ class WebServer:
         # Parsed inventories include other files added while setup was interrupted.
         own = False
         foreign = []
-        for line in self.configuration().splitlines():
+        configuration = self.configuration()
+        self.check_layout(configuration)
+        for line in configuration.splitlines():
             if self.kind == 'apache2':
                 source = re.search(r'\((/.*):[0-9]+\)', line)
             else:

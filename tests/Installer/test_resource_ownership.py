@@ -284,7 +284,7 @@ class ResourceOwnership(unittest.TestCase):
         manager.configuration = Path('/etc/emailer-light/runtime.env')
         manager.original_configuration = manager.configuration
         manager.releases = Path('/srv/emailer-light/releases')
-        manager.installer = types.SimpleNamespace(bundle=bundle, product='emailer-pro', version='1.2.1')
+        manager.installer = types.SimpleNamespace(bundle=bundle, product='emailer-pro', version='1.2.2')
         manager.record = {}
         manager.save = lambda: None
         values = {'EMAILER_SECRET_KEY_FILE': str(key)}

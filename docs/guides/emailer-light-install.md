@@ -1,8 +1,10 @@
 # Install Emailer Light
 
-Version 1.2.1 | Beginner guide | Ubuntu Apache or Debian Nginx VPS
+Version 1.2.2 | Beginner guide | Ubuntu Apache or Debian Nginx VPS
 
 Install a usable Emailer Light website with one guided server setup. You need your administrator email, a new password, and the address you want people to use. Email delivery can wait.
+
+Ubuntu Apache can coexist with Nginx on a separate port (tested: 8081). Setup manages only Apache and the new Emailer instance. Every existing listener on ports 80 and 443 must belong to apache2.service. A different service on either port, an address-specific Apache virtual host on those ports, or an overlapping Emailer hostname stops setup with existing services preserved.
 
 ## Who can use this guide?
 
@@ -16,7 +18,7 @@ An existing Apache website using PHP 8.1 can stay on Ubuntu 22.04, including its
 | Ubuntu 24.04.5 LTS, amd64/systemd | Apache 2.4.58 | PHP 8.4.26; distribution MariaDB 10.11.14 |
 | Debian 13 Trixie, amd64/systemd | Nginx 1.26.3 | PHP 8.4.26; MariaDB 11.8.6 |
 
-Only these OS/web-server combinations are supported. Ubuntu with Nginx, Debian 13 with Apache, ARM, custom website ports/subfolders and ordinary file-upload hosting are outside this installer’s tested scope. On a VPS that also hosts other websites, Emailer needs its own dedicated hostname; existing websites retain their configuration and operation.
+Only these OS/web-server combinations are supported. Ubuntu using Nginx as its public web server on ports 80/443, Debian 13 with Apache, ARM, custom website ports/subfolders and ordinary file-upload hosting are outside this installer’s tested scope. On a VPS that also hosts other websites, Emailer needs its own dedicated hostname; existing websites retain their configuration and operation.
 
 Ordinary file-upload/shared hosting cannot run this installer: Emailer needs a persistent background worker, scheduled services and private key storage outside the website. Uploading PHP files alone cannot provide these requirements. Use the supported VPS path.
 
@@ -33,12 +35,12 @@ Choose a spare address such as `news.your-domain.com`. In your domain provider's
 In the server terminal, paste this download action. It saves the official installation package in your current folder.
 
 ```bash
-curl --fail --location --output emailer-light-1.2.1-setup.run \
-  https://github.com/Attory/emailer-light/releases/download/v1.2.1/\
-emailer-light-1.2.1-setup.run
+curl --fail --location --output emailer-light-1.2.2-setup.run \
+  https://github.com/Attory/emailer-light/releases/download/v1.2.2/\
+emailer-light-1.2.2-setup.run
 ```
 
-Or download **emailer-light-1.2.1-setup.run** from the [official release](https://github.com/Attory/emailer-light/releases/tag/v1.2.1) in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path.
+Or download **emailer-light-1.2.2-setup.run** from the [official release](https://github.com/Attory/emailer-light/releases/tag/v1.2.2) in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path.
 
 Initial trust comes from obtaining the setup action itself from the official HTTPS release or an authorized private channel. Its embedded, established edition signing identity then verifies the package inventory, runtime and release identity before installer code runs. A key supplied beside an arbitrary download would not establish that initial trust.
 
@@ -49,7 +51,7 @@ Ubuntu 22.04 also retrieves an authenticated MariaDB runtime of about 360 MB. Al
 From the folder containing the downloaded file, paste this single setup action:
 
 ```bash
-sudo sh emailer-light-1.2.1-setup.run
+sudo sh emailer-light-1.2.2-setup.run
 ```
 
 sudo may ask for your server account password once. Setup needs host permission to install services; the application itself runs under a dedicated account. Keep the terminal open. Password entry is hidden, so no letters or dots may appear.
