@@ -6,6 +6,8 @@ This reference covers exceptional hosting, update and recovery work. Start with 
 
 Ubuntu Apache can coexist with Nginx on a separate port (tested: 8081). Setup manages only Apache and the Emailer instance. Every existing listener on ports 80 and 443 must belong to apache2.service; a different service on either port or an overlapping Emailer hostname stops setup with existing services preserved. Light supports only wildcard Apache virtual hosts (*:80 and *:443). A server with address-specific Apache virtual hosts requires Emailer Ripe with address-specific installation support. Keep your existing websites unchanged; do not delete installer state or database files.
 
+![Recorded Light setup message on an address-specific Apache server. Existing sites remain running; this configuration requires Ripe.](images/emailer-light-address-profile.png)
+
 ## Supported native profile
 
 | Component | Supported scope |

@@ -42,7 +42,11 @@ class WebServer:
                 if port in ('*', '0'):
                     raise self.error('Apache uses a wildcard-port website. Light requires explicit *:80 and *:443 virtual hosts. Existing sites were preserved; wildcard-port virtual hosts are outside both editions’ supported profiles.')
                 if address != '*':
-                    raise self.error(f'Apache has an address-specific website on {address}:{port}. It takes precedence over the new wildcard Emailer site. Emailer Light supports only wildcard (*:80 and *:443) Apache virtual hosts. This server configuration requires Emailer Ripe with address-specific Apache support. Existing websites and saved setup progress were preserved; use the supported Ripe setup package or a separate server with wildcard Apache virtual hosts. Do not delete installation state or database files.')
+                    raise self.error(f'Apache has an address-specific website on {address}:{port}.\n'
+                                     'Emailer Light supports only wildcard (*:80 and *:443) Apache virtual hosts.\n'
+                                     'This server configuration requires Emailer Ripe with address-specific Apache support.\n'
+                                     'Existing websites and saved setup progress were preserved. Use the supported Ripe setup package.\n'
+                                     'Do not delete installation state or database files.')
 
     def names(self, configuration):
         if self.kind == 'apache2':
