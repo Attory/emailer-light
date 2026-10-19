@@ -71,7 +71,7 @@ Use Profile for your account and Sessions to review access. Lost administrator p
 
 ## Updates
 
-1. Download the official new Light setup file and start it using the installation action. Light 1.0.0, 1.1.0, 1.2.0 and 1.2.1 can update directly to 1.2.3. Check the displayed address before choosing an action.
+1. Download the official new Light setup file and start it using the installation action. Light 1.0.0, 1.1.0, 1.2.0, 1.2.1 and 1.2.2 can update directly to 1.2.3. Check the displayed address before choosing an action.
 2. Choose Update with a verified backup. Setup pauses delivery, verifies recovery material and checks the updated application. Follow any Finish a committed update instruction.
 3. Review Doctor and mail settings. Start the same file and choose Resume delivery after reviewing readiness when ready. Previously approved due work may continue after resume; no draft is approved by this action.
 
