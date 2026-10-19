@@ -53,8 +53,14 @@ class ApacheCoexistence(unittest.TestCase):
         web.check_layout('*:80 is a NameVirtualHost\n*:443 secure.example.test (/etc/apache2/sites-enabled/site:1)\n127.0.0.1:8081 internal.example.test (/etc/apache2/sites-enabled/internal:1)\n')
         for address in ('127.0.0.1','192.0.2.2','[::]','[::1]'):
             for port in (80,443):
-                with self.subTest(address=address,port=port), self.assertRaisesRegex(SetupError,'address-specific'):
+                with self.subTest(address=address,port=port), self.assertRaisesRegex(SetupError,'(?s)Emailer Light supports only wildcard.*requires Emailer Ripe'):
                     web.check_layout(f'{address}:{port} is a NameVirtualHost\n')
+
+    def test_wildcard_port_vhosts_are_outside_both_profiles(self):
+        web=WebServer('apache2',SetupError)
+        for selector in ('*:0','192.0.2.2:*','_default_:*'):
+            with self.subTest(selector=selector),self.assertRaisesRegex(SetupError,'outside both'):
+                web.check_layout(selector+' is a NameVirtualHost\n')
 
     def test_preflight_cannot_skip_listener_proof_on_fresh_or_managed_runs(self):
         # Use real preflight flow; stop exactly at the mandatory live inspection.

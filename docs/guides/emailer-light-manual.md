@@ -1,10 +1,12 @@
 # Emailer Light user manual
 
-Version 1.2.2 | Setup and everyday newsletters
+Version 1.2.3 | Setup and everyday newsletters
 
 Prepare, test, approve, then send. Saving a draft sends nothing. Light has one administrator and campaign-specific CSV audiences; it has no reusable contacts, lists, additional administrator accounts or MFA.
 
-The 1.2.2 setup file supports Ubuntu 22.04/24.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action.
+Light’s Ubuntu Apache installer supports wildcard virtual hosts. Address-specific Apache websites require Emailer Ripe with its supported address-specific installation profile. Nginx on a separate port, such as 8081, can remain running.
+
+The 1.2.3 setup file supports Ubuntu 22.04/24.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action.
 
 ## Your installed account
 
@@ -69,7 +71,7 @@ Use Profile for your account and Sessions to review access. Lost administrator p
 
 ## Updates
 
-1. Download the official new Light setup file and start it using the installation action. Light 1.0.0, 1.1.0, 1.2.0 and 1.2.1 can update directly to 1.2.2. Check the displayed address before choosing an action.
+1. Download the official new Light setup file and start it using the installation action. Light 1.0.0, 1.1.0, 1.2.0, 1.2.1 and 1.2.2 can update directly to 1.2.3. Check the displayed address before choosing an action.
 2. Choose Update with a verified backup. Setup pauses delivery, verifies recovery material and checks the updated application. Follow any Finish a committed update instruction.
 3. Review Doctor and mail settings. Start the same file and choose Resume delivery after reviewing readiness when ready. Previously approved due work may continue after resume; no draft is approved by this action.
 
