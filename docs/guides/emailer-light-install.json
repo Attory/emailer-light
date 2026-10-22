@@ -136,7 +136,7 @@
         "Enter <b>Application hostname</b> if asked: just your dedicated address, without https://, a port or a path. Setup does not assume the machine's name is a public website.",
         "Enter <b>Administrator email</b>. This becomes your sign-in name.",
         "Enter a strong <b>Administrator password</b> and enter it again. Use 15-256 characters.",
-        "On Ubuntu 22.04 fresh setup creates its own database without asking for database details. On Ubuntu 24.04 or Debian 13, enter a database administrator sign-in only if the existing local MariaDB server needs it; passwords are hidden."
+        "On Ubuntu 22.04 fresh setup creates its own database without asking for database details. On Ubuntu 24.04, Ubuntu 26.04 or Debian 13, enter a database administrator sign-in only if the existing local MariaDB server needs it; passwords are hidden."
       ]
     },
     {
@@ -211,7 +211,7 @@
         ],
         [
           "Existing database is incompatible",
-          "Ubuntu 22.04 provisions its own isolated database. On Ubuntu 24.04 or Debian 13, an incompatible existing server is preserved; use the supported separate VPS profile rather than upgrading a shared database during setup."
+          "Ubuntu 22.04 provisions its own isolated database. On Ubuntu 24.04, Ubuntu 26.04 or Debian 13, an incompatible existing server is preserved; use the supported separate VPS profile rather than upgrading a shared database during setup."
         ],
         [
           "Signed OS package catalogue cannot be used",

@@ -64,7 +64,7 @@ sudo may ask for your server account password once. Setup needs host permission 
 1. Enter **Application hostname** if asked: just your dedicated address, without https://, a port or a path. Setup does not assume the machine's name is a public website.
 2. Enter **Administrator email**. This becomes your sign-in name.
 3. Enter a strong **Administrator password** and enter it again. Use 15-256 characters.
-4. On Ubuntu 22.04 fresh setup creates its own database without asking for database details. On Ubuntu 24.04 or Debian 13, enter a database administrator sign-in only if the existing local MariaDB server needs it; passwords are hidden.
+4. On Ubuntu 22.04 fresh setup creates its own database without asking for database details. On Ubuntu 24.04, Ubuntu 26.04 or Debian 13, enter a database administrator sign-in only if the existing local MariaDB server needs it; passwords are hidden.
 
 You will see named progress steps for dependencies, package verification, private folders, database and account, services, backup/recovery, HTTPS and health. Organisation name defaults to Emailer; language to English and scheduling timezone to UTC. SMTP details are not required.
 
@@ -96,7 +96,7 @@ For a fresh Light installation, backups are under `/var/lib/emailer-light/privat
 | --- | --- |
 | Address/DNS or HTTPS validation failed | Correct the domain records and provider firewall for this server, then run the same setup action again. Saved progress is retained. HTTPS is complete only after validation succeeds. |
 | Another service owns port 80 or 443 | Keep that service running. Existing supported Apache/Nginx sites can coexist; a different service owning the web ports needs a separate supported VPS. Setup does not stop unrelated services. |
-| Existing database is incompatible | Ubuntu 22.04 provisions its own isolated database. On Ubuntu 24.04 or Debian 13, an incompatible existing server is preserved; use the supported separate VPS profile rather than upgrading a shared database during setup. |
+| Existing database is incompatible | Ubuntu 22.04 provisions its own isolated database. On Ubuntu 24.04, Ubuntu 26.04 or Debian 13, an incompatible existing server is preserved; use the supported separate VPS profile rather than upgrading a shared database during setup. |
 | Signed OS package catalogue cannot be used | Check the server clock, internet connection and configured OS repositories. Setup does not bypass signature checks. Keep the same setup file and retry. |
 | Package authenticity or integrity verification failed | Delete only the failed download, obtain a fresh official setup file, and retry. Keep any existing application and recovery files. |
 | Setup interrupted | Run the same action again. It resumes the recorded setup; it does not create another administrator or reset an existing database. |
