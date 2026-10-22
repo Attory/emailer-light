@@ -36,7 +36,7 @@ class HostHandoff:
         if action != 'drain':
             values.update(self.state['database'])
             values['source_url'] = self.m.source_values['DATABASE_URL']
-        return self.m.call(['/usr/bin/php8.4', str(self.m.package.parent / 'host-database.php')], data=json.dumps(values))
+        return self.m.call([self.host.php, str(self.m.package.parent / 'host-database.php')], data=json.dumps(values))
 
     def web(self):
         from hosting import WebServer
@@ -407,7 +407,6 @@ class HostHandoff:
         host.backups = backups
         host.base = m.releases.parent
         host.release = (m.releases / 'current').resolve(strict=True)
-        host.php = '/usr/bin/php8.4'
         host.database_profile = 'isolated' if urllib.parse.parse_qs(original_url.query).get('unix_socket') == ['/run/emailer-database/mysql.sock'] else 'shared'
         host.resource_claims = self.claims()
         host.services()

@@ -20,13 +20,13 @@ from manage import ManagementError
 class ApacheProfile(unittest.TestCase):
     def test_profiles_choose_only_explicit_tested_combinations(self):
         with patch('hosting.shutil.which',return_value=None):
-            for version in ('22.04','24.04'):
+            for version in ('22.04','24.04','26.04'):
                 self.assertEqual('apache2',WebServer.discover(('ubuntu',version),SetupError).kind)
             self.assertEqual('nginx',WebServer.discover(('debian','13'),SetupError).kind)
-            for system in [('ubuntu','20.04'),('ubuntu','26.04'),('debian','12')]:
+            for system in [('ubuntu','20.04'),('ubuntu','25.10'),('debian','12')]:
                 with self.subTest(system=system),self.assertRaises(SetupError):WebServer.discover(system,SetupError)
         with patch('hosting.shutil.which',side_effect=lambda name:'/usr/sbin/'+name):
-            for version in ('22.04','24.04'):
+            for version in ('22.04','24.04','26.04'):
                 self.assertEqual('apache2',WebServer.discover(('ubuntu',version),SetupError).kind)
             with self.assertRaisesRegex(SetupError,'Existing Apache/Caddy'):
                 WebServer.discover(('debian','13'),SetupError)

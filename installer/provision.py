@@ -57,8 +57,10 @@ def durable(path, content, mode=0o600):
             os.unlink(temporary)
 
 
-def generated_launcher(bundle, name, user, runtime, current):
-    command = (Path(bundle) / 'command.py').read_text().replace('@NAME@', name).replace('@USER@', user).replace('@RUNTIME_FILE@', str(runtime)).replace('@CURRENT_RELEASE@', str(current))
+def generated_launcher(bundle, name, user, runtime, current, *, php='/usr/bin/php8.4'):
+    if php not in ('/usr/bin/php8.4', '/usr/bin/php8.5'):
+        raise SetupError('The selected PHP runtime is outside the supported installation profiles.')
+    command = (Path(bundle) / 'command.py').read_text().replace('@NAME@', name).replace('@USER@', user).replace('@RUNTIME_FILE@', str(runtime)).replace('@CURRENT_RELEASE@', str(current)).replace('@PHP@', php)
     return '#!/usr/bin/python3\n' + (Path(bundle) / 'runtime_env.py').read_text() + '\n' + command.partition('\n')[2]
 
 
@@ -123,6 +125,14 @@ class Installer:
         self.step = 'Checking this server'
         self.durable = durable
 
+    @property
+    def php_version(self):
+        return getattr(self, 'php', '/usr/bin/php8.4').removeprefix('/usr/bin/php')
+
+    @property
+    def php_fpm(self):
+        return '/usr/sbin/php-fpm' + self.php_version
+
     def save(self):
         durable(self.journal, json.dumps(self.state, indent=2) + '\n')
 
@@ -148,6 +158,7 @@ class Installer:
         system = (values.get('ID', '').strip('"'), values.get('VERSION_ID', '').strip('"'))
         from hosting import WebServer
         self.system = system
+        self.php = '/usr/bin/php8.5' if system == ('ubuntu', '26.04') else '/usr/bin/php8.4'
         self.web = WebServer.discover(system, SetupError)
         if platform.machine() != 'x86_64' or not Path('/run/systemd/system').is_dir():
             raise SetupError('Setup needs an amd64 supported VPS booted with systemd. File-upload hosting cannot run the required background services.')
@@ -275,14 +286,14 @@ class Installer:
         self.state['web_server'] = self.web.kind
         self.state['database_profile'] = self.database_profile
         self.save()
-        self.php = '/usr/bin/php8.4'
         self.release = self.base / 'releases' / self.version
         self.site = self.web.directory / 'sites-available' / (self.name + '.conf')
         print(f"\nInstalling {self.product} {self.version} at https://{self.state['hostname']}\nApplication files: {self.base}\nAn existing website, if present, will retain its PHP runtime and settings.")
 
     def dependencies(self, runtime_only=False):
-        packages = ['ca-certificates', 'curl', 'unzip', 'openssl', 'certbot', 'php8.4-cli', 'php8.4-fpm', 'php8.4-curl',
-                    'php8.4-gd', 'php8.4-intl', 'php8.4-mbstring', 'php8.4-mysql', 'php8.4-xml', 'php8.4-zip']
+        php_prefix = 'php' + self.php_version + '-'
+        packages = ['ca-certificates', 'curl', 'unzip', 'openssl', 'certbot']
+        packages += [php_prefix + suffix for suffix in ('cli', 'fpm', 'curl', 'gd', 'intl', 'mbstring', 'mysql', 'xml', 'zip')]
         from packages import ubuntu_php_source
         ubuntu_php_source(self)
         if not runtime_only and not shutil.which(self.web.kind):
@@ -292,18 +303,18 @@ class Installer:
         if not runtime_only and self.database_profile == 'isolated':
             packages.extend(['libaio1', 'libncurses6', 'libnuma1'])
         if runtime_only:
-            packages = [package for package in packages if package.startswith('php8.4-') or package in ('ca-certificates', 'openssl', 'curl', 'unzip')]
+            packages = [package for package in packages if package.startswith(php_prefix) or package in ('ca-certificates', 'openssl', 'curl', 'unzip')]
         # No global PHP alternatives switch; no automatic unrelated service restart.
         missing = []
         for package in packages:
             status = subprocess.run(['dpkg-query', '-W', '-f=${Status}', package], capture_output=True, text=True)
             if status.returncode or status.stdout != 'install ok installed':
                 missing.append(package)
-        selections = [('php', '/usr/bin/php', 'php8.4-cli'), ('php-fpm.sock', '/run/php/php-fpm.sock', 'php8.4-fpm')]
-        common = subprocess.run(['dpkg-query', '-W', '-f=${Status} ${Version}', 'php8.4-common'], capture_output=True, text=True)
+        selections = [('php', '/usr/bin/php', php_prefix + 'cli'), ('php-fpm.sock', '/run/php/php-fpm.sock', php_prefix + 'fpm')]
+        common = subprocess.run(['dpkg-query', '-W', '-f=${Status} ${Version}', php_prefix + 'common'], capture_output=True, text=True)
         if common.returncode == 0 and common.stdout.startswith('install ok installed '):
             installed_php_version = common.stdout.split()[-1]
-            missing = [package + '=' + installed_php_version if package.startswith('php8.4-') else package for package in missing]
+            missing = [package + '=' + installed_php_version if package.startswith(php_prefix) else package for package in missing]
         # Inspect registered selections even when /run links have disappeared after boot.
         # Retain original receipts only across an unfinished APT task, including one
         # that installed all packages before interruption.
@@ -411,6 +422,7 @@ class Installer:
             raise SetupError('The existing PHP command or shared FPM socket could not be preserved. Setup stopped before changing application resources.')
 
     def install_missing_packages(self, missing):
+        php_prefix = 'php' + self.php_version + '-'
         catalogue = subprocess.run(['apt-get', '--error-on=any', '-o', 'Acquire::Retries=0', '-o', 'Acquire::http::Timeout=10', '-o', 'Acquire::https::Timeout=10', 'update'], capture_output=True, text=True)
         if catalogue.returncode:
             evidence = catalogue.stdout + catalogue.stderr
@@ -427,14 +439,14 @@ class Installer:
             raise SetupError(reason + ' Then start the same setup package again; completed steps are retained.')
         from packages import validate_plan, ServicePolicy
         plan = subprocess.run(['apt-get', '--simulate', 'install', '--no-install-recommends', *missing], capture_output=True, text=True)
-        if plan.returncode and any(name.startswith('php8.4-') and '=' in name for name in missing):
-            raise SetupError('The matching PHP 8.4 patch packages are unavailable. Setup kept that PHP version unchanged. Restore matching signed extension packages or arrange normal maintenance for the existing PHP runtime, then retry.')
+        if plan.returncode and any(name.startswith(php_prefix) and '=' in name for name in missing):
+            raise SetupError(f'The matching PHP {self.php_version} patch packages are unavailable. Setup kept that PHP version unchanged. Restore matching signed extension packages or arrange normal maintenance for the existing PHP runtime, then retry.')
         if plan.returncode:
-            raise SetupError('The supported package transaction could not be resolved. No packages were installed; inspect apt-cache policy for the required PHP 8.4 packages and retain the current host packages.')
+            raise SetupError(f'The supported package transaction could not be resolved. No packages were installed; inspect apt-cache policy for the required PHP {self.php_version} packages and retain the current host packages.')
         from packages import retained_preferences
-        compatible = ('php-common', 'libgd3') if getattr(self, 'system', ('debian', '13'))[0] == 'ubuntu' else ()
-        retained = ', '.join(name + '=' + version for name, version in re.findall(r'^Inst ([a-z0-9][a-z0-9+.:~-]*) \[([a-zA-Z0-9+.:~_-]+)\]', plan.stdout, re.M) if name not in compatible and not name.startswith('php8.4-'))
-        with retained_preferences(plan.stdout, compatible, self.state_dir, SetupError) as preferences:
+        compatible = ('php-common', 'libgd3') if getattr(self, 'system', ('debian', '13')) in (('ubuntu', '22.04'), ('ubuntu', '24.04')) else ()
+        retained = ', '.join(name + '=' + version for name, version in re.findall(r'^Inst ([a-z0-9][a-z0-9+.:~-]*) \[([a-zA-Z0-9+.:~_-]+)\]', plan.stdout, re.M) if name not in compatible and not name.startswith(php_prefix))
+        with retained_preferences(plan.stdout, compatible, self.state_dir, SetupError, php_prefix=php_prefix) as preferences:
             if preferences:
                 plan = subprocess.run(['apt-get', *preferences, '--simulate', 'install', '--no-install-recommends', *missing], capture_output=True, text=True)
                 if plan.returncode:
@@ -453,11 +465,11 @@ class Installer:
                                           capture_output=True, text=True, pass_fds=(policy.descriptor,), env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive', 'NEEDRESTART_MODE': 'l', 'NEEDRESTART_SUSPEND': '1'})
             if installation.returncode:
                 evidence = installation.stdout + installation.stderr
-                pinned_php = any(name.startswith('php8.4-') and '=' in name for name in missing)
+                pinned_php = any(name.startswith(php_prefix) and '=' in name for name in missing)
                 if 'EMAILER_APT_PLAN_CHANGED' in evidence:
                     reason = 'The actual host package transaction changed after validation. No package was unpacked. Let other operating-system package tasks finish, then rerun setup.'
                 elif pinned_php and re.search(r'was not found|not available|no installation candidate|unmet dependencies|held broken packages', evidence, re.I):
-                    reason = 'The configured repositories no longer offer extensions matching the PHP 8.4 patch already used on this server. Setup kept that PHP version unchanged to protect existing websites. Restore the matching signed packages, or arrange a coordinated PHP patch update for those websites, then run setup again. A separate supported VPS also avoids this conflict.'
+                    reason = f'The configured repositories no longer offer extensions matching the PHP {self.php_version} patch already used on this server. Setup kept that PHP version unchanged to protect existing websites. Restore the matching signed packages, or arrange a coordinated PHP patch update for those websites, then run setup again. A separate supported VPS also avoids this conflict.'
                 elif re.search(r'Could not get lock|Unable to acquire.*lock|dpkg was interrupted', evidence, re.I):
                     reason = 'Another operating-system package task is running, or an earlier task was interrupted. Finish that operating-system package task before starting setup again.'
                 elif re.search(r'Unable to locate package|no installation candidate', evidence, re.I):
@@ -772,7 +784,7 @@ Description={self.product} isolated PHP runtime
 After=network.target {database_service}
 Wants={database_service}
 [Service]
-ExecStart=/usr/sbin/php-fpm8.4 --nodaemonize --fpm-config {self.config}/fpm.conf
+ExecStart={self.php_fpm} --nodaemonize --fpm-config {self.config}/fpm.conf
 EnvironmentFile={runtime}
 RuntimeDirectory={self.name}-fpm
 Restart=on-failure
@@ -799,7 +811,7 @@ WantedBy=multi-user.target
             if not worker:
                 interval = '60s' if role == 'scheduler' else '15min'
                 self.service_file(self.name + '-' + role + '.timer', f'[Unit]\nDescription={self.product} {role} timer\n[Timer]\nOnBootSec=60s\nOnUnitActiveSec={interval}\nPersistent=true\n[Install]\nWantedBy=timers.target\n')
-        run(['/usr/sbin/php-fpm8.4', '--test', '--fpm-config', str(self.config / 'fpm.conf')])
+        run([self.php_fpm, '--test', '--fpm-config', str(self.config / 'fpm.conf')])
         self.claims().check_all()
         for suffix in ('fpm.service', 'worker.service', 'scheduler.service', 'scheduler.timer', 'operations.service', 'operations.timer'):
             self.check_unit(self.name + '-' + suffix)
@@ -808,7 +820,7 @@ WantedBy=multi-user.target
             run(['systemctl', 'enable', '--now', self.name + '-' + unit])
         run(['systemctl', 'start', self.name + '-scheduler.service'])
         # Self-contained least-privilege command launcher, no shell expansion of runtime secrets.
-        launcher = generated_launcher(self.bundle, self.name, self.user, runtime, self.base / 'releases/current')
+        launcher = generated_launcher(self.bundle, self.name, self.user, runtime, self.base / 'releases/current', php=self.php)
         self.claims().write('/usr/local/sbin/' + self.name, launcher, 0o755)
 
     def validated_site(self, text, enabled=None):
