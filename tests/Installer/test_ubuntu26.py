@@ -1,5 +1,6 @@
 """Native Ubuntu26 runtime selection must not change shared runtimes or sources."""
 import os
+import json
 import subprocess
 from pathlib import Path
 import sys
@@ -11,7 +12,7 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'installer'))
 from packages import ubuntu_php_source, validate_plan, retained_preferences
 from provision import Installer, SetupError, generated_launcher
-from manage import Manager
+from manage import Manager, ManagementError
 
 
 class Ubuntu26Runtime(unittest.TestCase):
@@ -25,6 +26,23 @@ class Ubuntu26Runtime(unittest.TestCase):
                         instance.preflight()
                 self.assertEqual('/usr/bin/php' + expected, instance.php)
                 self.assertEqual('/usr/sbin/php-fpm' + expected, instance.php_fpm)
+
+    def test_constructor_reenters_exact_managed_release_paths_and_rejects_other_targets(self):
+        class SelectedConfiguration(Exception):
+            pass
+        selected = [('emailer-light', '/etc/emailer-light-light-124/runtime.env')]
+        for product, runtime in selected:
+            pointer = {'format': 'emailer-active-installation-v1', 'product': product, 'runtime': runtime}
+            with self.subTest(runtime=runtime), patch.object(Path, 'exists', return_value=True), patch('manage.protected', return_value=types.SimpleNamespace(read_text=lambda: json.dumps(pointer))), patch('manage.read_environment', side_effect=SelectedConfiguration) as reader:
+                with self.assertRaises(SelectedConfiguration):
+                    Manager(types.SimpleNamespace(), '/etc/emailer-light/runtime.env')
+                reader.assert_called_once_with(Path(runtime))
+        for runtime in ['/etc/emailer-light-light-125/runtime.env', '/etc/emailer-light-ripe-132/runtime.env', '/tmp/emailer-light-light-124/runtime.env', '/etc/emailer-light-light-124/../runtime.env']:
+            pointer = {'format': 'emailer-active-installation-v1', 'product': 'emailer-light', 'runtime': runtime}
+            with self.subTest(rejected=runtime), patch.object(Path, 'exists', return_value=True), patch('manage.protected', return_value=types.SimpleNamespace(read_text=lambda: json.dumps(pointer))), patch('manage.read_environment') as reader:
+                with self.assertRaisesRegex(ManagementError, 'active installation pointer is invalid'):
+                    Manager(types.SimpleNamespace(), '/etc/emailer-light/runtime.env')
+                reader.assert_not_called()
 
     def test_real_outer_os_gate_accepts26_and_rejects_unsupported_before_bootstrap(self):
         source = (Path(__file__).resolve().parents[2] / 'installer/setup.in').read_text()

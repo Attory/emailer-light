@@ -10,7 +10,7 @@ contexts; acceptance and delivery resume are explicit. See the
 ## Install or update
 
 Use the [beginner installation guide](docs/guides/emailer-light-install.md).
-The self-contained official setup file provisions Ubuntu 22.04/24.04 amd64
+The self-contained official setup file provisions Ubuntu 22.04/24.04/26.04 amd64
 with Apache, or Debian 13 with Nginx, using a dedicated PHP 8.4 FPM instance.
 Ubuntu 22.04 adds isolated MariaDB 10.11.19 beside existing database servers;
 Ubuntu 24.04/Debian reuse compatible local MariaDB. Existing Apache/PHP 8.1
