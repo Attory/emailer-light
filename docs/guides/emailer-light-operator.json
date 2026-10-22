@@ -40,15 +40,15 @@
       "rows": [
         [
           "Host",
-          "Ubuntu 22.04/24.04 LTS amd64/systemd with Apache, or Debian 13 amd64/systemd with Nginx. Tested server: 2 cores, 3 GB RAM, 24 GB disk. Minimum free space: 5 GiB on Ubuntu 22.04; 2 GiB elsewhere."
+          "Ubuntu 22.04/24.04/26.04 LTS amd64/systemd with Apache, or Debian 13 amd64/systemd with Nginx. Tested server: 2 cores, 3 GB RAM, 24 GB disk. Minimum free space: 5 GiB on Ubuntu 22.04; 2 GiB elsewhere."
         ],
         [
           "Web/runtime",
-          "Dedicated PHP 8.4 FPM instance: Apache on Ubuntu, Nginx on Debian 13. Existing PHP versions, global CLI selection and Apache MPM/handlers are retained."
+          "Dedicated PHP 8.4 FPM on Ubuntu 22.04/24.04 and Debian 13; PHP 8.5 on Ubuntu 26.04: Apache on Ubuntu, Nginx on Debian 13. Existing PHP versions, global CLI selection and Apache MPM/handlers are retained."
         ],
         [
           "Database",
-          "Ubuntu 22.04: isolated socket-only MariaDB 10.11.19; existing shared servers remain unchanged. Ubuntu 24.04/Debian 13: compatible local MariaDB 10.11 or 11.8; incompatible servers stop preflight before packages."
+          "Ubuntu 22.04: isolated socket-only MariaDB 10.11.19; existing shared servers remain unchanged. Ubuntu 24.04/26.04 and Debian 13: compatible local MariaDB 10.11 or 11.8; incompatible servers stop preflight before packages."
         ],
         [
           "Network",
@@ -62,7 +62,7 @@
     },
     {
       "type": "p",
-      "text": "The exact native versions below are acceptance observations, not a promise to freeze security patches. PHP extensions must match the installed PHP 8.4 patch. Application CI separately tests PHP 8.4.24 and 8.5.9 with MariaDB 10.11.19 and 11.8.9; it does not claim a native PHP 8.5 profile."
+      "text": "The exact native versions below are acceptance observations, not a promise to freeze security patches. PHP extensions must match the installed PHP 8.4 or 8.5 patch selected for that OS. Application CI separately tests PHP 8.4.24 and 8.5.9 with MariaDB 10.11.19 and 11.8.9; the native Ubuntu 26.04.1 profile separately verifies distribution PHP 8.5.4 with MariaDB 11.8.6."
     },
     {
       "type": "table",
@@ -111,7 +111,7 @@
     },
     {
       "type": "p",
-      "text": "Ubuntu PHP 8.4 comes from the maintained <a href=\"https://launchpad.net/~ondrej/+archive/ubuntu/php\">Ondřej Surý Launchpad PPA</a>, using the existing signing identity B8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6. Setup pins all other PPA packages below installed distro packages; only php8.4-*, php-common metadata and the ABI-compatible libgd3 image library may be selected. It does not change installed PHP 8.1 packages or shared Apache/database packages."
+      "text": "On Ubuntu 22.04/24.04 only, PHP 8.4 comes from the maintained <a href=\"https://launchpad.net/~ondrej/+archive/ubuntu/php\">Ondřej Surý Launchpad PPA</a>, using the existing signing identity B8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6. Setup pins all other PPA packages below installed distro packages; only php8.4-*, php-common metadata and the ABI-compatible libgd3 image library may be selected. It does not change installed PHP 8.1 packages or shared Apache/database packages."
     },
     {
       "type": "p",
@@ -119,7 +119,7 @@
     },
     {
       "type": "p",
-      "text": "Host APT does not patch the isolated MariaDB binary. Its future security patches require a reviewed Emailer installer/maintenance release. Retain its ownership receipt and data directory; do not replace its binaries or run the distribution database upgrade against it. A shared Ubuntu 22.04 MariaDB 10.6.23 server and its data were tested unchanged beside it. On Ubuntu 24.04/Debian13 an incompatible shared database stops before mutation; isolated arrangements on those profiles are not claimed."
+      "text": "Host APT does not patch the isolated MariaDB binary. Its future security patches require a reviewed Emailer installer/maintenance release. Retain its ownership receipt and data directory; do not replace its binaries or run the distribution database upgrade against it. A shared Ubuntu 22.04 MariaDB 10.6.23 server and its data were tested unchanged beside it. On Ubuntu 24.04/26.04 and Debian 13 an incompatible shared database stops before mutation; isolated arrangements on those profiles are not claimed."
     },
     {
       "type": "p",
@@ -135,7 +135,7 @@
     },
     {
       "type": "p",
-      "text": "Healthy installed PHP 8.4 stays on its current patch; missing extensions must match exactly. Setup preserves the global CLI choice, existing PHP handlers, Apache MPM and shared database versions. It authenticates the pre-unpack package plan again under APT’s locks. A temporary, crash-recoverable service policy suppresses package-triggered restarts and retains the original bytes, mode, ownership and extended attributes. Apache/nginx configuration is checked before a scoped reload. Unknown custom routing, handlers, includes or additional sites in an adopted file are refused before whole-file replacement."
+      "text": "Healthy installed PHP 8.4 or 8.5 stays on its current patch; missing extensions must match exactly. Setup preserves the global CLI choice, existing PHP handlers, Apache MPM and shared database versions. It authenticates the pre-unpack package plan again under APT’s locks. A temporary, crash-recoverable service policy suppresses package-triggered restarts and retains the original bytes, mode, ownership and extended attributes. Apache/nginx configuration is checked before a scoped reload. Unknown custom routing, handlers, includes or additional sites in an adopted file are refused before whole-file replacement."
     },
     {
       "type": "h2",

@@ -18,13 +18,13 @@ Ubuntu Apache can coexist with Nginx on a separate port (tested: 8081). Setup ma
 
 | Component | Supported scope |
 | --- | --- |
-| Host | Ubuntu 22.04/24.04 LTS amd64/systemd with Apache, or Debian 13 amd64/systemd with Nginx. Tested server: 2 cores, 3 GB RAM, 24 GB disk. Minimum free space: 5 GiB on Ubuntu 22.04; 2 GiB elsewhere. |
-| Web/runtime | Dedicated PHP 8.4 FPM instance: Apache on Ubuntu, Nginx on Debian 13. Existing PHP versions, global CLI selection and Apache MPM/handlers are retained. |
-| Database | Ubuntu 22.04: isolated socket-only MariaDB 10.11.19; existing shared servers remain unchanged. Ubuntu 24.04/Debian 13: compatible local MariaDB 10.11 or 11.8; incompatible servers stop preflight before packages. |
+| Host | Ubuntu 22.04/24.04/26.04 LTS amd64/systemd with Apache, or Debian 13 amd64/systemd with Nginx. Tested server: 2 cores, 3 GB RAM, 24 GB disk. Minimum free space: 5 GiB on Ubuntu 22.04; 2 GiB elsewhere. |
+| Web/runtime | Dedicated PHP 8.4 FPM on Ubuntu 22.04/24.04 and Debian 13; PHP 8.5 on Ubuntu 26.04: Apache on Ubuntu, Nginx on Debian 13. Existing PHP versions, global CLI selection and Apache MPM/handlers are retained. |
+| Database | Ubuntu 22.04: isolated socket-only MariaDB 10.11.19; existing shared servers remain unchanged. Ubuntu 24.04/26.04 and Debian 13: compatible local MariaDB 10.11 or 11.8; incompatible servers stop preflight before packages. |
 | Network | Official HTTPS setup delivery, signed OS/PHP repositories, archive.mariadb.org on Ubuntu 22.04; public DNS, inbound 80/443 and outbound HTTPS for ACME. SMTP is optional until sending. |
 | Excluded | Untested OS/web combinations, ARM, Caddy, remote databases, custom URL port/subfolder, shared private/key storage and ordinary file-upload hosting. |
 
-The exact native versions below are acceptance observations, not a promise to freeze security patches. PHP extensions must match the installed PHP 8.4 patch. Application CI separately tests PHP 8.4.24 and 8.5.9 with MariaDB 10.11.19 and 11.8.9; it does not claim a native PHP 8.5 profile.
+The exact native versions below are acceptance observations, not a promise to freeze security patches. PHP extensions must match the installed PHP 8.4 or 8.5 patch selected for that OS. Application CI separately tests PHP 8.4.24 and 8.5.9 with MariaDB 10.11.19 and 11.8.9; the native Ubuntu 26.04.1 profile separately verifies distribution PHP 8.5.4 with MariaDB 11.8.6.
 
 | OS | Web server | Emailer PHP | Emailer database |
 | --- | --- | --- | --- |
@@ -35,11 +35,11 @@ The exact native versions below are acceptance observations, not a promise to fr
 
 ## Ubuntu package sources and isolated database maintenance
 
-Ubuntu PHP 8.4 comes from the maintained [Ondřej Surý Launchpad PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php), using the existing signing identity B8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6. Setup pins all other PPA packages below installed distro packages; only php8.4-*, php-common metadata and the ABI-compatible libgd3 image library may be selected. It does not change installed PHP 8.1 packages or shared Apache/database packages.
+On Ubuntu 22.04/24.04 only, PHP 8.4 comes from the maintained [Ondřej Surý Launchpad PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php), using the existing signing identity B8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6. Setup pins all other PPA packages below installed distro packages; only php8.4-*, php-common metadata and the ABI-compatible libgd3 image library may be selected. It does not change installed PHP 8.1 packages or shared Apache/database packages.
 
 Ubuntu 22.04’s isolated MariaDB 10.11.19 uses `/opt/emailer-database/10.11.19`, `/var/lib/emailer-database/data`, `/etc/emailer-database.cnf` and `/run/emailer-database/mysql.sock`, under `emailer-database.service` and its dedicated non-root user. It accepts only a Unix socket, not a TCP database port. The official upstream binary archive is SHA-256 pinned inside the edition-signed installer; its upstream signature was verified during release preparation. See [MariaDB’s binary-tarball documentation](https://mariadb.com/docs/server/server-management/install-and-upgrade-mariadb/installing-mariadb/binary-packages/installing-mariadb-binary-tarballs).
 
-Host APT does not patch the isolated MariaDB binary. Its future security patches require a reviewed Emailer installer/maintenance release. Retain its ownership receipt and data directory; do not replace its binaries or run the distribution database upgrade against it. A shared Ubuntu 22.04 MariaDB 10.6.23 server and its data were tested unchanged beside it. On Ubuntu 24.04/Debian13 an incompatible shared database stops before mutation; isolated arrangements on those profiles are not claimed.
+Host APT does not patch the isolated MariaDB binary. Its future security patches require a reviewed Emailer installer/maintenance release. Retain its ownership receipt and data directory; do not replace its binaries or run the distribution database upgrade against it. A shared Ubuntu 22.04 MariaDB 10.6.23 server and its data were tested unchanged beside it. On Ubuntu 24.04/26.04 and Debian 13 an incompatible shared database stops before mutation; isolated arrangements on those profiles are not claimed.
 
 Shared hosting is unsupported because persistent workers, system timers, isolated service identity and private key storage are required. No file-upload compatibility is claimed. The native installer does not require Docker or Composer on the customer server.
 
@@ -47,7 +47,7 @@ Shared hosting is unsupported because persistent workers, system timers, isolate
 
 Fresh setup checks the exact platform, free space, actual port owners, parsed Apache/Nginx hostname inventory, protected paths and resource conflicts. It reserves dedicated generated identities before creating them. An occupied hostname is preserved and a spare address is requested. Several existing Emailer installations are an ambiguous target and stop without adoption. Existing unrelated databases and applications’ secrets are never reused.
 
-Healthy installed PHP 8.4 stays on its current patch; missing extensions must match exactly. Setup preserves the global CLI choice, existing PHP handlers, Apache MPM and shared database versions. It authenticates the pre-unpack package plan again under APT’s locks. A temporary, crash-recoverable service policy suppresses package-triggered restarts and retains the original bytes, mode, ownership and extended attributes. Apache/nginx configuration is checked before a scoped reload. Unknown custom routing, handlers, includes or additional sites in an adopted file are refused before whole-file replacement.
+Healthy installed PHP 8.4 or 8.5 stays on its current patch; missing extensions must match exactly. Setup preserves the global CLI choice, existing PHP handlers, Apache MPM and shared database versions. It authenticates the pre-unpack package plan again under APT’s locks. A temporary, crash-recoverable service policy suppresses package-triggered restarts and retains the original bytes, mode, ownership and extended attributes. Apache/nginx configuration is checked before a scoped reload. Unknown custom routing, handlers, includes or additional sites in an adopted file are refused before whole-file replacement.
 
 ## Files and service ownership
 
