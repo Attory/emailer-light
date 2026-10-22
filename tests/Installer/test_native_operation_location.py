@@ -46,6 +46,17 @@ class NativeOperationLocation(unittest.TestCase):
                     manager.restore_services.assert_not_called()
                     self.assertEqual('activated', json.loads(operation.read_text())['phase'])
 
+    def test_failure_before_any_core_journal_restores_only_the_prepared_host(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager, operation = self.manager(Path(directory), '1.2.3', True, 'unused')
+            operation.unlink()
+            manager.console.side_effect = ManagementError('Synthetic pre-journal rejection')
+            with patch('host.HostHandoff') as handoff:
+                with self.assertRaisesRegex(ManagementError, 'pre-journal rejection'):
+                    manager.native_action('1')
+                handoff.return_value.recover_host.assert_called_once()
+                manager.restore_services.assert_called_once()
+
     def test_recover_calls_core_before_restoring_host_and_uses_retained_source_on_reentry(self):
         with tempfile.TemporaryDirectory() as directory:
             manager, operation = self.manager(Path(directory), '1.2.3', True, 'activated')
