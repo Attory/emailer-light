@@ -23,7 +23,8 @@ def protected_content(path, content, durable, error):
 
 
 def ubuntu_php_source(installer):
-    if installer.system[0] != 'ubuntu':
+    # Resolute uses its maintained distribution PHP8.5; do not add a nonexistent PPA.
+    if installer.system[0] != 'ubuntu' or installer.system == ('ubuntu', '26.04'):
         return
     codename = {'22.04': 'jammy', '24.04': 'noble'}[installer.system[1]]
     key = installer.bundle / 'ubuntu-php.asc'
@@ -53,20 +54,21 @@ def validate_plan(output, error, compatible_packages=()):
         if line.startswith(('Remv ', 'Purg ')):
             raise error('Installing the missing dependencies would remove existing host software. No packages were changed; use a separate supported VPS or resolve the named package conflict.')
         match = re.match(r'^Inst (\S+) \[([^]]+)\]', line)
-        if match and match.group(1) not in compatible_packages and not match.group(1).startswith('php8.4-'):
+        if match and match.group(1) not in compatible_packages and not match.group(1).startswith(('php8.4-', 'php8.5-')):
             raise error('The package manager would change existing host package ' + match.group(1) + '. No packages were changed. Update that shared dependency through your normal host maintenance process, then retry setup; setup will not upgrade shared software.')
-        if match and match.group(1).startswith('php8.4-'):
+        if match and match.group(1).startswith(('php8.4-', 'php8.5-')):
             # The existing pool can belong to another website; keep its patch too.
-            raise error('The required PHP 8.4 extensions need a different patch than an existing PHP 8.4 installation. Setup kept that runtime unchanged; restore matching signed packages or arrange its normal host maintenance first.')
+            version = match.group(1).split('-', 1)[0].removeprefix('php')
+            raise error(f'The required PHP {version} extensions need a different patch than an existing PHP {version} installation. Setup kept that runtime unchanged; restore matching signed packages or arrange its normal host maintenance first.')
 
 
 @contextmanager
-def retained_preferences(output, compatible, directory, error):
+def retained_preferences(output, compatible, directory, error, *, php_prefix='php8.4-'):
     """Per-command constraints avoid APT's optional upgrades; host policy stays intact."""
     retained = {}
     for line in output.splitlines():
         match = re.match(r'^Inst ([a-z0-9][a-z0-9+.:~-]*) \[([a-zA-Z0-9+.:~_-]+)\]', line)
-        if match and match.group(1) not in compatible and not match.group(1).startswith('php8.4-'):
+        if match and match.group(1) not in compatible and not match.group(1).startswith(php_prefix):
             retained[match.group(1)] = match.group(2)
     if not retained:
         yield []

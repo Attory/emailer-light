@@ -51,7 +51,7 @@ class Manager:
             product = selected.get('product', '')
             if not re.fullmatch(r'emailer-[a-z]+', product):
                 raise ManagementError('The active installation edition is invalid.')
-            candidates = [Path('/etc') / (self.root.name + '-' + product.removeprefix('emailer-') + '-' + suffix) / 'runtime.env' for suffix in ('110', '120', '121', '122', '123')]
+            candidates = [Path('/etc') / (self.root.name + '-' + product.removeprefix('emailer-') + '-' + suffix) / 'runtime.env' for suffix in ('110', '120', '121', '122', '123', '124')]
             expected = Path(selected.get('runtime', ''))
             if selected.get('format') != 'emailer-active-installation-v1' or expected not in candidates:
                 raise ManagementError('The active installation pointer is invalid. It was preserved.')
@@ -104,9 +104,9 @@ class Manager:
         from provision import generated_launcher
         values = read_environment(self.configuration)
         account = pwd.getpwuid(Path(values['EMAILER_SECRET_KEY_FILE']).stat().st_uid)
-        expected = generated_launcher(self.installer.bundle, self.configuration.parent.name, account.pw_name, self.configuration, self.releases / 'current')
+        expected = [generated_launcher(self.installer.bundle, self.configuration.parent.name, account.pw_name, self.configuration, self.releases / 'current', php=php).encode() for php in ('/usr/bin/php8.4', '/usr/bin/php8.5')]
         actual = protected(launcher, public=True).read_bytes()
-        if actual == expected.encode():
+        if actual in expected:
             return
         handoff = self.record.get('host_handoff', {})
         entry = handoff.get('resource_claims', {}).get(str(launcher))
@@ -119,8 +119,8 @@ class Manager:
             if isinstance(source_user, str) and re.fullmatch(r'[a-z_][a-z0-9_-]*', source_user):
                 candidates.append((self.original_configuration.parent.name, source_user, self.original_configuration))
             for candidate_name, user, configuration in candidates:
-                candidate = generated_launcher(self.installer.bundle, candidate_name, user, configuration, self.releases / 'current')
-                if actual == candidate.encode():
+                candidate = [generated_launcher(self.installer.bundle, candidate_name, user, configuration, self.releases / 'current', php=php).encode() for php in ('/usr/bin/php8.4', '/usr/bin/php8.5')]
+                if actual in candidate:
                     return
         raise ManagementError('The Emailer command name is occupied by an unrelated or custom launcher. It was preserved and was not executed. Move that command to another name or restore the original generated Emailer launcher, then retry setup; no replacement launcher needs to be assembled.')
 
@@ -130,7 +130,7 @@ class Manager:
     def call(self, arguments, *, environment=None, data=None):
         result = subprocess.run(arguments, input=data, text=True, env={**(os.environ if environment is None else environment), 'EMAILER_INSTALLER_DIAGNOSTICS': '1'}, capture_output=True)
         if result.returncode:
-            step = arguments[2] if arguments[0].endswith('php8.4') and len(arguments) > 2 else Path(arguments[0]).name
+            step = arguments[2] if arguments[0] in ('/usr/bin/php8.4', '/usr/bin/php8.5') and len(arguments) > 2 else Path(arguments[0]).name
             diagnostic = {'step': step, 'exit_code': result.returncode}
             try:
                 report = json.loads(result.stdout)
@@ -186,7 +186,7 @@ class Manager:
             else:
                 self.installer.durable(destination, (host.bundle / name).read_bytes(), 0o400)
         self.package = package_dir / host.meta['archive']
-        self.call(['/usr/bin/php8.4', str(package_dir / 'verify-package.php'), '--archive=' + str(self.package), '--public-key=' + str(package_dir / 'release.pub'), '--current-version=' + version, '--expected-version=' + version, '--expected-source=' + host.meta['source_commit']])
+        self.call([self.installer.php, str(package_dir / 'verify-package.php'), '--archive=' + str(self.package), '--public-key=' + str(package_dir / 'release.pub'), '--current-version=' + version, '--expected-version=' + version, '--expected-source=' + host.meta['source_commit']])
         self.bootstrap = package_dir / 'runtime'
         manifest = json.loads((package_dir / (host.meta['archive'] + '.manifest.json')).read_text())
         if not self.bootstrap.exists():
@@ -259,7 +259,7 @@ class Manager:
             dsn = protected(self.directory / 'maintenance-url').read_text().strip()
         def environment(url):
             return {'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8', **values, 'DATABASE_URL': url}
-        check = ['/usr/bin/php8.4', str(self.bootstrap / 'bin/console'), 'dbal:run-sql', 'SELECT 1', '--no-interaction']
+        check = [self.installer.php, str(self.bootstrap / 'bin/console'), 'dbal:run-sql', 'SELECT 1', '--no-interaction']
         if not dsn or subprocess.run(check, env=environment(dsn), capture_output=True).returncode:
             print('The database needs separate permission for a safe backup and update. Your application password is kept unchanged.')
             username = input('Database administrator name: ').strip()
@@ -275,7 +275,7 @@ class Manager:
         endpoint_input = {'action': 'verify-endpoint', 'bootstrap': str(self.bootstrap), 'maintenance_url': dsn, 'source_url': self.source_values['DATABASE_URL']}
         if self.record.get('database_endpoint'):
             endpoint_input['expected_endpoint'] = self.record['database_endpoint']
-        proof = self.call(['/usr/bin/php8.4', str(self.package.parent / 'host-database.php')], data=json.dumps(endpoint_input))
+        proof = self.call([self.installer.php, str(self.package.parent / 'host-database.php')], data=json.dumps(endpoint_input))
         self.record['database_endpoint'] = json.loads(proof)
         self.save()
         server = self.console(['dbal:run-sql', 'SELECT VERSION()', '--no-interaction'])
@@ -284,7 +284,7 @@ class Manager:
         return database
 
     def console(self, arguments, *, data=None):
-        return self.call(['/usr/bin/php8.4', str(self.bootstrap / 'bin/console'), *arguments], environment=self.environment, data=data)
+        return self.call([self.installer.php, str(self.bootstrap / 'bin/console'), *arguments], environment=self.environment, data=data)
 
     def stop_services(self):
         units = []
@@ -370,8 +370,8 @@ class Manager:
         operation = self.root / ('native-updates/light-' + source_version + '-to-' + self.installer.version + '.json')
         if self.source_version == self.installer.version and choice == '1' and not operation.exists():
             raise ManagementError('This release is already installed. Choose Check the installation.')
-        if source_version not in ('1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2'):
-            raise ManagementError('This installer supports native Light updates from 1.0.0, 1.1.0, 1.2.0, 1.2.1 or 1.2.2.')
+        if source_version not in ('1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3'):
+            raise ManagementError('This installer supports native Light updates from 1.0.0, 1.1.0, 1.2.0, 1.2.1, 1.2.2 or 1.2.3.')
         self.record['native_source'] = source_version
         self.save()
         source = self.package.parent / ('emailer-light-' + source_version + '.zip')

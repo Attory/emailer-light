@@ -21,11 +21,11 @@ class WebServer:
             if shutil.which('apache2') or shutil.which('caddy'):
                 raise error('Debian 13 provisioning supports Nginx. Existing Apache/Caddy was preserved; use the tested Ubuntu Apache profile or a separate supported VPS.')
             return cls('nginx', error)
-        if system in (('ubuntu', '22.04'), ('ubuntu', '24.04')):
+        if system in (('ubuntu', '22.04'), ('ubuntu', '24.04'), ('ubuntu', '26.04')):
             # Installed or running software on other ports is not a conflict.
             # preflight separately proves every 80/443 socket belongs to Apache.
             return cls('apache2', error)
-        raise error('Setup supports Debian 13 with Nginx, or Ubuntu 22.04/24.04 LTS with Apache, on amd64/systemd. This host is unsupported; nothing has been installed.')
+        raise error('Setup supports Debian 13 with Nginx, or Ubuntu 22.04/24.04/26.04 LTS with Apache, on amd64/systemd. This host is unsupported; nothing has been installed.')
 
     def configuration(self):
         command = ['apache2ctl', '-S'] if self.kind == 'apache2' else ['nginx', '-T']

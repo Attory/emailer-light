@@ -39,12 +39,13 @@ try {
     if (!is_string($options['predecessors'] ?? null)) {
         throw new RuntimeException('The self-contained installer requires its authenticated predecessor package set.');
     }
-    $priorArchives = ['emailer-light-1.0.0.zip', 'emailer-light-1.1.0.zip', 'emailer-light-1.2.0.zip', 'emailer-light-1.2.1.zip', 'emailer-light-1.2.2.zip'];
+    $priorArchives = ['emailer-light-1.0.0.zip', 'emailer-light-1.1.0.zip', 'emailer-light-1.2.0.zip', 'emailer-light-1.2.1.zip', 'emailer-light-1.2.2.zip', 'emailer-light-1.2.3.zip'];
     (new App\Module\Release\Application\PackageInspector($options['public-key'], '1.0.0'))->inspectInstalledSource($options['predecessors'].'/'.$priorArchives[0]);
     (new App\Module\Release\Application\PackageInspector($options['public-key'], '1.1.0'))->inspectInstalledSource($options['predecessors'].'/emailer-light-1.1.0.zip');
     (new App\Module\Release\Application\PackageInspector($options['public-key'], '1.2.0'))->inspectInstalledSource($options['predecessors'].'/emailer-light-1.2.0.zip');
     (new App\Module\Release\Application\PackageInspector($options['public-key'], '1.2.1'))->inspectInstalledSource($options['predecessors'].'/emailer-light-1.2.1.zip');
     (new App\Module\Release\Application\PackageInspector($options['public-key'], '1.2.2'))->inspectInstalledSource($options['predecessors'].'/emailer-light-1.2.2.zip');
+    (new App\Module\Release\Application\PackageInspector($options['public-key'], '1.2.3'))->inspectInstalledSource($options['predecessors'].'/emailer-light-1.2.3.zip');
     foreach ($priorArchives as $prior) {
         foreach (['', '.manifest.json', '.sha256', '.spdx.json', '.sig'] as $suffix) {
             $path = $options['predecessors'].'/'.$prior.$suffix;

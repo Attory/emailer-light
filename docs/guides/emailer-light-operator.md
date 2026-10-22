@@ -1,8 +1,14 @@
 # Light operator and troubleshooting reference
 
-Version 1.2.3 | Exceptional hosting, updates and recovery
+Version 1.2.4 | Exceptional hosting, updates and recovery
 
 This reference covers exceptional hosting, update and recovery work. Start with the [beginner installation guide](emailer-light-install.md) for the normal path. The installer supplies the runtime, verifier, launcher, database provisioning, keys, services, backup defaults and HTTPS configuration; customers do not assemble these pieces.
+
+Ubuntu 26.04 uses its maintained distribution PHP 8.5 packages; no external PHP source is added. A compatible existing MariaDB 10.11 or 11.8 service is reused without a major upgrade. Setup adds a dedicated Emailer PHP-FPM pool and keeps existing website pools, PHP alternatives and Virtualmin-managed websites in place. Missing PHP extension packages add their standard extension configuration; existing PHP settings are retained and shared PHP services are not restarted.
+
+Virtualmin is tested on Ubuntu 26.04.1 with Apache wildcard *:80 and *:443 virtual hosts and two existing PHP websites. Use a spare Emailer hostname that is not already a Virtualmin domain or website alias. Setup creates and manages its own Apache site; it does not register a Virtualmin domain. Manage Emailer through its setup file and application rather than importing or editing that site in Virtualmin. Address-specific Apache virtual hosts require Ripe; Light remains wildcard-only.
+
+Ubuntu 26.04.1 HTTPS acceptance used a local ACME server with real HTTP challenge validation and strict certificate/name verification. Public certificate issuance remains unverified because no dedicated non-production hostname and DNS authority were available. Customer setup uses the normal public ACME service; DNS must point to the server and Apache must be reachable on ports 80 and 443.
 
 Ubuntu Apache can coexist with Nginx on a separate port (tested: 8081). Setup manages only Apache and the Emailer instance. Every existing listener on ports 80 and 443 must belong to apache2.service; a different service on either port or an overlapping Emailer hostname stops setup with existing services preserved. Light supports only wildcard Apache virtual hosts (*:80 and *:443). A server with address-specific Apache virtual hosts requires Emailer Ripe with address-specific installation support. Keep your existing websites unchanged; do not delete installer state or database files.
 
@@ -12,27 +18,28 @@ Ubuntu Apache can coexist with Nginx on a separate port (tested: 8081). Setup ma
 
 | Component | Supported scope |
 | --- | --- |
-| Host | Ubuntu 22.04/24.04 LTS amd64/systemd with Apache, or Debian 13 amd64/systemd with Nginx. Tested server: 2 cores, 3 GB RAM, 24 GB disk. Minimum free space: 5 GiB on Ubuntu 22.04; 2 GiB elsewhere. |
-| Web/runtime | Dedicated PHP 8.4 FPM instance: Apache on Ubuntu, Nginx on Debian 13. Existing PHP versions, global CLI selection and Apache MPM/handlers are retained. |
-| Database | Ubuntu 22.04: isolated socket-only MariaDB 10.11.19; existing shared servers remain unchanged. Ubuntu 24.04/Debian 13: compatible local MariaDB 10.11 or 11.8; incompatible servers stop preflight before packages. |
+| Host | Ubuntu 22.04/24.04/26.04 LTS amd64/systemd with Apache, or Debian 13 amd64/systemd with Nginx. Earlier fixtures: 2 cores, 3 GB RAM, 24 GB disk; Ubuntu 26.04.1/Virtualmin: 4 cores, 6 GB RAM, 40 GB disk. Minimum free space: 5 GiB on Ubuntu 22.04; 2 GiB elsewhere. |
+| Web/runtime | Dedicated PHP 8.4 FPM on Ubuntu 22.04/24.04 and Debian 13; PHP 8.5 on Ubuntu 26.04: Apache on Ubuntu, Nginx on Debian 13. Existing PHP versions, global CLI selection and Apache MPM/handlers are retained. |
+| Database | Ubuntu 22.04: isolated socket-only MariaDB 10.11.19; existing shared servers remain unchanged. Ubuntu 24.04/26.04 and Debian 13: compatible local MariaDB 10.11 or 11.8; incompatible servers stop preflight before packages. |
 | Network | Official HTTPS setup delivery, signed OS/PHP repositories, archive.mariadb.org on Ubuntu 22.04; public DNS, inbound 80/443 and outbound HTTPS for ACME. SMTP is optional until sending. |
 | Excluded | Untested OS/web combinations, ARM, Caddy, remote databases, custom URL port/subfolder, shared private/key storage and ordinary file-upload hosting. |
 
-The exact native versions below are acceptance observations, not a promise to freeze security patches. PHP extensions must match the installed PHP 8.4 patch. Application CI separately tests PHP 8.4.24 and 8.5.9 with MariaDB 10.11.19 and 11.8.9; it does not claim a native PHP 8.5 profile.
+The exact native versions below are acceptance observations, not a promise to freeze security patches. PHP extensions must match the installed PHP 8.4 or 8.5 patch selected for that OS. Application CI separately tests PHP 8.4.24 and 8.5.9 with MariaDB 10.11.19 and 11.8.9; the native Ubuntu 26.04.1 profile separately verifies distribution PHP 8.5.4 with MariaDB 11.8.6.
 
 | OS | Web server | Emailer PHP | Emailer database |
 | --- | --- | --- | --- |
 | Ubuntu 22.04.5 LTS, amd64/systemd | Apache 2.4.52 | 8.4.26 | 10.11.19 isolated |
 | Ubuntu 24.04.5 LTS, amd64/systemd | Apache 2.4.58 | 8.4.26 | 10.11.14 distro |
+| Ubuntu 26.04.1 LTS, amd64/systemd | Apache 2.4.66 / Virtualmin 8.3.0 | 8.5.4-0ubuntu1.5 | 11.8.6-5ubuntu0.1 distro |
 | Debian 13 Trixie, amd64/systemd | Nginx 1.26.3 | 8.4.26 | 11.8.6 distro |
 
 ## Ubuntu package sources and isolated database maintenance
 
-Ubuntu PHP 8.4 comes from the maintained [Ondřej Surý Launchpad PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php), using the existing signing identity B8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6. Setup pins all other PPA packages below installed distro packages; only php8.4-*, php-common metadata and the ABI-compatible libgd3 image library may be selected. It does not change installed PHP 8.1 packages or shared Apache/database packages.
+On Ubuntu 22.04/24.04 only, PHP 8.4 comes from the maintained [Ondřej Surý Launchpad PPA](https://launchpad.net/~ondrej/+archive/ubuntu/php), using the existing signing identity B8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6. Setup pins all other PPA packages below installed distro packages; only php8.4-*, php-common metadata and the ABI-compatible libgd3 image library may be selected. It does not change installed PHP 8.1 packages or shared Apache/database packages.
 
 Ubuntu 22.04’s isolated MariaDB 10.11.19 uses `/opt/emailer-database/10.11.19`, `/var/lib/emailer-database/data`, `/etc/emailer-database.cnf` and `/run/emailer-database/mysql.sock`, under `emailer-database.service` and its dedicated non-root user. It accepts only a Unix socket, not a TCP database port. The official upstream binary archive is SHA-256 pinned inside the edition-signed installer; its upstream signature was verified during release preparation. See [MariaDB’s binary-tarball documentation](https://mariadb.com/docs/server/server-management/install-and-upgrade-mariadb/installing-mariadb/binary-packages/installing-mariadb-binary-tarballs).
 
-Host APT does not patch the isolated MariaDB binary. Its future security patches require a reviewed Emailer installer/maintenance release. Retain its ownership receipt and data directory; do not replace its binaries or run the distribution database upgrade against it. A shared Ubuntu 22.04 MariaDB 10.6.23 server and its data were tested unchanged beside it. On Ubuntu 24.04/Debian13 an incompatible shared database stops before mutation; isolated arrangements on those profiles are not claimed.
+Host APT does not patch the isolated MariaDB binary. Its future security patches require a reviewed Emailer installer/maintenance release. Retain its ownership receipt and data directory; do not replace its binaries or run the distribution database upgrade against it. A shared Ubuntu 22.04 MariaDB 10.6.23 server and its data were tested unchanged beside it. On Ubuntu 24.04/26.04 and Debian 13 an incompatible shared database stops before mutation; isolated arrangements on those profiles are not claimed.
 
 Shared hosting is unsupported because persistent workers, system timers, isolated service identity and private key storage are required. No file-upload compatibility is claimed. The native installer does not require Docker or Composer on the customer server.
 
@@ -40,7 +47,7 @@ Shared hosting is unsupported because persistent workers, system timers, isolate
 
 Fresh setup checks the exact platform, free space, actual port owners, parsed Apache/Nginx hostname inventory, protected paths and resource conflicts. It reserves dedicated generated identities before creating them. An occupied hostname is preserved and a spare address is requested. Several existing Emailer installations are an ambiguous target and stop without adoption. Existing unrelated databases and applications’ secrets are never reused.
 
-Healthy installed PHP 8.4 stays on its current patch; missing extensions must match exactly. Setup preserves the global CLI choice, existing PHP handlers, Apache MPM and shared database versions. It authenticates the pre-unpack package plan again under APT’s locks. A temporary, crash-recoverable service policy suppresses package-triggered restarts and retains the original bytes, mode, ownership and extended attributes. Apache/nginx configuration is checked before a scoped reload. Unknown custom routing, handlers, includes or additional sites in an adopted file are refused before whole-file replacement.
+Healthy installed PHP 8.4 or 8.5 stays on its current patch; missing extensions must match exactly. Setup preserves the global CLI choice, existing PHP handlers, Apache MPM and shared database versions. It authenticates the pre-unpack package plan again under APT’s locks. A temporary, crash-recoverable service policy suppresses package-triggered restarts and retains the original bytes, mode, ownership and extended attributes. Apache/nginx configuration is checked before a scoped reload. Unknown custom routing, handlers, includes or additional sites in an adopted file are refused before whole-file replacement.
 
 ## Files and service ownership
 
@@ -59,7 +66,7 @@ sudo emailer-light emailer:doctor:run --json
 
 The health command distinguishes structural installation completion from sending readiness. Deferred SMTP is compatible with structural completion and blocks actual sending. Doctor retains its original sending gates and severity. Open Doctor after changing mail or MFA settings; installer Check does not remove the operational hold.
 
-Fresh redacted diagnostics are under `/var/lib/emailer-light-installer/last-error.json`. Managed operations use `/etc/emailer-light/installer/<edition>/1.2.3/last-error.json`. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status.
+Fresh redacted diagnostics are under `/var/lib/emailer-light-installer/last-error.json`. Managed operations use `/etc/emailer-light/installer/<edition>/1.2.4/last-error.json`. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status.
 
 ## Error reference
 
@@ -120,4 +127,4 @@ If setup says a reserved host resource is occupied or changed, it has kept that 
 
 ## Resume after the 1.2.1 web-server check
 
-If 1.2.1 stopped during Checking this server with Existing Nginx/Caddy was preserved, download the official 1.2.3 setup file and start it with sudo sh as in the installation guide. That check occurs before installation initialization or database creation. Keep the existing installer state directory and its operation lock; no state or database deletion is needed. An operation that progressed beyond this check remains bound to its original signed package; complete it with that package before a normal update. If Light reports an address-specific Apache website, this server configuration requires Ripe; retrying Light will retain the same supported-profile restriction.
+If 1.2.1 stopped during Checking this server with Existing Nginx/Caddy was preserved, download the official 1.2.4 setup file and start it with sudo sh as in the installation guide. That check occurs before installation initialization or database creation. Keep the existing installer state directory and its operation lock; no state or database deletion is needed. An operation that progressed beyond this check remains bound to its original signed package; complete it with that package before a normal update. If Light reports an address-specific Apache website, this server configuration requires Ripe; retrying Light will retain the same supported-profile restriction.

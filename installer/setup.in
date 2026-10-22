@@ -8,13 +8,13 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 # Reject unsupported hosting before installing even bootstrap dependencies.
 if [ ! -r /etc/os-release ] || [ ! -d /run/systemd/system ]; then
-    printf 'Setup needs a Debian 13 or Ubuntu 22.04/24.04 amd64 VPS with systemd. File-upload hosting is unsupported.\n' >&2
+    printf 'Setup needs a Debian 13 or Ubuntu 22.04/24.04/26.04 amd64 VPS with systemd. File-upload hosting is unsupported.\n' >&2
     exit 1
 fi
 . /etc/os-release
-case "${ID:-}:${VERSION_ID:-}" in debian:13|ubuntu:22.04|ubuntu:24.04) ;; *) printf 'This setup supports Debian 13 or Ubuntu 22.04/24.04 on amd64. No application was installed.\n' >&2; exit 1 ;; esac
+case "${ID:-}:${VERSION_ID:-}" in debian:13|ubuntu:22.04|ubuntu:24.04|ubuntu:26.04) ;; *) printf 'This setup supports Debian 13 or Ubuntu 22.04/24.04/26.04 on amd64. No application was installed.\n' >&2; exit 1 ;; esac
 if [ "$(uname -m)" != x86_64 ]; then
-    printf 'This setup supports Debian 13 or Ubuntu 22.04/24.04 on amd64. No application was installed.\n' >&2
+    printf 'This setup supports Debian 13 or Ubuntu 22.04/24.04/26.04 on amd64. No application was installed.\n' >&2
     exit 1
 fi
 # A real terminal is required for hidden administrator passwords and guided choices.

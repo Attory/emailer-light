@@ -17,7 +17,7 @@ final readonly class DoctrineInstallationFinalizer implements InstallationFinali
         private InstallationLock $installationLock,
         private SetupDoctor $doctor,
         private SetupLifecycle $lifecycle,
-        private string $productVersion = '1.2.3',
+        private string $productVersion = '1.2.4',
     ) {
     }
 
