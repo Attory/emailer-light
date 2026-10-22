@@ -1,6 +1,6 @@
 {
   "title": "Install Emailer Light",
-  "subtitle": "Version 1.2.3 | Beginner guide | Ubuntu Apache or Debian Nginx VPS",
+  "subtitle": "Version 1.2.4 | Beginner guide | Ubuntu Apache or Debian Nginx VPS",
   "blocks": [
     {
       "type": "p",
@@ -21,11 +21,15 @@
     },
     {
       "type": "p",
-      "text": "Use a virtual server with Ubuntu 22.04 LTS or 24.04 LTS and Apache, or Debian 13 and Nginx. It must be amd64/x86-64, use systemd, and let you run sudo. Setup chooses Apache on a clean Ubuntu host and Nginx on a clean Debian 13 host. The tested server has 2 CPU cores, 3 GB memory and a 24 GB disk. Ubuntu 22.04 needs at least 5 GiB free; other supported profiles need 2 GiB. Leave additional space for uploads and backups."
+      "text": "Use a virtual server with Ubuntu 22.04 LTS, 24.04 LTS or 26.04 LTS and Apache, or Debian 13 and Nginx. It must be amd64/x86-64, use systemd, and let you run sudo. Setup chooses Apache on a clean Ubuntu host and Nginx on a clean Debian 13 host. The tested server has 2 CPU cores, 3 GB memory and a 24 GB disk. Ubuntu 22.04 needs at least 5 GiB free; other supported profiles need 2 GiB. Leave additional space for uploads and backups."
     },
     {
       "type": "p",
-      "text": "An existing Apache website using PHP 8.1 can stay on Ubuntu 22.04, including its existing database and unrelated services. Give Emailer a spare hostname. Setup adds its own PHP runtime and application services without changing the existing website’s PHP selection. Ubuntu 22.04 also gets a separate supported database; it does not upgrade an older shared database. Ubuntu 24.04 and Debian 13 reuse a compatible local MariaDB server. An incompatible existing database on those two profiles stops setup before packages change."
+      "text": "An existing Apache website using PHP 8.1 can stay on Ubuntu 22.04, including its existing database and unrelated services. Give Emailer a spare hostname. Setup adds its own PHP runtime and application services without changing the existing website’s PHP selection. Ubuntu 22.04 also gets a separate supported database; it does not upgrade an older shared database. Ubuntu 24.04, Ubuntu 26.04 and Debian 13 reuse a compatible local MariaDB server. An incompatible existing database on those profiles stops setup before packages change."
+    },
+    {
+      "type": "p",
+      "text": "Ubuntu 26.04 uses distribution PHP 8.5 and MariaDB 11.8. Virtualmin is tested with wildcard Apache websites (*:80 and *:443). Choose an Emailer hostname that is not already a Virtualmin domain or alias; setup adds its own site and keeps your existing sites and PHP settings. Missing PHP extensions are installed automatically. Continue managing Emailer with this setup file; do not import its site into Virtualmin. Public certificate issuance has not been independently verified for this profile; see the HTTPS evidence and limitation in the operator reference."
     },
     {
       "type": "table",
@@ -44,6 +48,11 @@
           "Ubuntu 24.04.5 LTS, amd64/systemd",
           "Apache 2.4.58",
           "PHP 8.4.26; distribution MariaDB 10.11.14"
+        ],
+        [
+          "Ubuntu 26.04.1 LTS, amd64/systemd",
+          "Apache 2.4.66; Virtualmin 8.3.0 / Webmin 2.670",
+          "Distribution PHP 8.5.4-0ubuntu1.5; MariaDB 11.8.6-5ubuntu0.1; dedicated Emailer PHP-FPM pool"
         ],
         [
           "Debian 13 Trixie, amd64/systemd",
@@ -67,7 +76,7 @@
     },
     {
       "type": "p",
-      "text": "On Ubuntu, setup adds the maintained Ondřej Surý PHP package source and verifies its signing identity automatically. Ubuntu 22.04’s separate database receives security patches through reviewed Emailer maintenance releases, rather than the server’s ordinary package updates. Keep Emailer maintenance releases current; you do not need to assemble or configure the database yourself."
+      "text": "On Ubuntu 22.04 and 24.04, setup adds the maintained Ondřej Surý PHP package source and verifies its signing identity automatically. Ubuntu 22.04’s separate database receives security patches through reviewed Emailer maintenance releases, rather than the server’s ordinary package updates. Keep Emailer maintenance releases current; you do not need to assemble or configure the database yourself."
     },
     {
       "type": "h2",
@@ -91,11 +100,11 @@
     },
     {
       "type": "code",
-      "text": "curl --fail --location --output emailer-light-1.2.3-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.2.3/\\\nemailer-light-1.2.3-setup.run"
+      "text": "curl --fail --location --output emailer-light-1.2.4-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.2.4/\\\nemailer-light-1.2.4-setup.run"
     },
     {
       "type": "p",
-      "text": "Or download <b>emailer-light-1.2.3-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.2.3\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
+      "text": "Or download <b>emailer-light-1.2.4-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.2.4\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
     },
     {
       "type": "p",
@@ -115,7 +124,7 @@
     },
     {
       "type": "code",
-      "text": "sudo sh emailer-light-1.2.3-setup.run"
+      "text": "sudo sh emailer-light-1.2.4-setup.run"
     },
     {
       "type": "p",
@@ -136,8 +145,8 @@
     },
     {
       "type": "image",
-      "file": "emailer-light-setup.png",
-      "caption": "Actual Light setup completion. Use the login address printed by your own installation."
+      "file": "emailer-light-ubuntu26-complete.png",
+      "caption": "Actual Light 1.2.4 setup completion on Ubuntu 26.04.1 with Virtualmin. Sign in at the address shown by your installation."
     },
     {
       "type": "h2",
@@ -149,8 +158,8 @@
     },
     {
       "type": "image",
-      "file": "emailer-light-dashboard.png",
-      "caption": "Actual Light dashboard after sign-in with email delivery deferred."
+      "file": "emailer-light-ubuntu26-dashboard.png",
+      "caption": "Actual Ubuntu 26 installation after administrator sign-in. SMTP can be configured later."
     },
     {
       "type": "h2",
