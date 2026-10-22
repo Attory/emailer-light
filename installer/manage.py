@@ -367,7 +367,7 @@ class Manager:
         if self.product != 'emailer-light' or self.installer.product != 'emailer-light':
             raise ManagementError('Use the installation package for the installed edition.')
         source_version = self.record.get('native_source', self.source_version)
-        operation = self.root / ('native-updates/light-' + source_version + '-to-' + self.installer.version + '.json')
+        operation = self.original_configuration.parent / ('native-updates/light-' + source_version + '-to-' + self.installer.version + '.json')
         if self.source_version == self.installer.version and choice == '1' and not operation.exists():
             raise ManagementError('This release is already installed. Choose Check the installation.')
         if source_version not in ('1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3'):
