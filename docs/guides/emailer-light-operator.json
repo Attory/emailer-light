@@ -40,7 +40,7 @@
       "rows": [
         [
           "Host",
-          "Ubuntu 22.04/24.04/26.04 LTS amd64/systemd with Apache, or Debian 13 amd64/systemd with Nginx. Tested server: 2 cores, 3 GB RAM, 24 GB disk. Minimum free space: 5 GiB on Ubuntu 22.04; 2 GiB elsewhere."
+          "Ubuntu 22.04/24.04/26.04 LTS amd64/systemd with Apache, or Debian 13 amd64/systemd with Nginx. Earlier fixtures: 2 cores, 3 GB RAM, 24 GB disk; Ubuntu 26.04.1/Virtualmin: 4 cores, 6 GB RAM, 40 GB disk. Minimum free space: 5 GiB on Ubuntu 22.04; 2 GiB elsewhere."
         ],
         [
           "Web/runtime",

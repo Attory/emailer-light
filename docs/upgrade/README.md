@@ -1,9 +1,10 @@
 # Light to Ripe compatibility
 
-The private Ripe 1.2.1 installer supports original Light 1.0.0 and official
-Light 1.1.0/1.2.1 releases. Ripe 1.0.6 does not recognize Light 1.1.0/1.2.1;
-Ripe 1.1.0 does not recognize Light 1.2.1. Use the corresponding new Ripe release.
-The original published Light 1.0.0 path remains supported.
+The compatible private Ripe 1.3.1 installer supports original Light 1.0.0 and
+signed Light 1.1.0, 1.2.0, 1.2.1, 1.2.2, 1.2.3 and 1.2.4. Light 1.2.4 on
+Ubuntu 26.04 uses distribution PHP 8.5 and upgrades directly with that installer.
+Ripe 1.3.0 and earlier releases do not recognize Light 1.2.4. Use the compatible
+new Ripe setup file; the original published Light 1.0.0 path remains supported.
 
 The private release supplies the guided upgrade and its beginner guide. It retains
 administrator identity/password hash, campaign-owned recipients, history, assets,

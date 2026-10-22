@@ -18,7 +18,7 @@ Ubuntu Apache can coexist with Nginx on a separate port (tested: 8081). Setup ma
 
 | Component | Supported scope |
 | --- | --- |
-| Host | Ubuntu 22.04/24.04/26.04 LTS amd64/systemd with Apache, or Debian 13 amd64/systemd with Nginx. Tested server: 2 cores, 3 GB RAM, 24 GB disk. Minimum free space: 5 GiB on Ubuntu 22.04; 2 GiB elsewhere. |
+| Host | Ubuntu 22.04/24.04/26.04 LTS amd64/systemd with Apache, or Debian 13 amd64/systemd with Nginx. Earlier fixtures: 2 cores, 3 GB RAM, 24 GB disk; Ubuntu 26.04.1/Virtualmin: 4 cores, 6 GB RAM, 40 GB disk. Minimum free space: 5 GiB on Ubuntu 22.04; 2 GiB elsewhere. |
 | Web/runtime | Dedicated PHP 8.4 FPM on Ubuntu 22.04/24.04 and Debian 13; PHP 8.5 on Ubuntu 26.04: Apache on Ubuntu, Nginx on Debian 13. Existing PHP versions, global CLI selection and Apache MPM/handlers are retained. |
 | Database | Ubuntu 22.04: isolated socket-only MariaDB 10.11.19; existing shared servers remain unchanged. Ubuntu 24.04/26.04 and Debian 13: compatible local MariaDB 10.11 or 11.8; incompatible servers stop preflight before packages. |
 | Network | Official HTTPS setup delivery, signed OS/PHP repositories, archive.mariadb.org on Ubuntu 22.04; public DNS, inbound 80/443 and outbound HTTPS for ACME. SMTP is optional until sending. |
