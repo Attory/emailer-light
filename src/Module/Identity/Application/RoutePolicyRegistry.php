@@ -59,6 +59,7 @@ final class RoutePolicyRegistry
         'admin_suppressions' => ['GET', 'HEAD'],
         'admin_template_archive' => ['POST'],
         'admin_template_asset_upload' => ['POST'],
+        'admin_template_assets' => ['GET', 'HEAD'],
         'admin_template_create' => ['POST'],
         'admin_template_duplicate' => ['GET', 'HEAD', 'POST'],
         'admin_template_edit' => ['GET', 'HEAD', 'POST'],

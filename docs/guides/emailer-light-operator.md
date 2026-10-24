@@ -1,6 +1,6 @@
 # Light operator and troubleshooting reference
 
-Version 1.2.4 | Exceptional hosting, updates and recovery
+Version 1.2.5 | Exceptional hosting, updates and recovery
 
 This reference covers exceptional hosting, update and recovery work. Start with the [beginner installation guide](emailer-light-install.md) for the normal path. The installer supplies the runtime, verifier, launcher, database provisioning, keys, services, backup defaults and HTTPS configuration; customers do not assemble these pieces.
 
@@ -66,7 +66,7 @@ sudo emailer-light emailer:doctor:run --json
 
 The health command distinguishes structural installation completion from sending readiness. Deferred SMTP is compatible with structural completion and blocks actual sending. Doctor retains its original sending gates and severity. Open Doctor after changing mail or MFA settings; installer Check does not remove the operational hold.
 
-Fresh redacted diagnostics are under `/var/lib/emailer-light-installer/last-error.json`. Managed operations use `/etc/emailer-light/installer/<edition>/1.2.4/last-error.json`. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status.
+Fresh redacted diagnostics are under `/var/lib/emailer-light-installer/last-error.json`. Managed operations use `/etc/emailer-light/installer/<edition>/1.2.5/last-error.json`. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status.
 
 ## Error reference
 
@@ -127,4 +127,23 @@ If setup says a reserved host resource is occupied or changed, it has kept that 
 
 ## Resume after the 1.2.1 web-server check
 
-If 1.2.1 stopped during Checking this server with Existing Nginx/Caddy was preserved, download the official 1.2.4 setup file and start it with sudo sh as in the installation guide. That check occurs before installation initialization or database creation. Keep the existing installer state directory and its operation lock; no state or database deletion is needed. An operation that progressed beyond this check remains bound to its original signed package; complete it with that package before a normal update. If Light reports an address-specific Apache website, this server configuration requires Ripe; retrying Light will retain the same supported-profile restriction.
+If 1.2.1 stopped during Checking this server with Existing Nginx/Caddy was preserved, download the official 1.2.5 setup file and start it with sudo sh as in the installation guide. That check occurs before installation initialization or database creation. Keep the existing installer state directory and its operation lock; no state or database deletion is needed. An operation that progressed beyond this check remains bound to its original signed package; complete it with that package before a normal update. If Light reports an address-specific Apache website, this server configuration requires Ripe; retrying Light will retain the same supported-profile restriction.
+
+## Template images and unsaved editor recovery
+
+The image gallery lists this installation’s persistent template assets under the existing template-editing permissions. Earlier validated uploads remain discoverable. Missing files appear unavailable; restore the matching application asset backup rather than uploading different bytes under an existing link. The gallery is paginated and thumbnails are bounded. Assets and their metadata use the existing backup contributors; no new database migration is needed for this patch.
+
+| What you see | What to do |
+| --- | --- |
+| Choose a JPEG, PNG or WebP image | Use a supported raster image at most 2 MB and 2400 pixels on each side. |
+| Upload not confirmed | Keep the editor open. Refresh the gallery before retrying; the server may have saved the image despite a lost response. |
+| Image file unavailable | Restore the corresponding persistent asset file from a verified backup. Existing metadata and other gallery entries are retained. |
+| Place the HTML cursor in text or between tags | Move the cursor outside attributes, comments, raw-text elements and merge fields; insertion has not changed your HTML. |
+| Save could not be confirmed | Keep the entries here and inspect Templates in another tab before retrying. A lost response can follow a successful save. |
+| Browser recovery is unavailable | Save or copy the fields before leaving. Browser storage can be disabled or full. |
+
+Recovery uses per-tab session storage scoped to the signed-in account and editor. It allowlists the five content fields, cursor and image controls; it does not store passwords, CSRF tokens or selected upload files. Copies expire after 12 hours and are size-bounded. Do not rely on that copy after closing the tab. Recovery is a convenience rather than a server backup. The normal unsaved-changes warning remains available when storage cannot be used.
+
+The image URL is intentionally public for email readers; the saved-asset gallery and uploads require authentication and the existing editing authority. Upload POSTs retain CSRF checks. Saving remains separate from publication. SMTP transport resolves supported relative image references against the canonical HTTPS installation address. Do not change that address casually after sending messages.
+
+Earlier uploaded images become visible in the updated gallery. Browser draft recovery protects work entered in the updated editor; it cannot reconstruct text that an older page already discarded before recovery existed.

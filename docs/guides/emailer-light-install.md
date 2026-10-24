@@ -1,6 +1,6 @@
 # Install Emailer Light
 
-Version 1.2.4 | Beginner guide | Ubuntu Apache or Debian Nginx VPS
+Version 1.2.5 | Beginner guide | Ubuntu Apache or Debian Nginx VPS
 
 Install a usable Emailer Light website with one guided server setup. You need your administrator email, a new password, and the address you want people to use. Email delivery can wait.
 
@@ -40,12 +40,12 @@ Choose a spare address such as `news.your-domain.com`. In your domain provider's
 In the server terminal, paste this download action. It saves the official installation package in your current folder.
 
 ```bash
-curl --fail --location --output emailer-light-1.2.4-setup.run \
-  https://github.com/Attory/emailer-light/releases/download/v1.2.4/\
-emailer-light-1.2.4-setup.run
+curl --fail --location --output emailer-light-1.2.5-setup.run \
+  https://github.com/Attory/emailer-light/releases/download/v1.2.5/\
+emailer-light-1.2.5-setup.run
 ```
 
-Or download **emailer-light-1.2.4-setup.run** from the [official release](https://github.com/Attory/emailer-light/releases/tag/v1.2.4) in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path.
+Or download **emailer-light-1.2.5-setup.run** from the [official release](https://github.com/Attory/emailer-light/releases/tag/v1.2.5) in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path.
 
 Initial trust comes from obtaining the setup action itself from the official HTTPS release or an authorized private channel. Its embedded, established edition signing identity then verifies the package inventory, runtime and release identity before installer code runs. A key supplied beside an arbitrary download would not establish that initial trust.
 
@@ -56,7 +56,7 @@ Ubuntu 22.04 also retrieves an authenticated MariaDB runtime of about 360 MB. Al
 From the folder containing the downloaded file, paste this single setup action:
 
 ```bash
-sudo sh emailer-light-1.2.4-setup.run
+sudo sh emailer-light-1.2.5-setup.run
 ```
 
 sudo may ask for your server account password once. Setup needs host permission to install services; the application itself runs under a dedicated account. Keep the terminal open. Password entry is hidden, so no letters or dots may appear.
@@ -68,7 +68,7 @@ sudo may ask for your server account password once. Setup needs host permission 
 
 You will see named progress steps for dependencies, package verification, private folders, database and account, services, backup/recovery, HTTPS and health. Organisation name defaults to Emailer; language to English and scheduling timezone to UTC. SMTP details are not required.
 
-![Actual Light 1.2.4 setup completion on Ubuntu 26.04.1 with Virtualmin. Sign in at the address shown by your installation.](images/emailer-light-ubuntu26-complete.png)
+![Actual Light 1.2.5 setup completion on Ubuntu 26.04.1 with Virtualmin. Sign in at the address shown by your installation.](images/emailer-light-ubuntu26-complete.png)
 
 ## 4. Sign in
 

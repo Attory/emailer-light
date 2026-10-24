@@ -60,6 +60,25 @@ final class NativeVersionBindingTest extends TestCase
         }
     }
 
+    public function testEditorPatchSupportsAllPublishedSourcesWithoutWeakeningVersionBinding(): void
+    {
+        foreach (['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4'] as $source) {
+            $binding = new NativeVersionBinding($source, '1.2.5');
+            $original = ['installation_uuid' => 'synthetic-installation', 'product_version' => $source];
+            $expected = $binding->lock(json_encode($original, JSON_THROW_ON_ERROR), true);
+            $updated = json_encode([...$original, 'product_version' => '1.2.5'], JSON_THROW_ON_ERROR);
+            self::assertSame($expected, $binding->lock($updated));
+            foreach (array_diff(['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.6'], [$source]) as $unrelated) {
+                try {
+                    $binding->canonical($unrelated);
+                    self::fail('An unrelated patch source version was accepted.');
+                } catch (\RuntimeException $exception) {
+                    self::assertStringContainsString('outside the authenticated update pair', $exception->getMessage());
+                }
+            }
+        }
+    }
+
     public function testAnAlreadyChangedLockCannotBecomeFreshSourceEvidence(): void
     {
         $this->expectExceptionMessage('source installation lock version is inconsistent');

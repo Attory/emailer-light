@@ -79,6 +79,21 @@ jobs:
       - name: Repeat test suite with external egress disabled
         run: bash tools/ci/run-network-isolated-tests.sh
 
+      - name: Install the pinned editor browser test toolchain
+        if: matrix.php == '8.4.24' && matrix.mariadb == '10.11.19'
+        working-directory: tools/browser
+        run: |
+          npm ci --ignore-scripts
+          node node_modules/playwright-core/cli.js install --with-deps chromium
+
+      - name: Verify the complete editor workflow and actual isolated SMTP delivery
+        if: matrix.php == '8.4.24' && matrix.mariadb == '10.11.19'
+        run: |
+          export EMAILER_BROWSER_PHP_IMAGE="${COMPOSE_PROJECT_NAME}-app:latest"
+          export EMAILER_CHROMIUM_EXECUTABLE="$(node -e 'process.stdout.write(require("./tools/browser/node_modules/playwright-core").chromium.executablePath())')"
+          export EMAILER_BROWSER_OUTPUT="${GITHUB_WORKSPACE}/build/browser-results"
+          sudo --preserve-env=EMAILER_BROWSER_PHP_IMAGE,EMAILER_CHROMIUM_EXECUTABLE,EMAILER_BROWSER_OUTPUT python3 tools/browser/run-isolated.py
+
       - name: Inspect resulting diff
         run: git diff --check
 
