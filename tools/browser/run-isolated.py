@@ -152,6 +152,14 @@ except Exception:
             if failed.get('status') == 'FAIL' and isinstance(failed_phase, str) and re.fullmatch(r'[A-Za-z0-9 /_-]{1,160}', failed_phase):
                 print('Browser regression phase: ' + failed_phase, file=sys.stderr)
                 print('Browser cases completed: ' + str(len(failed.get('cases', []))), file=sys.stderr)
+                status = failed.get('publicImageStatus')
+                if isinstance(status, int) and 100 <= status <= 599:
+                    print('Public image HTTP status: ' + str(status), file=sys.stderr)
+                if failed.get('publicImageContentType') in ('image/png', 'text/html; charset=UTF-8', 'application/json'):
+                    print('Public image content type: ' + failed['publicImageContentType'], file=sys.stderr)
+                for error in failed.get('runtimeErrors', [])[:3]:
+                    if isinstance(error, dict) and error.get('type') in ('Error', 'TypeError', 'ReferenceError', 'SyntaxError', 'RangeError', 'OtherError') and re.fullmatch(r'(?:/assets/[A-Za-z0-9._/-]+\.js:\d+:\d+|No asset frame)', error.get('frame', '')):
+                        print('Browser runtime category: ' + error['type'] + ' at ' + error['frame'], file=sys.stderr)
         except Exception:
             pass
     sys.exit(1)

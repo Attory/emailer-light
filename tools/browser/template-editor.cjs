@@ -72,7 +72,11 @@ const holdNext = async (pattern, allowCanceled = false) => {
         page = await context.newPage();
         // No HAR, request bodies, console logs or Playwright traces: these can
         // contain session cookies or typed credentials.
-        const pageErrors = []; page.on('pageerror', () => pageErrors.push('pageerror'));
+        const pageErrors = []; page.on('pageerror', error => {
+            const type = ['Error', 'TypeError', 'ReferenceError', 'SyntaxError', 'RangeError'].includes(error.name) ? error.name : 'OtherError';
+            const frame = /\/assets\/[A-Za-z0-9._/-]+\.js:\d+:\d+/.exec(error.stack || '')?.[0] || 'No asset frame';
+            pageErrors.push({ type, frame });
+        });
         page.on('dialog', dialog => dialog.accept());
         phase = 'real login';
         await page.goto(config.url + '/login');
@@ -306,8 +310,15 @@ const holdNext = async (pattern, allowCanceled = false) => {
         phase = 'public image retrieval';
         const publicPage = await browser.newContext(); const recipient = await publicPage.newPage();
         const response = await recipient.goto(config.url + selectedPath);
-        assert.equal(response.status(), 200); assert.match(response.headers()['content-type'], /^image\/png/);
+        phase = 'public image HTTP status'; result.publicImageStatus = response.status();
+        assert.equal(response.status(), 200);
+        phase = 'public image MIME type';
+        const imageType = response.headers()['content-type'];
+        result.publicImageContentType = typeof imageType === 'string' && /^[A-Za-z0-9/+.;= -]{1,100}$/.test(imageType) ? imageType : 'Other';
+        assert.match(imageType, /^image\/png/);
+        phase = 'public image byte count';
         const bytes = await response.body(); assert(bytes.length > 0); result.publicImageBytes = bytes.length; result.publicImageSha256 = crypto.createHash('sha256').update(bytes).digest('hex'); await publicPage.close();
+        phase = 'browser runtime errors'; result.runtimeErrors = pageErrors;
         assert.deepEqual(pageErrors, []); record('Saved image retrievable by an unauthenticated recipient');
         result.status = 'PASS'; console.log(config.edition + ' editor browser regressions PASS (' + result.cases.length + ' cases).');
     } catch {
