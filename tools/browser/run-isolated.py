@@ -144,6 +144,16 @@ try:
     print('PASS: isolated ' + edition + ' browser, no-send and real worker SMTP regressions; safe receipts in ' + str(output))
 except Exception:
     print('FAIL: editor acceptance at ' + stage + '. Private diagnostics retained; credentials and request details omitted.', file=sys.stderr)
+    receipt = output / 'browser-result.json'
+    if stage == 'real browser regressions' and receipt.is_file():
+        try:
+            failed = json.loads(receipt.read_text())
+            failed_phase = failed.get('failedPhase')
+            if failed.get('status') == 'FAIL' and isinstance(failed_phase, str) and re.fullmatch(r'[A-Za-z0-9 /_-]{1,160}', failed_phase):
+                print('Browser regression phase: ' + failed_phase, file=sys.stderr)
+                print('Browser cases completed: ' + str(len(failed.get('cases', []))), file=sys.stderr)
+        except Exception:
+            pass
     sys.exit(1)
 finally:
     if proxy:
