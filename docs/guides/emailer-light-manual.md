@@ -1,6 +1,6 @@
 # Emailer Light user manual
 
-Version 1.2.4 | Setup and everyday newsletters
+Version 1.2.5 | Setup and everyday newsletters
 
 Prepare, test, approve, then send. Saving a draft sends nothing. Light has one administrator and campaign-specific CSV audiences; it has no reusable contacts, lists, additional administrator accounts or MFA.
 
@@ -12,7 +12,7 @@ Ubuntu 26.04.1 HTTPS acceptance used a local ACME server with real HTTP challeng
 
 Light’s Ubuntu Apache installer supports wildcard virtual hosts. Address-specific Apache websites require Emailer Ripe with its supported address-specific installation profile. Nginx on a separate port, such as 8081, can remain running.
 
-The 1.2.4 setup file supports Ubuntu 22.04/24.04/26.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action.
+The 1.2.5 setup file supports Ubuntu 22.04/24.04/26.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action.
 
 ## Your installed account
 
@@ -31,13 +31,31 @@ Sign in with the administrator email and password chosen during installation. Ex
 
 Provider suggestions are conveniences; use your account's current settings. Leave the optional one-click DKIM confirmation unticked unless your provider confirms signing both unsubscribe headers. Normal unsubscribe links work independently.
 
-## Prepare a template
+## Create or edit a template with images
 
-1. Open Templates and create a template with a recognizable name, email subject and HTML. Plain text is optional; leave it blank to generate it automatically. Preview and save/publish the version you intend to use.
-2. Upload images through the template asset controls and use the returned asset address. Unsafe HTML and remote image sources are removed.
-3. Use the supported fields shown by the editor, such as `{{ recipient.first_name }}` and `{{ unsubscribe_url }}`. Older `{{name}}` and `{{email}}` forms are unsupported.
+Open Templates to create a draft, or choose Edit for an existing template. Enter the name, subject, optional preheader and HTML. Plain text is optional; leave it blank to generate it when saving. Your image controls are part of this same editor.
 
-![The installed Light templates screen.](images/emailer-light-templates.png)
+1. In Images, choose a JPEG, PNG or WebP file and select Upload and re-encode image. Stay on this page: progress is shown while Emailer validates and saves the image. Uploading keeps your five template fields and HTML cursor position.
+2. Choose the saved thumbnail in the gallery. Earlier uploads are available here too; use Refresh gallery or Load more images when needed. You do not need to upload the same image again.
+3. Enter a useful Description (alt text), or leave it blank for a decorative image. Adjust Display width if needed; Keep proportions adjusts the height. New selections fit within 600 pixels without enlarging a small image.
+4. Place the HTML cursor in text or between tags, then choose Insert image. The supported image reference is generated for you. Copy image HTML copies the complete image tag; Copy image path copies only its address. Neither copy action changes your template.
+5. Choose Create template, Save template or Create new version, as appropriate. Saving stores an unpublished draft. Publication, campaign approval and sending remain separate actions.
+
+![The editor's image controls after inline upload. Your template fields remain on the same page.](images/emailer-light-image-library.png)
+
+![Select an image, set its description and dimensions, then insert at the HTML cursor or copy its HTML/path.](images/emailer-light-image-insert.png)
+
+Images must be at most 2 MB and 2400 pixels on each side. Emailer validates and re-encodes them. SVG and other unsupported files are rejected with an explanation. On failure, your entries stay here; correct the file and use Retry upload. If a connection fails after upload started, refresh the gallery before retrying because the image may already have been saved. Cancel also does not remove an image that already reached the server.
+
+Saved image links can be opened without signing in so recipients can see them. Upload only images that are safe to share. The editor uses a relative /template-assets/ image reference; delivered messages automatically use your installation’s HTTPS address. Keep that address and HTTPS working while recipients use those images.
+
+### Recover unsaved work
+
+The editor keeps an unsaved recovery copy in this browser tab for up to 12 hours. After refresh or returning, choose Restore draft to bring back the five fields and HTML cursor, or Discard recovered draft to use the saved version. Each tab has its own copy. Use Save for durable storage; closing the tab may remove browser recovery. Close the tab when finished on a shared computer.
+
+If browser storage is unavailable, the editor says so and warns before you leave with unsaved changes. Keep a copy of your content or save it before leaving. If saving fails validation, your submitted fields remain visible with the error; correct them and save again. Insertion errors leave the HTML unchanged. Uploading, recovering and saving a draft send no messages.
+
+Supported merge fields include `{{ recipient.first_name }}` and `{{ unsubscribe_url }}`. Older `{{name}}` and `{{email}}` forms are unsupported.
 
 ## Create a campaign and upload recipients
 
@@ -77,7 +95,7 @@ Use Profile for your account and Sessions to review access. Lost administrator p
 
 ## Updates
 
-1. Download the official new Light setup file and start it using the installation action. Light 1.0.0, 1.1.0, 1.2.0, 1.2.1 and 1.2.2 can update directly to 1.2.4. Check the displayed address before choosing an action.
+1. Download the official new Light setup file and start it using the installation action. Light 1.0.0, 1.1.0, 1.2.0, 1.2.1, 1.2.2, 1.2.3 and 1.2.4 can update directly to 1.2.5. Check the displayed address before choosing an action.
 2. Choose Update with a verified backup. Setup pauses delivery, verifies recovery material and checks the updated application. Follow any Finish a committed update instruction.
 3. Review Doctor and mail settings. Start the same file and choose Resume delivery after reviewing readiness when ready. Previously approved due work may continue after resume; no draft is approved by this action.
 

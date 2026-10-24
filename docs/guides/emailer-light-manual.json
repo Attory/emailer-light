@@ -1,6 +1,6 @@
 {
   "title": "Emailer Light user manual",
-  "subtitle": "Version 1.2.4 | Setup and everyday newsletters",
+  "subtitle": "Version 1.2.5 | Setup and everyday newsletters",
   "blocks": [
     {
       "type": "p",
@@ -24,7 +24,7 @@
     },
     {
       "type": "p",
-      "text": "The 1.2.4 setup file supports Ubuntu 22.04/24.04/26.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action."
+      "text": "The 1.2.5 setup file supports Ubuntu 22.04/24.04/26.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action."
     },
     {
       "type": "h2",
@@ -63,20 +63,55 @@
     },
     {
       "type": "h2",
-      "text": "Prepare a template"
+      "text": "Create or edit a template with images"
+    },
+    {
+      "type": "p",
+      "text": "Open Templates to create a draft, or choose Edit for an existing template. Enter the name, subject, optional preheader and HTML. Plain text is optional; leave it blank to generate it when saving. Your image controls are part of this same editor."
     },
     {
       "type": "ol",
       "items": [
-        "Open Templates and create a template with a recognizable name, email subject and HTML. Plain text is optional; leave it blank to generate it automatically. Preview and save/publish the version you intend to use.",
-        "Upload images through the template asset controls and use the returned asset address. Unsafe HTML and remote image sources are removed.",
-        "Use the supported fields shown by the editor, such as <code>{{ recipient.first_name }}</code> and <code>{{ unsubscribe_url }}</code>. Older <code>{{name}}</code> and <code>{{email}}</code> forms are unsupported."
+        "In Images, choose a JPEG, PNG or WebP file and select Upload and re-encode image. Stay on this page: progress is shown while Emailer validates and saves the image. Uploading keeps your five template fields and HTML cursor position.",
+        "Choose the saved thumbnail in the gallery. Earlier uploads are available here too; use Refresh gallery or Load more images when needed. You do not need to upload the same image again.",
+        "Enter a useful Description (alt text), or leave it blank for a decorative image. Adjust Display width if needed; Keep proportions adjusts the height. New selections fit within 600 pixels without enlarging a small image.",
+        "Place the HTML cursor in text or between tags, then choose Insert image. The supported image reference is generated for you. Copy image HTML copies the complete image tag; Copy image path copies only its address. Neither copy action changes your template.",
+        "Choose Create template, Save template or Create new version, as appropriate. Saving stores an unpublished draft. Publication, campaign approval and sending remain separate actions."
       ]
     },
     {
       "type": "image",
-      "file": "emailer-light-templates.png",
-      "caption": "The installed Light templates screen."
+      "file": "emailer-light-image-library.png",
+      "caption": "The editor's image controls after inline upload. Your template fields remain on the same page."
+    },
+    {
+      "type": "image",
+      "file": "emailer-light-image-insert.png",
+      "caption": "Select an image, set its description and dimensions, then insert at the HTML cursor or copy its HTML/path."
+    },
+    {
+      "type": "p",
+      "text": "Images must be at most 2 MB and 2400 pixels on each side. Emailer validates and re-encodes them. SVG and other unsupported files are rejected with an explanation. On failure, your entries stay here; correct the file and use Retry upload. If a connection fails after upload started, refresh the gallery before retrying because the image may already have been saved. Cancel also does not remove an image that already reached the server."
+    },
+    {
+      "type": "p",
+      "text": "Saved image links can be opened without signing in so recipients can see them. Upload only images that are safe to share. The editor uses a relative /template-assets/ image reference; delivered messages automatically use your installation’s HTTPS address. Keep that address and HTTPS working while recipients use those images."
+    },
+    {
+      "type": "h3",
+      "text": "Recover unsaved work"
+    },
+    {
+      "type": "p",
+      "text": "The editor keeps an unsaved recovery copy in this browser tab for up to 12 hours. After refresh or returning, choose Restore draft to bring back the five fields and HTML cursor, or Discard recovered draft to use the saved version. Each tab has its own copy. Use Save for durable storage; closing the tab may remove browser recovery. Close the tab when finished on a shared computer."
+    },
+    {
+      "type": "p",
+      "text": "If browser storage is unavailable, the editor says so and warns before you leave with unsaved changes. Keep a copy of your content or save it before leaving. If saving fails validation, your submitted fields remain visible with the error; correct them and save again. Insertion errors leave the HTML unchanged. Uploading, recovering and saving a draft send no messages."
+    },
+    {
+      "type": "p",
+      "text": "Supported merge fields include <code>{{ recipient.first_name }}</code> and <code>{{ unsubscribe_url }}</code>. Older <code>{{name}}</code> and <code>{{email}}</code> forms are unsupported."
     },
     {
       "type": "h2",
@@ -149,7 +184,7 @@
     {
       "type": "ol",
       "items": [
-        "Download the official new Light setup file and start it using the installation action. Light 1.0.0, 1.1.0, 1.2.0, 1.2.1 and 1.2.2 can update directly to 1.2.4. Check the displayed address before choosing an action.",
+        "Download the official new Light setup file and start it using the installation action. Light 1.0.0, 1.1.0, 1.2.0, 1.2.1, 1.2.2, 1.2.3 and 1.2.4 can update directly to 1.2.5. Check the displayed address before choosing an action.",
         "Choose Update with a verified backup. Setup pauses delivery, verifies recovery material and checks the updated application. Follow any Finish a committed update instruction.",
         "Review Doctor and mail settings. Start the same file and choose Resume delivery after reviewing readiness when ready. Previously approved due work may continue after resume; no draft is approved by this action."
       ]
