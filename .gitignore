@@ -90,3 +90,6 @@ Thumbs.db
 
 # Installer Python runtime cache
 __pycache__/
+
+# Test-only pinned browser dependencies
+/tools/browser/node_modules/

@@ -1,17 +1,19 @@
 {% extends 'admin/layout.html.twig' %}
 {% block title %}{{ operation == 'edit' ? 'Edit' : 'Duplicate' }} template — Emailer Light{% endblock %}
+{% block stylesheets %}{{ parent() }}<link rel="stylesheet" href="{{ asset('styles/template-editor.css') }}">{% endblock %}
+{% block javascripts %}{{ parent() }}<script type="module" src="{{ asset('template-editor.js') }}"></script>{% endblock %}
 {% block admin_body %}
 <p><a href="{{ path('admin_templates') }}">← Templates</a></p>
 <h1>{{ operation == 'edit' ? 'Edit template' : 'Duplicate template' }}</h1>
+{% if operation == 'edit' %}
+{% include 'admin/_template-editor.html.twig' %}
+{% else %}
+{% if form_error %}<p class="alert" role="alert">{{ form_error }}</p>{% endif %}
 <form method="post" action="{{ path('admin_template_' ~ operation, {id: template.id}) }}">
     <input type="hidden" name="_token" value="{{ csrf_token('template-' ~ operation ~ '-' ~ template.id) }}">
-    <label>{{ operation == 'duplicate' ? 'New template name' : 'Name' }} <input name="name" value="{{ operation == 'edit' ? template.name : '' }}" maxlength="160" required></label>
-    {% if operation == 'edit' %}
-    <label>Subject <input name="subject" value="{{ template.subject }}" maxlength="200" required></label>
-    <label>Preheader <input name="preheader" value="{{ template.preheader }}" maxlength="200"></label>
-    <label>HTML <textarea name="html_body" rows="14" maxlength="200000" required>{{ template.html_body }}</textarea></label>
-    <label>Plain text <textarea name="text_body" rows="8" maxlength="100000">{{ template.text_body }}</textarea></label>
-    {% else %}<p>The new draft will copy the current subject, preheader and content. It will have its own name and can be edited independently.</p>{% endif %}
-    <button type="submit">{{ operation == 'edit' ? 'Save template' : 'Duplicate template' }}</button>
+    <label>{{ operation == 'duplicate' ? 'New template name' : 'Name' }} <input name="name" value="{{ values.name }}" maxlength="160" required></label>
+    <p>The new draft will copy the current subject, preheader and content. It will have its own name and can be edited independently.</p>
+    <button type="submit">Duplicate template</button>
 </form>
+{% endif %}
 {% endblock %}

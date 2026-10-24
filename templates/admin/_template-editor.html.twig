@@ -1,0 +1,60 @@
+<form method="post" enctype="multipart/form-data" action="{{ editor.action }}" class="template-editor" data-template-editor data-editor-key="{{ editor.key }}" data-editor-account="{{ editor.actor }}" data-editor-unsaved="{{ editor.unsaved ? 'true' : 'false' }}" data-selected-asset="{{ editor.selected_asset }}" data-gallery-url="{{ path('admin_template_assets') }}">
+    <input type="hidden" name="_token" value="{{ csrf_token(editor.csrf_purpose) }}">
+    <input type="hidden" name="_asset_token" value="{{ csrf_token('template-asset-upload') }}">
+    <input type="hidden" name="_editor_kind" value="{{ editor.kind }}">
+    <input type="hidden" name="_editor_id" value="{{ editor.id }}">
+    <section class="alert" data-template-recovery hidden aria-label="Unsaved draft recovery">
+        <h2>Unsaved draft found in this tab</h2>
+        <p data-template-recovery-info>Restore your entries before continuing, or discard this recovered draft.</p>
+        <div class="actions"><button type="button" data-template-restore>Restore draft</button><button type="button" class="secondary" data-template-discard>Discard recovered draft</button></div>
+    </section>
+    <p class="alert" role="alert" data-template-error{% if not editor.error %} hidden{% endif %}>{{ editor.error }}</p>
+    <p class="alert success" role="status" aria-live="polite" data-template-notice{% if not editor.notice %} hidden{% endif %}>{{ editor.notice }}</p>
+    <p class="field-hint" data-template-draft-status aria-live="polite">Saving here creates an unpublished draft. Publication is a separate action.</p>
+    <div class="actions template-editor-save-actions"><button type="submit" data-template-save>{{ editor.kind == 'create' ? 'Create template' : (editor.kind == 'version' ? 'Create new version' : 'Save template') }}</button></div>
+    <fieldset data-template-fields>
+        <legend>Template draft</legend>
+        {% if editor.kind != 'version' %}<label>Name <input name="name" value="{{ editor.values.name }}" maxlength="160" required></label>{% endif %}
+        <label>Subject <input name="subject" value="{{ editor.values.subject }}" maxlength="200" required></label>
+        <label>Preheader <input name="preheader" value="{{ editor.values.preheader }}" maxlength="200"></label>
+        <label>HTML <textarea name="html_body" maxlength="200000" rows="14" required>{{ editor.values.html_body }}</textarea></label>
+        <label>Plain text (optional; generated when blank) <textarea name="text_body" maxlength="100000" rows="8">{{ editor.values.text_body }}</textarea></label>
+    </fieldset>
+    <section class="panel template-image-library" aria-label="Saved image gallery">
+        <div class="section-header"><h2>Images</h2><button type="button" class="secondary" data-template-refresh>Refresh gallery</button></div>
+        <p>Upload a new image or reuse one saved earlier. Select an image, add its description and choose Insert image to place it at your HTML cursor.</p>
+        <label>JPEG, PNG or WebP image <input type="file" name="image" accept="image/jpeg,image/png,image/webp" data-template-file></label>
+        <p class="field-hint">Up to 2 MB and 2400 pixels on each side. Images are validated and re-encoded. Uploading keeps your template entries here.</p>
+        <div class="actions"><button type="submit" formaction="{{ path('admin_template_asset_upload') }}" formnovalidate data-template-upload>Upload and re-encode image</button><button type="button" class="secondary" data-template-retry hidden>Retry upload</button><button type="button" class="secondary" data-template-cancel-upload hidden>Cancel upload</button></div>
+        <progress class="progress-track" max="100" value="0" aria-label="Image upload progress" data-template-upload-progress hidden></progress>
+        <p class="field-hint" role="status" aria-live="polite" data-template-upload-status></p>
+        <p class="field-error" role="alert" data-template-upload-error hidden></p>
+        <p class="field-error" role="alert" data-template-gallery-error{% if not editor.gallery_error %} hidden{% endif %}>{{ editor.gallery_error }}</p>
+        <div class="template-image-grid" data-template-gallery>
+        {% for asset in editor.gallery.items %}
+            <button type="button" class="template-image-choice secondary" data-template-select data-asset-id="{{ asset.id }}" data-asset-url="{{ asset.url }}" data-asset-width="{{ asset.width }}" data-asset-height="{{ asset.height }}" data-asset-created="{{ asset.created_at }}" data-asset-available="{{ asset.available ? 'true' : 'false' }}" aria-pressed="false"{% if not asset.available %} disabled{% endif %}>
+                {% if asset.available %}<img src="{{ asset.url }}" class="template-image-thumbnail" width="160" height="120" alt="Saved image {{ loop.index }}" loading="lazy" decoding="async">{% endif %}
+                <span>{{ asset.available ? 'Select image' : 'Image file unavailable' }}</span>
+                <small>{{ asset.width }} × {{ asset.height }} pixels · {{ asset.created_at }}</small>
+            </button>
+            <noscript>{% if asset.available %}<label>Image HTML <textarea readonly rows="2">&lt;img src="{{ asset.url }}" alt="" width="{{ min(asset.width, 600) }}"&gt;</textarea></label>{% endif %}</noscript>
+        {% else %}<p data-template-gallery-empty>No saved images yet. Your uploads will remain available here when you return.</p>{% endfor %}
+        </div>
+        <button type="button" class="secondary" data-template-more data-cursor="{{ editor.gallery.next_cursor }}"{% if not editor.gallery.next_cursor %} hidden{% endif %}>Load more images</button>
+        <section class="template-image-settings" data-template-image-settings hidden aria-label="Selected image">
+            <h3>Selected image</h3>
+            <label>Description (alt text) <input type="text" maxlength="500" data-template-alt></label>
+            <p class="field-hint">Describe what the image conveys. Leave this blank for a purely decorative image.</p>
+            <div class="form-grid"><label>Display width (pixels) <input type="text" inputmode="numeric" maxlength="4" data-template-width></label><label>Display height (pixels) <input type="text" inputmode="numeric" maxlength="4" data-template-height></label></div>
+            <label><input type="checkbox" checked data-template-proportions> Keep proportions</label>
+            <p class="field-error" role="alert" data-template-image-error hidden></p>
+            <div class="actions"><button type="button" data-template-insert>Insert image</button><button type="button" class="secondary" data-template-copy-html>Copy image HTML</button><button type="button" class="secondary" data-template-copy-path>Copy image path</button></div>
+            <label>Supported image path <input type="text" readonly data-template-image-path></label>
+            <p class="field-hint">Images are available at their image links. Uploading does not publish a template or send a message.</p>
+        </section>
+    </section>
+    <dialog data-template-copy-dialog aria-label="Copy image reference">
+        <label>Copy this text <textarea readonly rows="4" data-template-copy-value></textarea></label>
+        <button type="button" data-template-copy-close>Close</button>
+    </dialog>
+</form>
