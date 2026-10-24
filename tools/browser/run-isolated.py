@@ -110,6 +110,9 @@ try:
         raise RuntimeError('Disposable database did not start.')
     stage = 'real synthetic installation'
     php('-r', 'if(posix_geteuid()===0){exit(1);}')
+    # CI and native packages contain this directory. It must not change routing
+    # for private image storage served through the application controller.
+    php('-r', 'if(!is_dir("public/template-assets")&&!mkdir("public/template-assets",0775,true)){exit(1);}')
     php('bin/console', 'doctrine:migrations:migrate', '--env=test', '--no-interaction')
     php('tools/browser/seed-editor.php')
     php('bin/console', 'asset-map:compile', '--env=test', '--no-interaction')

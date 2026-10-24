@@ -34,6 +34,11 @@ reload/navigation recovery; independent tabs; create/edit validation; slow
 saves; fallback-to-enhanced recovery; mobile/desktop bounds; and anonymous
 recipient image retrieval.
 
+The fixture deliberately includes a physical `public/template-assets` directory,
+as CI and native packages do. Its built-in test server sets the same front
+controller variables as Apache/FPM so this directory cannot change routed image
+URLs into a different application base path.
+
 Upload/save acceptance first compares publication, campaign, queue, delivery
 and sink counts against its unchanged baseline. Only then does a separate,
 explicit synthetic campaign-test stage publish its test version, create a
