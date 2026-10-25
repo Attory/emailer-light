@@ -40,14 +40,9 @@ try {
         throw new RuntimeException('The self-contained installer requires its authenticated predecessor package set.');
     }
     $priorArchives = ['emailer-light-1.0.0.zip', 'emailer-light-1.1.0.zip', 'emailer-light-1.2.0.zip', 'emailer-light-1.2.1.zip', 'emailer-light-1.2.2.zip', 'emailer-light-1.2.3.zip', 'emailer-light-1.2.4.zip', 'emailer-light-1.2.5.zip'];
-    (new App\Module\Release\Application\PackageInspector($options['public-key'], '1.0.0'))->inspectInstalledSource($options['predecessors'].'/'.$priorArchives[0]);
-    (new App\Module\Release\Application\PackageInspector($options['public-key'], '1.1.0'))->inspectInstalledSource($options['predecessors'].'/emailer-light-1.1.0.zip');
-    (new App\Module\Release\Application\PackageInspector($options['public-key'], '1.2.0'))->inspectInstalledSource($options['predecessors'].'/emailer-light-1.2.0.zip');
-    (new App\Module\Release\Application\PackageInspector($options['public-key'], '1.2.1'))->inspectInstalledSource($options['predecessors'].'/emailer-light-1.2.1.zip');
-    (new App\Module\Release\Application\PackageInspector($options['public-key'], '1.2.2'))->inspectInstalledSource($options['predecessors'].'/emailer-light-1.2.2.zip');
-    (new App\Module\Release\Application\PackageInspector($options['public-key'], '1.2.3'))->inspectInstalledSource($options['predecessors'].'/emailer-light-1.2.3.zip');
-    (new App\Module\Release\Application\PackageInspector($options['public-key'], '1.2.5'))->inspectInstalledSource($options['predecessors'].'/emailer-light-1.2.5.zip');
     foreach ($priorArchives as $prior) {
+        $priorVersion = substr($prior, strlen('emailer-light-'), -strlen('.zip'));
+        (new App\Module\Release\Application\PackageInspector($options['public-key'], $priorVersion))->inspectInstalledSource($options['predecessors'].'/'.$prior);
         foreach (['', '.manifest.json', '.sha256', '.spdx.json', '.sig'] as $suffix) {
             $path = $options['predecessors'].'/'.$prior.$suffix;
             $info = lstat($path);
@@ -69,7 +64,7 @@ try {
     $contents['release.pub'] = $public."\n";
     ksort($contents, SORT_STRING);
     $digests = array_map(static fn (string $bytes): string => hash('sha256', $bytes), $contents);
-    $manifest = json_encode(['format' => 'emailer-installer-v1', 'product' => $product, 'test_only' => $testOnly, 'schema_version' => '20261014000000', 'version' => $options['version'], 'source_commit' => $options['source'], 'archive' => $archive, 'files' => $digests], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n";
+    $manifest = json_encode(['format' => 'emailer-installer-v1', 'product' => $product, 'test_only' => $testOnly, 'schema_version' => $inspection['schema_version'], 'version' => $options['version'], 'source_commit' => $options['source'], 'archive' => $archive, 'files' => $digests], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n";
     $contents['installer.json'] = $manifest;
     $contents['installer.json.sig'] = sodium_crypto_sign_detached($manifest, $key);
     $contents['setup'] = str_replace(['@PUBLIC_KEY@', '@PRODUCT@', '@BOOTSTRAP@'], [$public, $product, (string) file_get_contents(__DIR__.'/bootstrap.sh.in')], (string) file_get_contents(__DIR__.'/setup.in'));
