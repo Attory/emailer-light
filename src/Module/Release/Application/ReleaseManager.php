@@ -128,7 +128,7 @@ final readonly class ReleaseManager
                 throw new \RuntimeException('Release downgrade or same-version update is not allowed.');
             }
             if ('prod' === $this->environment && NativeSchemaUpdate::supports($this->currentVersion, $targetVersion)) {
-                throw new \RuntimeException('Use the guided native installer for this schema-preserving Light update, including its persistent writer fencing and recovery journal.');
+                throw new \RuntimeException('Use the guided native installer for this supported Light update, including its persistent writer fencing and recovery journal.');
             }
             $this->assertPlatformAndSchemaCompatibility($manifest);
             $this->assertDiskCapacity($archive, $manifest);
@@ -225,7 +225,7 @@ final readonly class ReleaseManager
     {
         $minimumSchema = $manifest['minimum_schema_version'] ?? null;
         $targetSchema = $manifest['schema_version'] ?? null;
-        $currentSchema = $this->connection->fetchOne('SELECT version FROM doctrine_migration_versions ORDER BY executed_at DESC, version DESC LIMIT 1');
+        $currentSchema = $this->connection->fetchOne('SELECT version FROM doctrine_migration_versions ORDER BY version DESC LIMIT 1');
         $currentSchema = \is_string($currentSchema) ? substr($currentSchema, -14) : null;
         if (!\is_string($minimumSchema) || !\is_string($targetSchema) || !\is_string($currentSchema) || 1 !== preg_match('/^[0-9]{14}$/', $minimumSchema) || 1 !== preg_match('/^[0-9]{14}$/', $targetSchema) || $currentSchema < $minimumSchema || $targetSchema < $currentSchema) {
             throw new \RuntimeException('Release database schema compatibility check failed.');

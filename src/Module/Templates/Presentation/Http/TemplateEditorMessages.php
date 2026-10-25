@@ -12,6 +12,9 @@ final class TemplateEditorMessages
 {
     public static function save(\Throwable $failure): string
     {
+        if ($failure instanceof \App\Module\Templates\Application\TemplateMergeException) {
+            return $failure->getMessage();
+        }
         if ($failure instanceof UniqueConstraintViolationException) {
             return 'That template name is already in use, including archived templates. Choose a different name. Your content is still here.';
         }

@@ -151,7 +151,7 @@ final readonly class TemplateManager implements CampaignTemplatePreparation
     {
         $this->authorization->assertAtLeastRank($actor, AdministrativeAccessLevel::Administrator, 'templates.campaign.options');
 
-        return $this->connection->fetchAllAssociative("SELECT v.id, t.name, v.version_number, t.status FROM email_template t INNER JOIN template_version v ON v.template_id = t.id WHERE t.status <> 'archived' AND v.version_number = (SELECT MAX(v2.version_number) FROM template_version v2 WHERE v2.template_id = t.id) ORDER BY t.name");
+        return $this->connection->fetchAllAssociative("SELECT v.id, t.name, v.version_number, t.status, v.published_at FROM email_template t INNER JOIN template_version v ON v.template_id = t.id WHERE t.status <> 'archived' AND (v.id = t.published_version_id OR v.version_number = (SELECT MAX(v2.version_number) FROM template_version v2 WHERE v2.template_id = t.id)) ORDER BY t.name, v.version_number DESC");
     }
 
     public function prepareContent(AdministrativeActor $actor, string $name, string $subject, string $preheader, string $html): string

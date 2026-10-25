@@ -18,7 +18,7 @@ final class ReleaseController extends AbstractController
     #[Route('/admin/release', name: 'admin_release', methods: ['GET', 'HEAD'])]
     public function view(): Response
     {
-        $migration = $this->connection->fetchOne('SELECT version FROM doctrine_migration_versions ORDER BY executed_at DESC, version DESC LIMIT 1');
+        $migration = $this->connection->fetchOne('SELECT version FROM doctrine_migration_versions ORDER BY version DESC LIMIT 1');
 
         return $this->render('admin/release.html.twig', ['version' => $this->version, 'schema_version' => \is_string($migration) ? substr($migration, -14) : 'unknown', 'immutable_pointer' => '' !== $this->releasesDirectory && is_link($this->releasesDirectory.'/current')]);
     }

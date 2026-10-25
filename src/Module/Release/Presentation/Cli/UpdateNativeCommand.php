@@ -12,7 +12,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
-#[AsCommand(name: 'emailer:release:update-native', description: 'Installer-only schema-preserving Light update and interrupted-operation recovery.')]
+#[AsCommand(name: 'emailer:release:update-native', description: 'Installer-only verified Light update and interrupted-operation recovery.')]
 final class UpdateNativeCommand extends Command
 {
     public function __construct(private readonly NativeSchemaUpdate $updates)

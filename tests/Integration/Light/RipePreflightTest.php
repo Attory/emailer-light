@@ -22,14 +22,14 @@ final class RipePreflightTest extends KernelTestCase
         $key = $private.'/master.key';
         file_put_contents($key, str_repeat('k', 32));
         chmod($key, 0o600);
-        file_put_contents($private.'/install.lock', json_encode(['version' => 1, 'product_id' => 'emailer-light', 'product_version' => '1.0.0', 'schema_version' => '20261014000000', 'upgrade_contract_version' => '1.0', 'installation_uuid' => '01990101-0000-7000-8000-000000000001'], JSON_THROW_ON_ERROR));
+        file_put_contents($private.'/install.lock', json_encode(['version' => 1, 'product_id' => 'emailer-light', 'product_version' => '1.2.6', 'schema_version' => '20261025000000', 'upgrade_contract_version' => '1.0', 'installation_uuid' => '01990101-0000-7000-8000-000000000001'], JSON_THROW_ON_ERROR));
         chmod($private.'/install.lock', 0o600);
         try {
             $id = '01990101-0000-7000-8000-000000000001';
             $now = '2026-01-01 00:00:00.000000';
             $database->insert('app_user', ['id' => $id, 'singleton_key' => '1', 'login_identifier' => 'admin@example.test', 'password_hash' => password_hash('synthetic-only-long-password', PASSWORD_ARGON2ID), 'active' => 1, 'created_at' => $now, 'updated_at' => $now, 'password_changed_at' => $now]);
             $database->update('installation_state', ['installation_uuid' => $id, 'completed_at' => $now], ['singleton_key' => '1']);
-            $database->update('product_identity', ['installation_uuid' => $id], ['singleton_key' => '1']);
+            $database->update('product_identity', ['installation_uuid' => $id, 'product_version' => '1.2.6', 'schema_version' => '20261025000000'], ['singleton_key' => '1']);
             $database->update('delivery_runtime', ['accepting_work' => 0], ['singleton_key' => '1']);
             $database->insert('suppression', ['id' => '01990101-0000-7000-8000-000000000082', 'email_canonical' => 'Jane.Doe@example.test', 'reason' => 'unsubscribe', 'source' => 'synthetic', 'created_at' => $now]);
             $before = $database->fetchAllAssociative('SELECT * FROM product_identity');

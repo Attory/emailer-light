@@ -3,6 +3,7 @@
 {% block stylesheets %}{{ parent() }}<link rel="stylesheet" href="{{ asset('styles/template-editor.css') }}">{% endblock %}
 {% block javascripts %}{{ parent() }}<script type="module" src="{{ asset('template-editor.js') }}"></script>{% endblock %}
 {% block admin_body %}
+{% include 'admin/_campaign-template-return.html.twig' %}
 <p><a href="{{ path('admin_templates') }}">← Templates</a></p>
 <h1>{{ operation == 'edit' ? 'Edit template' : 'Duplicate template' }}</h1>
 {% if operation == 'edit' %}

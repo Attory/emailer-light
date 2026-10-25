@@ -17,7 +17,7 @@ final readonly class DoctrineInstallationFinalizer implements InstallationFinali
         private InstallationLock $installationLock,
         private SetupDoctor $doctor,
         private SetupLifecycle $lifecycle,
-        private string $productVersion = '1.2.5',
+        private string $productVersion = '1.2.6',
     ) {
     }
 
@@ -77,7 +77,7 @@ final readonly class DoctrineInstallationFinalizer implements InstallationFinali
                     'product_version' => $this->productVersion,
                     'installation_uuid' => $installationId,
                     'completed_at' => $completedAt,
-                    'schema_version' => '20261014000000',
+                    'schema_version' => '20261025000000',
                     'upgrade_contract_version' => '1.0',
                 ]);
             } catch (\Throwable $exception) {

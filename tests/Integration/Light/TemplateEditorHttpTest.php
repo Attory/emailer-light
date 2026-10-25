@@ -109,7 +109,7 @@ final class TemplateEditorHttpTest extends WebTestCase
                 '_token' => self::token($form, '[data-template-editor] [name="_token"]')], server: $server);
             self::assertSame(422, $client->getResponse()->getStatusCode());
             self::assertValues($rejected, $invalidValues);
-            self::assertStringContainsString('merge field', $rejected->filter('[data-template-error]')->text());
+            self::assertStringContainsString('{{ unknown_field }}', $rejected->filter('[data-template-error]')->text());
             self::assertSame(0, self::number($database->fetchOne('SELECT COUNT(*) FROM email_template')));
 
             $client->request('POST', '/admin/templates/create', [...$values,

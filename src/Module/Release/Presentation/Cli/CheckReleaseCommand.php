@@ -20,7 +20,7 @@ final class CheckReleaseCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $migration = $this->connection->fetchOne('SELECT version FROM doctrine_migration_versions ORDER BY executed_at DESC, version DESC LIMIT 1');
+        $migration = $this->connection->fetchOne('SELECT version FROM doctrine_migration_versions ORDER BY version DESC LIMIT 1');
         $pointer = '' !== $this->releasesDirectory && is_link($this->releasesDirectory.'/current') ? readlink($this->releasesDirectory.'/current') : null;
         $output->writeln(json_encode(['version' => $this->version, 'schema_version' => \is_string($migration) ? substr($migration, -14) : 'unknown', 'immutable_pointer' => \is_string($pointer)], JSON_THROW_ON_ERROR));
 

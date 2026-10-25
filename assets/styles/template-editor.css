@@ -20,3 +20,10 @@
     .template-image-library .section-header { flex-wrap: wrap; }
     .template-image-settings .actions { align-items: stretch; flex-direction: column; }
 }
+
+.template-editor { display: grid; grid-template-columns: minmax(0, 2fr) minmax(16rem, 1fr); gap: 1rem; }
+.template-editor > * { grid-column: 1 / -1; }
+.template-editor > fieldset { grid-column: 1; }
+.template-editor > .template-placeholder-help { grid-column: 2; grid-row: auto; overflow-wrap: anywhere; }
+.template-placeholder-help code { white-space: pre-wrap; }
+@media (max-width: 900px) { .template-editor { display: block; } }

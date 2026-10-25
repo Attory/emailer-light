@@ -20,7 +20,7 @@ final readonly class BackupEngine implements BackupOperations
     private const CHUNK = 65536;
 
     /** @param iterable<BackupContributor> $contributors */
-    public function __construct(private Connection $connection, private MasterKey $masterKey, private LockFactory $locks, private MaintenanceOperationLock $maintenance, private iterable $contributors, private string $backupDirectory, private string $sourceVersion, private ?RestoreDrillEvidence $drillEvidence = null, private ?AuditSink $audit = null)
+    public function __construct(private Connection $connection, private MasterKey $masterKey, private LockFactory $locks, private MaintenanceOperationLock $maintenance, private iterable $contributors, private string $backupDirectory, private string $sourceVersion, private ?RestoreDrillEvidence $drillEvidence = null, private ?AuditSink $audit = null, private ?string $expectedSchemaVersion = null)
     {
     }
 
@@ -274,8 +274,12 @@ final readonly class BackupEngine implements BackupOperations
         try {
             try {
                 $this->assertQuiesced();
+                $manifest = $this->inspect($path);
+                $liveSchema = $this->schemaVersion();
+                if ($manifest['schema_version'] !== $liveSchema || (null !== $this->expectedSchemaVersion && $this->expectedSchemaVersion !== $liveSchema)) {
+                    throw new \RuntimeException('This backup belongs to a different database schema. Nothing was restored. Use the matching signed release in an isolated recovery installation, or the guided updater’s retained recovery operation. Keep this backup for recovery; it can still be verified.');
+                }
                 $maintenanceConfirmed = true;
-                $manifest = $this->verify($path);
                 if ($drill) {
                     $this->evidence();
                 }
@@ -924,7 +928,7 @@ final readonly class BackupEngine implements BackupOperations
 
     private function schemaVersion(): string
     {
-        $version = $this->connection->fetchOne('SELECT version FROM doctrine_migration_versions ORDER BY executed_at DESC, version DESC LIMIT 1');
+        $version = $this->connection->fetchOne('SELECT version FROM doctrine_migration_versions ORDER BY version DESC LIMIT 1');
 
         return \is_string($version) ? substr($version, -14) : 'unknown';
     }

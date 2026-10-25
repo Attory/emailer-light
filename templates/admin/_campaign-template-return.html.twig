@@ -1,0 +1,4 @@
+{% set return_campaign = app.request.request.get('return_campaign', app.request.query.get('return_campaign', '')) %}
+{% if return_campaign matches '/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/' %}
+<p class="panel campaign-return"><a href="{{ path('admin_campaign_edit', {id: return_campaign}) }}" data-campaign-return>← Return to saved Campaign draft</a>. Your campaign’s saved fields and recipients are kept. Its template choices refresh when you return.</p>
+{% endif %}
