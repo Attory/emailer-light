@@ -67,3 +67,30 @@ No release tag or asset has been created for 1.2.6 at this point. No production
 system, database, credential or recipient was accessed. No later product phase
 was implemented. Existing Apache wildcard-only boundary and public ACME limitation
 remain unchanged.
+
+## Candidate acceptance follow-up
+
+The Light original-key candidate at 740c53bc1e405acb6d4d9e12c77e2ac51bc85329
+passed all eight published predecessor native updates, repeat execution and
+completed-operation recovery refusal. Actual process kills during preparation
+and after DDL/before ledger were recovered to exact source schema, ledger,
+identity and lock, then successfully retried with no new mail.
+
+A disposable Ubuntu 26.04.1 / Virtualmin host passed fresh setup, interruption,
+resume/repeat, 31 actual installed-package browser cases and encrypted backup
+restoration. Its 195 protected configuration files and five pre-existing main
+PIDs remained unchanged; continuous HTTP/HTTPS checks recorded no failure and
+SMTP egress remained zero. Public ACME issuance is still not claimed.
+
+Independent manual-only usability passed the new campaign/CSV/template round
+trip and five-field diagnostic recovery. Review found a missing Light progress
+badge attribute; it is restored with HTTP and live-poll browser assertions in
+both editions. The source browser pass now includes 17 campaign cases in
+addition to the retained 15 image-editor cases and actual Mailpit delivery check.
+
+Actual setup-file update on the separate synthetic Light125 lab found a second
+invocation rejected its new active runtime pointer. Both edition allowlists now
+include the exact new handoff paths, with regressions for supported reentry and
+continued rejection of unlisted versions, unrelated roots and path traversal.
+Final rebuilt packages must repeat these checks before publication. No production
+was accessed. These are candidate observations, not final release publication.

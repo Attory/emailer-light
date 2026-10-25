@@ -195,6 +195,15 @@ const snapshot = async name => {
     assert.equal(await field('recipient_csv').evaluate(n => n.files[0].name), csv.name);
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     record('Mobile navigation confirmation is bounded and retains the selected CSV');
+    phase = 'healthy live campaign summary';
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.goto(config.url + '/admin/campaigns/' + id);
+    await page.locator('[data-progress-updated]').filter({ hasText: 'Updated ' }).waitFor();
+    assert.equal(await page.locator('[data-campaign-state]').getAttribute('data-state'), 'draft');
+    assert.doesNotMatch(await page.locator('[data-progress-feedback]').innerText(), /unavailable/i);
+    assert.equal(await page.locator('form[action$="/review"] button').isDisabled(), true);
+    await snapshot('campaign-saved-summary-desktop');
+    record('Campaign summary live polling keeps a healthy draft badge and blocks review of unpublished content');
     assert.deepEqual(runtimeErrors, []); result.status = 'PASS';
     console.log(config.edition + ' campaign browser regressions PASS (' + result.cases.length + ' cases).');
  } catch {

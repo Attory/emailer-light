@@ -269,7 +269,7 @@
     },
     {
       "type": "callout",
-      "text": "This release adds incomplete campaign drafts and a small database schema migration. Use its guided setup file for updates. Normal backup restore requires the same schema as the running release. Keep pre-update recovery material; an interrupted update uses the guided Recover action. After completion, old-schema backups are retained for matching-release isolated recovery, not restored directly over this release."
+      "text": "This release adds a database migration. Update with the guided setup file and keep its recovery material. Normal restore needs the same database schema. Recover older backups with their matching release in an isolated environment. For interrupted updates choose Recover in setup; a completed update cannot be downgraded through recovery."
     }
   ]
 }

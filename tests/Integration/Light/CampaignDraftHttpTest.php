@@ -80,6 +80,7 @@ final class CampaignDraftHttpTest extends WebTestCase
             $recipient = $database->fetchAssociative('SELECT * FROM campaign_audience_recipient WHERE campaign_id = ?', [$campaignId]);
             $detail = $client->request('GET', '/admin/campaigns/'.$campaignId, server: $server);
             self::assertSame(200, $client->getResponse()->getStatusCode());
+            self::assertSame('Draft', $detail->filter('[data-campaign-state]')->text());
             $client->request('POST', '/admin/campaigns/'.$campaignId.'/review', ['_token' => self::token($detail, 'form[action$="/review"] [name="_token"]')], server: $server);
             self::assertSame('draft', $database->fetchOne('SELECT state FROM campaign WHERE id = ?', [$campaignId]));
             $templates = $client->request('GET', '/admin/templates?return_campaign='.$campaignId, server: $server);

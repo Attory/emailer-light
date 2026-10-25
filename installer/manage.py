@@ -51,7 +51,7 @@ class Manager:
             product = selected.get('product', '')
             if not re.fullmatch(r'emailer-[a-z]+', product):
                 raise ManagementError('The active installation edition is invalid.')
-            candidates = [Path('/etc') / (self.root.name + '-' + product.removeprefix('emailer-') + '-' + suffix) / 'runtime.env' for suffix in ('110', '120', '121', '122', '123', '124', '125')]
+            candidates = [Path('/etc') / (self.root.name + '-' + product.removeprefix('emailer-') + '-' + suffix) / 'runtime.env' for suffix in ('110', '120', '121', '122', '123', '124', '125', '126')]
             expected = Path(selected.get('runtime', ''))
             if selected.get('format') != 'emailer-active-installation-v1' or expected not in candidates:
                 raise ManagementError('The active installation pointer is invalid. It was preserved.')
