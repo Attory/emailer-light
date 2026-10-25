@@ -3,13 +3,14 @@
 {% block stylesheets %}{{ parent() }}<link rel="stylesheet" href="{{ asset('styles/template-editor.css') }}">{% endblock %}
 {% block javascripts %}{{ parent() }}<script type="module" src="{{ asset('template-editor.js') }}"></script>{% endblock %}
 {% block admin_body %}
+{% include 'admin/_campaign-template-return.html.twig' %}
 <h1>Templates</h1><p>Preview or edit a template, start a campaign, or duplicate it with a new name. Saving an edit creates a new draft; previously sent content is preserved.</p>
 {% include 'admin/_template-editor.html.twig' %}
 <table><thead><tr><th scope="col">Name</th><th scope="col">Status</th><th scope="col">Versions</th><th scope="col">Actions</th></tr></thead><tbody>{% for template in templates %}<tr><td>{{ template.name }}</td><td>{{ template.status }}{% if template.status == 'published' and template.latest_version_id != template.published_version_id %}; newer draft{% endif %}</td><td>{{ template.version_count }}</td><td><div class="actions">
 <a href="{{ path('admin_template_preview', {versionId: template.latest_version_id}) }}">Preview</a>
 {% if template.status != 'archived' %}
 <a href="{{ path('admin_template_edit', {id: template.id}) }}">Edit</a>
-<a href="{{ path('admin_campaigns', {template: template.latest_version_id}) }}">Send</a>
+<a href="{{ path('admin_campaigns', {template: template.latest_version_id}) }}">Use in campaign</a>
 <a href="{{ path('admin_template_duplicate', {id: template.id}) }}">Duplicate</a>
 {% endif %}
 <a href="{{ path('admin_template_versions', {id: template.id}) }}">Versions</a>

@@ -23,7 +23,7 @@ final readonly class SystemReadinessProbe implements LightweightReadinessProbe, 
             if (!$this->connection->createSchemaManager()->tablesExist(['health_check_run', 'health_finding_state', 'backup_record', 'backup_transfer', 'release_operation', 'housekeeping_run', 'operations_policy', 'operations_run'])) {
                 $findings[] = $this->critical('schema_incompatible', 'The Phase 8 database schema is incomplete.', 'Run reviewed migrations before enabling sending.');
             }
-            $schema = $this->connection->fetchOne('SELECT version FROM doctrine_migration_versions ORDER BY executed_at DESC, version DESC LIMIT 1');
+            $schema = $this->connection->fetchOne('SELECT version FROM doctrine_migration_versions ORDER BY version DESC LIMIT 1');
             if (!\is_string($schema) || $this->expectedSchemaVersion !== substr($schema, -14)) {
                 $findings[] = $this->critical('schema_version_mismatch', 'Application code and database schema versions differ.', 'Apply the exact reviewed migrations for this application release.');
             }

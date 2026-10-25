@@ -30,7 +30,13 @@ final class CampaignsController extends AbstractController
         $options = $this->campaigns->options($this->user());
         $options['templates'] = $this->templates->campaignOptions($this->user());
 
+        $selected = $request->query->getString('template');
+        if ('' !== $selected && !\in_array($selected, array_column($options['templates'], 'id'), true)) {
+            return new Response('Selection is unavailable.', Response::HTTP_BAD_REQUEST);
+        }
+
         return $this->render('admin/campaigns.html.twig', [
+            'selected_template' => $selected,
             'campaigns' => $this->campaigns->list($this->user()),
             'options' => $options,
             'limits' => $this->campaigns->deliveryLimits(),
@@ -48,43 +54,10 @@ final class CampaignsController extends AbstractController
     public function create(Request $request): Response
     {
         if (!$this->validCsrf($request, 'campaign-create')) {
-            return new Response('Request not accepted.', Response::HTTP_BAD_REQUEST);
+            return $this->draftError($request, 'The security check expired. Your entries and selected CSV are still here. Sign in again in another tab, then choose Refresh security check here before retrying.', Response::HTTP_BAD_REQUEST, null);
         }
-        try {
-            $content = null;
-            $templateVersion = $request->request->getString('template_version');
-            if ('upload' === $request->request->getString('template_mode', 'existing')) {
-                $file = $request->files->get('template_file');
-                if ($file instanceof UploadedFile) {
-                    if (!$file->isValid() || $file->getSize() > 200_000) {
-                        throw new \InvalidArgumentException('Template upload is invalid.');
-                    }
-                    $html = file_get_contents($file->getPathname());
-                } else {
-                    $html = $request->request->getString('html');
-                }
-                if (!\is_string($html) || '' === trim($html) || \strlen($html) > 200_000 || !mb_check_encoding($html, 'UTF-8')) {
-                    throw new \InvalidArgumentException('Template content is invalid.');
-                }
-                $content = ['name' => $request->request->getString('template_name'), 'subject' => $request->request->getString('subject'), 'preheader' => $request->request->getString('preheader'), 'html' => $html];
-            }
-            $csv = $request->files->get('recipient_csv');
-            $csvPath = null;
-            if ($csv instanceof UploadedFile) {
-                if (!$csv->isValid()) {
-                    throw new \InvalidArgumentException('Recipient CSV upload is invalid.');
-                }
-                $csvPath = $csv->getPathname();
-            }
-            $id = $this->campaigns->prepareDraft($this->user(), $request->request->getString('name'), $templateVersion, $content, $csvPath, $this->rate($request));
-            $this->addFlash('success', 'Campaign draft created. Review recipient counts and send a test before approval.');
 
-            return $this->redirectToRoute('admin_campaign', ['id' => $id], Response::HTTP_SEE_OTHER);
-        } catch (\Throwable) {
-            $this->addFlash('error', 'Draft creation was not accepted. Check the template, CSV, campaign name and rate.');
-
-            return $this->index($request)->setStatusCode(Response::HTTP_UNPROCESSABLE_ENTITY);
-        }
+        return $this->saveDraft($request, null);
     }
 
     #[Route('/{id}', name: 'admin_campaign', requirements: ['id' => '[0-9a-f-]{36}'], methods: ['GET', 'HEAD'])]
@@ -122,21 +95,61 @@ final class CampaignsController extends AbstractController
         }
         if ($request->isMethod('POST')) {
             if (!$this->validCsrf($request, 'campaign-edit-'.$id)) {
-                return new Response('Request not accepted.', Response::HTTP_BAD_REQUEST);
+                return $this->draftError($request, 'The security check expired. Your entries and selected CSV are still here. Sign in again in another tab, then choose Refresh security check here before retrying.', Response::HTTP_BAD_REQUEST, $id);
             }
-            try {
-                $this->campaigns->updateDraft($this->user(), $id, $request->request->getString('name'), $request->request->getString('template_version'), $this->rate($request));
-                $this->addFlash('success', 'Draft saved. A fresh test is required before approval.');
 
-                return $this->redirectToRoute('admin_campaign', ['id' => $id], Response::HTTP_SEE_OTHER);
-            } catch (\Throwable) {
-                $this->addFlash('error', 'Draft could not be saved.');
-            }
+            return $this->saveDraft($request, $id);
         }
         $options = $this->campaigns->options($this->user());
         $options['templates'] = $this->templates->campaignOptions($this->user());
 
-        return $this->render('admin/campaign-edit.html.twig', ['campaign' => $campaign, 'options' => $options]);
+        return $this->render('admin/campaign-edit.html.twig', ['campaign' => $campaign, 'options' => $options, 'form_values' => null]);
+    }
+
+    private function saveDraft(Request $request, ?string $id): Response
+    {
+        try {
+            $file = $request->files->get('recipient_csv');
+            if ($file instanceof UploadedFile && !$file->isValid()) {
+                throw new \InvalidArgumentException('Recipient CSV upload is invalid.');
+            }
+            $csvPath = $file instanceof UploadedFile ? $file->getPathname() : null;
+            $result = $this->campaigns->saveDraft($this->user(), $id, $request->request->getString('name'), $request->request->getString('template_version'), $this->rate($request), $csvPath);
+            $saved = $result['id'];
+            $message = 'Campaign draft saved. Nothing was published, approved or sent.';
+            if (null !== $result['csv_counts']) {
+                $counts = $result['csv_counts'];
+                $message .= \sprintf(' CSV: %d unique recipients saved; %d duplicate rows; %d invalid rows left out; %d currently suppressed. Review the recipient count before approval and replace the CSV if corrections are needed.', $counts['imported'], $counts['duplicate'], $counts['invalid'], $counts['suppressed']);
+            }
+            $this->addFlash('success', $message);
+            $redirect = 'templates' === $request->request->getString('_destination')
+                ? $this->generateUrl('admin_templates', ['return_campaign' => $saved])
+                : $this->generateUrl('admin_campaign_edit', ['id' => $saved]);
+            if (\in_array('application/json', $request->getAcceptableContentTypes(), true)) {
+                return $this->json(['saved' => true, 'id' => $saved, 'redirect' => $redirect, 'campaign_url' => $this->generateUrl('admin_campaign_edit', ['id' => $saved])]);
+            }
+
+            return $this->redirect($redirect, Response::HTTP_SEE_OTHER);
+        } catch (\Symfony\Component\Security\Core\Exception\AccessDeniedException $failure) {
+            throw $failure;
+        } catch (\Throwable $failure) {
+            return $this->draftError($request, CampaignDraftMessages::save($failure), $failure instanceof \InvalidArgumentException || $failure instanceof \DomainException || $failure instanceof \Symfony\Component\HttpFoundation\Exception\BadRequestException ? Response::HTTP_UNPROCESSABLE_ENTITY : Response::HTTP_SERVICE_UNAVAILABLE, $id);
+        }
+    }
+
+    private function draftError(Request $request, string $message, int $status, ?string $id): Response
+    {
+        if (\in_array('application/json', $request->getAcceptableContentTypes(), true)) {
+            return $this->json(['saved' => false, 'errors' => [$message]], $status);
+        }
+        $this->addFlash('error', $message.' On the server form, select the CSV file again before retrying. The live editor retains the selected file automatically.');
+        if (null === $id) {
+            return $this->index($request)->setStatusCode($status);
+        }
+        $options = $this->campaigns->options($this->user());
+        $options['templates'] = $this->templates->campaignOptions($this->user());
+
+        return $this->render('admin/campaign-edit.html.twig', ['campaign' => $this->campaigns->detail($this->user(), $id), 'options' => $options, 'form_values' => $this->retainedValues($request)], new Response(status: $status));
     }
 
     #[Route('/{id}/recipients/replace', name: 'admin_campaign_recipients_replace', requirements: ['id' => '[0-9a-f-]{36}'], methods: ['POST'])]
@@ -233,8 +246,8 @@ final class CampaignsController extends AbstractController
         try {
             $operation();
             $this->addFlash('success', $success);
-        } catch (\Throwable) {
-            $this->addFlash('error', 'This action is unavailable in the current campaign state. Refresh the campaign and check Doctor.');
+        } catch (\Throwable $failure) {
+            $this->addFlash('error', CampaignDraftMessages::save($failure));
         }
 
         return $this->redirectToRoute('admin_campaign', ['id' => $id], Response::HTTP_SEE_OTHER);
@@ -243,9 +256,10 @@ final class CampaignsController extends AbstractController
     /** @return array<string, string> */
     private function retainedValues(Request $request): array
     {
+        $input = $request->request->all();
         $values = [];
-        foreach (['name', 'template_name', 'template_version', 'subject', 'preheader', 'html', 'messages_per_minute', 'template_mode'] as $field) {
-            $values[$field] = mb_substr($request->request->getString($field), 0, 200_000);
+        foreach (['name', 'template_version', 'messages_per_minute', 'audience_mode'] as $field) {
+            $values[$field] = isset($input[$field]) && \is_string($input[$field]) ? mb_substr($input[$field], 0, 200_000) : '';
         }
 
         return $values;

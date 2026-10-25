@@ -149,7 +149,7 @@ final class TemplatesController extends AbstractController
             $this->addFlash('error', 'Template publication was not accepted.');
         }
 
-        return $this->redirectToRoute('admin_template_versions', ['id' => $id], Response::HTTP_SEE_OTHER);
+        return $this->redirectToRoute('admin_template_versions', ['id' => $id] + $this->campaignReturn($request), Response::HTTP_SEE_OTHER);
     }
 
     #[Route('/{id}/archive', name: 'admin_template_archive', requirements: ['id' => '[0-9a-f-]{36}'], methods: ['POST'])]
@@ -165,7 +165,7 @@ final class TemplatesController extends AbstractController
             $this->addFlash('error', 'Template archive was not accepted.');
         }
 
-        return $this->redirectToRoute('admin_templates', status: Response::HTTP_SEE_OTHER);
+        return $this->redirectToRoute('admin_templates', $this->campaignReturn($request), Response::HTTP_SEE_OTHER);
     }
 
     #[Route('/versions/{versionId}/preview', name: 'admin_template_preview', requirements: ['versionId' => '[0-9a-f-]{36}'], methods: ['GET', 'HEAD'])]
@@ -187,7 +187,7 @@ final class TemplatesController extends AbstractController
             $this->addFlash('error', 'Fake-only test validation was not accepted.');
         }
 
-        return $this->redirectToRoute('admin_templates', status: Response::HTTP_SEE_OTHER);
+        return $this->redirectToRoute('admin_templates', $this->campaignReturn($request), Response::HTTP_SEE_OTHER);
     }
 
     #[Route('/assets/upload', name: 'admin_template_asset_upload', methods: ['POST'])]
@@ -268,7 +268,7 @@ final class TemplatesController extends AbstractController
             $galleryError = 'Saved images could not be loaded. Your editor content is still here; retry loading the gallery.';
         }
 
-        return ['kind' => $kind, 'id' => $id, 'values' => $values, 'error' => $error, 'notice' => $notice,
+        return ['placeholders' => \App\Module\Templates\Application\TemplateContentPolicy::FIELD_EXAMPLES, 'kind' => $kind, 'id' => $id, 'values' => $values, 'error' => $error, 'notice' => $notice,
             'unsaved' => $unsaved || null !== $error, 'selected_asset' => $selected, 'gallery' => $gallery, 'gallery_error' => $galleryError,
             'action' => $this->generateUrl($route, '' === $id ? [] : ['id' => $id]), 'csrf_purpose' => $purpose,
             'key' => $kind.'-'.$id, 'actor' => $this->user()->id()];
@@ -308,6 +308,14 @@ final class TemplatesController extends AbstractController
             'editor' => $this->editor('version', $id, array_replace($this->values(), $values), $error, $notice, $selected, $unsaved)], new Response(status: $status));
     }
 
+    /** @return array<string, string> */
+    private function campaignReturn(Request $request): array
+    {
+        $id = $request->request->getString('return_campaign', $request->query->getString('return_campaign'));
+
+        return 1 === preg_match('/\A[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\z/', $id) ? ['return_campaign' => $id] : [];
+    }
+
     private function wantsJson(Request $request): bool
     {
         return \in_array('application/json', $request->getAcceptableContentTypes(), true);
@@ -332,15 +340,17 @@ final class TemplatesController extends AbstractController
 
     private function saved(Request $request, string $id, string $kind): Response
     {
-        $redirect = $this->generateUrl('admin_template_versions', ['id' => $id]);
+        $return = $request->request->getString('return_campaign', $request->query->getString('return_campaign'));
+        $context = 1 === preg_match('/\A[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\z/', $return) ? ['return_campaign' => $return] : [];
+        $redirect = $this->generateUrl('admin_template_versions', ['id' => $id] + $context);
         if ($this->wantsJson($request)) {
             $next = 'version' === $kind ? 'version' : 'edit';
             $purpose = 'version' === $next ? 'template-version-create-'.$id : 'template-edit-'.$id;
 
             return $this->json(['saved' => true, 'redirect' => $redirect, 'next_editor' => [
                 'kind' => $next, 'id' => $id, 'key' => $next.'-'.$id,
-                'action' => $this->generateUrl('version' === $next ? 'admin_template_version_create' : 'admin_template_edit', ['id' => $id]),
-                'url' => $this->generateUrl('version' === $next ? 'admin_template_versions' : 'admin_template_edit', ['id' => $id]),
+                'action' => $this->generateUrl('version' === $next ? 'admin_template_version_create' : 'admin_template_edit', ['id' => $id] + $context),
+                'url' => $this->generateUrl('version' === $next ? 'admin_template_versions' : 'admin_template_edit', ['id' => $id] + $context),
                 'token' => $this->tokens->getToken($purpose)->getValue(),
             ]]);
         }

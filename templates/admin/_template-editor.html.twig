@@ -1,4 +1,6 @@
 <form method="post" enctype="multipart/form-data" action="{{ editor.action }}" class="template-editor" data-template-editor data-editor-key="{{ editor.key }}" data-editor-account="{{ editor.actor }}" data-editor-unsaved="{{ editor.unsaved ? 'true' : 'false' }}" data-selected-asset="{{ editor.selected_asset }}" data-gallery-url="{{ path('admin_template_assets') }}">
+    {% set return_campaign = app.request.request.get('return_campaign', app.request.query.get('return_campaign', '')) %}
+    {% if return_campaign matches '/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/' %}<input type="hidden" name="return_campaign" value="{{ return_campaign }}">{% endif %}
     <input type="hidden" name="_token" value="{{ csrf_token(editor.csrf_purpose) }}">
     <input type="hidden" name="_asset_token" value="{{ csrf_token('template-asset-upload') }}">
     <input type="hidden" name="_editor_kind" value="{{ editor.kind }}">
@@ -11,15 +13,27 @@
     <p class="alert" role="alert" data-template-error{% if not editor.error %} hidden{% endif %}>{{ editor.error }}</p>
     <p class="alert success" role="status" aria-live="polite" data-template-notice{% if not editor.notice %} hidden{% endif %}>{{ editor.notice }}</p>
     <p class="field-hint" data-template-draft-status aria-live="polite">Saving here creates an unpublished draft. Publication is a separate action.</p>
-    <div class="actions template-editor-save-actions"><button type="submit" data-template-save>{{ editor.kind == 'create' ? 'Create template' : (editor.kind == 'version' ? 'Create new version' : 'Save template') }}</button></div>
+    <div class="actions template-editor-save-actions"><button type="submit" data-template-save>Save template draft</button></div>
     <fieldset data-template-fields>
         <legend>Template draft</legend>
         {% if editor.kind != 'version' %}<label>Name <input name="name" value="{{ editor.values.name }}" maxlength="160" required></label>{% endif %}
         <label>Subject <input name="subject" value="{{ editor.values.subject }}" maxlength="200" required></label>
         <label>Preheader <input name="preheader" value="{{ editor.values.preheader }}" maxlength="200"></label>
+        <div class="template-html-import"><label>Import an HTML file <input type="file" accept="text/html,.html,.htm" data-template-import-file></label><button type="button" class="secondary" data-template-import>Import HTML into this draft</button><p class="field-hint">UTF-8 HTML up to 200 KB. Import replaces only the HTML field after confirmation; your name, subject, preheader and plain text are kept. It does not save or publish.</p></div>
         <label>HTML <textarea name="html_body" maxlength="200000" rows="14" required>{{ editor.values.html_body }}</textarea></label>
         <label>Plain text (optional; generated when blank) <textarea name="text_body" maxlength="100000" rows="8">{{ editor.values.text_body }}</textarea></label>
     </fieldset>
+    <aside class="panel template-placeholder-help" aria-labelledby="placeholder-heading">
+        <h2 id="placeholder-heading">Supported placeholders</h2>
+        <p>Choose where to insert it, then choose Insert placeholder. Values are filled in for each recipient when you preview or send.</p>
+        <label>Insert into <select data-placeholder-target><option value="html_body">HTML</option><option value="subject">Subject</option><option value="preheader">Preheader</option><option value="text_body">Plain text</option></select></label>
+        {% for field, example in editor.placeholders %}
+        <p><code>{{ '{{ ' ~ field ~ ' }}' }}</code> — {{ example }} <button type="button" class="secondary" data-insert-placeholder="{{ field }}" aria-label="Insert {{ field }} placeholder">Insert placeholder</button></p>
+        {% endfor %}
+        <p>Example greeting: <code>{{ '<p>Hello {{ recipient.first_name }},</p>' }}</code></p>
+        <p>In HTML, URL placeholders must be complete link addresses: <code>{{ '<a href="{{ unsubscribe_url }}">Unsubscribe</a>' }}</code>. In Plain text, insert the URL placeholder itself. The buttons use the correct format for the chosen field. RSVP must also be enabled before approval.</p>
+        <p>Click <strong>Save template draft</strong> above the fields to save. Publication is a separate action on the saved template’s Versions page.</p>
+    </aside>
     <section class="panel template-image-library" aria-label="Saved image gallery">
         <div class="section-header"><h2>Images</h2><button type="button" class="secondary" data-template-refresh>Refresh gallery</button></div>
         <p>Upload a new image or reuse one saved earlier. Select an image, add its description and choose Insert image to place it at your HTML cursor.</p>

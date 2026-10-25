@@ -370,8 +370,8 @@ class Manager:
         operation = self.original_configuration.parent / ('native-updates/light-' + source_version + '-to-' + self.installer.version + '.json')
         if self.source_version == self.installer.version and choice == '1' and not operation.exists():
             raise ManagementError('This release is already installed. Choose Check the installation.')
-        if source_version not in ('1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4'):
-            raise ManagementError('This installer supports native Light updates from 1.0.0, 1.1.0, 1.2.0, 1.2.1, 1.2.2, 1.2.3 or 1.2.4.')
+        if source_version not in ('1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5'):
+            raise ManagementError('This installer supports native Light updates from 1.0.0, 1.1.0, 1.2.0, 1.2.1, 1.2.2, 1.2.3, 1.2.4 or 1.2.5.')
         self.record['native_source'] = source_version
         self.save()
         source = self.package.parent / ('emailer-light-' + source_version + '.zip')

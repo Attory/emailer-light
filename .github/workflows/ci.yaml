@@ -76,6 +76,9 @@ jobs:
       - name: Run Light quality, license, migration, test and artifact gates
         run: docker compose run --rm app composer check
 
+      - name: Verify root-controlled incomplete-draft migration and recovery
+        run: docker compose run --rm --user root app php bin/phpunit --do-not-cache-result tests/Integration/Light/CampaignDraftSchemaPlanTest.php
+
       - name: Repeat test suite with external egress disabled
         run: bash tools/ci/run-network-isolated-tests.sh
 

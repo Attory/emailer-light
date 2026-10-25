@@ -32,7 +32,7 @@ final class RipePreflightCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $findings = [];
-        $report = ['format' => 'emailer-light-ripe-preflight-v1', 'product' => 'emailer-light', 'product_version' => $this->connection->fetchOne("SELECT product_version FROM product_identity WHERE singleton_key = '1'"), 'schema_version' => '20261014000000', 'upgrade_contract_version' => '1.0', 'status' => 'unsafe', 'findings' => []];
+        $report = ['format' => 'emailer-light-ripe-preflight-v1', 'product' => 'emailer-light', 'product_version' => $this->connection->fetchOne("SELECT product_version FROM product_identity WHERE singleton_key = '1'"), 'schema_version' => $this->connection->fetchOne("SELECT schema_version FROM product_identity WHERE singleton_key = '1'"), 'upgrade_contract_version' => '1.0', 'status' => 'unsafe', 'findings' => []];
         try {
             $this->checkDatabase($findings);
             $this->checkFilesystem($findings);
@@ -44,7 +44,7 @@ final class RipePreflightCommand extends Command
         if (true === $input->getOption('json')) {
             $output->writeln(json_encode($report, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
         } else {
-            $output->writeln('Emailer Light, schema 20261014000000, upgrade contract 1.0');
+            $output->writeln('Emailer Light, schema '.(\is_string($report['schema_version']) ? $report['schema_version'] : 'unknown').', upgrade contract 1.0');
             $output->writeln([] === $findings ? 'Preflight passed. A compatible Ripe installer is still required.' : 'Preflight failed: '.implode(', ', $report['findings']));
         }
 
@@ -61,7 +61,7 @@ final class RipePreflightCommand extends Command
             return;
         }
         $identity = $this->connection->fetchAssociative("SELECT product_id, product_version, schema_version, upgrade_contract_version, installation_uuid FROM product_identity WHERE singleton_key = '1'");
-        if (false === $identity || 'emailer-light' !== $identity['product_id'] || !\in_array($identity['product_version'], ['1.0.0', '1.1.0'], true) || '20261014000000' !== $identity['schema_version'] || '1.0' !== $identity['upgrade_contract_version']) {
+        if (false === $identity || 'emailer-light' !== $identity['product_id'] || !\in_array($identity['product_version'], ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5', '1.2.6'], true) || $this->profile()['schema'] !== $identity['schema_version'] || '1.0' !== $identity['upgrade_contract_version']) {
             $findings[] = 'unsupported_or_ambiguous_identity';
 
             return;
@@ -70,8 +70,8 @@ final class RipePreflightCommand extends Command
         if (false === $installation || !\is_string($identity['installation_uuid']) || '' === $identity['installation_uuid'] || $installation['installation_uuid'] !== $identity['installation_uuid'] || null === $installation['completed_at']) {
             $findings[] = 'installation_incomplete';
         }
-        $migration = $this->connection->fetchOne('SELECT version FROM doctrine_migration_versions ORDER BY version DESC LIMIT 1');
-        if ('DoctrineMigrations\\Version20261014000000' !== $migration || 1 !== $this->count('SELECT COUNT(*) FROM doctrine_migration_versions')) {
+        $migrations = $this->connection->fetchFirstColumn('SELECT version FROM doctrine_migration_versions ORDER BY version');
+        if ($this->profile()['migrations'] !== $migrations) {
             $findings[] = 'schema_version_mismatch';
         }
         $this->checkSchema($findings);
@@ -129,7 +129,7 @@ final class RipePreflightCommand extends Command
     /** @param list<string> $findings */
     private function checkSchema(array &$findings): void
     {
-        $path = $this->projectDirectory.'/config/upgrade/schema-1.0.0.json';
+        $path = $this->projectDirectory.'/config/upgrade/'.$this->profile()['shape'];
         $expected = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
         if (!\is_array($expected) || !\is_array($expected['tables'] ?? null)) {
             $findings[] = 'schema_manifest_unavailable';
@@ -185,11 +185,21 @@ final class RipePreflightCommand extends Command
         }
         $lock = json_decode((string) file_get_contents($lockFile), true);
         $databaseId = $this->connection->fetchOne("SELECT installation_uuid FROM product_identity WHERE singleton_key = '1'");
-        if (!\is_array($lock) || 'emailer-light' !== ($lock['product_id'] ?? null) || !\in_array($lock['product_version'] ?? null, ['1.0.0', '1.1.0'], true)
-            || '20261014000000' !== ($lock['schema_version'] ?? null) || '1.0' !== ($lock['upgrade_contract_version'] ?? null)
+        if (!\is_array($lock) || 'emailer-light' !== ($lock['product_id'] ?? null) || $this->connection->fetchOne("SELECT product_version FROM product_identity WHERE singleton_key='1'") !== ($lock['product_version'] ?? null)
+            || $this->profile()['schema'] !== ($lock['schema_version'] ?? null) || '1.0' !== ($lock['upgrade_contract_version'] ?? null)
             || !\is_string($databaseId) || $databaseId !== ($lock['installation_uuid'] ?? null)) {
             $findings[] = 'installation_lock_identity_mismatch';
         }
+    }
+
+    /** @return array{schema: string, shape: string, migrations: list<string>} */
+    private function profile(): array
+    {
+        $version = $this->connection->fetchOne("SELECT product_version FROM product_identity WHERE singleton_key='1'");
+
+        return '1.2.6' === $version
+            ? ['schema' => '20261025000000', 'shape' => 'schema-1.2.6.json', 'migrations' => ['DoctrineMigrations\\Version20261014000000', 'DoctrineMigrations\\Version20261025000000']]
+            : ['schema' => '20261014000000', 'shape' => 'schema-1.0.0.json', 'migrations' => ['DoctrineMigrations\\Version20261014000000']];
     }
 
     private function count(string $sql): int

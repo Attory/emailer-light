@@ -10,7 +10,7 @@ use App\Shared\Identity;
 use App\Shared\MaintenanceOperationLock;
 use Doctrine\DBAL\Connection;
 
-/** Explicit supported native Light pairs preserve schema, user data and crypto contexts. */
+/** Explicit native pairs protect data and crypto; the nullable-draft migration has a separate bounded proof. */
 final readonly class NativeSchemaUpdate
 {
     /** @param iterable<\App\Module\Backup\Application\Contract\BackupContributor> $contributors */
@@ -20,7 +20,7 @@ final readonly class NativeSchemaUpdate
 
     public static function supports(string $source, string $target): bool
     {
-        return (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4'], true) && '1.2.5' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3'], true) && '1.2.4' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2'], true) && '1.2.3' === $target) || ('1.0.0' === $source && '1.1.0' === $target) || (\in_array($source, ['1.0.0', '1.1.0'], true) && '1.2.0' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0'], true) && '1.2.1' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1'], true) && '1.2.2' === $target);
+        return (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5'], true) && '1.2.6' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4'], true) && '1.2.5' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3'], true) && '1.2.4' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2'], true) && '1.2.3' === $target) || ('1.0.0' === $source && '1.1.0' === $target) || (\in_array($source, ['1.0.0', '1.1.0'], true) && '1.2.0' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0'], true) && '1.2.1' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1'], true) && '1.2.2' === $target);
     }
 
     /** @return array{status: string, delivery_held: bool} */
@@ -37,7 +37,12 @@ final readonly class NativeSchemaUpdate
         }
         $source = $this->packages->inspectInstalledSource($sourceArchive);
         $target = $this->packages->inspect($targetArchive);
-        if (!self::supports(NativeUpdateJournal::text($source['version']), NativeUpdateJournal::text($target['version'])) || '20261014000000' !== $source['schema_version'] || $source['schema_version'] !== $target['schema_version'] || $this->migrations($source) !== $this->migrations($target)) {
+        if (!self::supports(NativeUpdateJournal::text($source['version']), NativeUpdateJournal::text($target['version']))) {
+            throw new \RuntimeException('The authenticated source and target are not a supported native Light update pair.');
+        }
+        if ('1.2.6' === $target['version']) {
+            (new CampaignDraftSchemaPlan($this->connection, $this->projectDirectory))->assertPackages($source, $target);
+        } elseif ('20261014000000' !== $source['schema_version'] || $source['schema_version'] !== $target['schema_version'] || $this->migrations($source) !== $this->migrations($target)) {
             throw new \RuntimeException('This native update supports only the explicit verified schema-preserving Light release pairs.');
         }
         $this->maintenance->acquire();
@@ -178,6 +183,11 @@ final readonly class NativeSchemaUpdate
         }
         $id = Identity::uuidV7();
         $record = ['format' => 'emailer-light-native-update-v1', 'id' => $id, 'phase' => 'preparing', 'retain_source_fence' => $this->retainSourceFence, 'binding' => $binding, 'source_sha256' => hash_file('sha256', $sourceArchive), 'target_sha256' => hash_file('sha256', $targetArchive), 'schema' => $this->schema(), 'account' => $this->fence->identify(), 'files' => $this->captureFiles($base.'/'.$id, $versions), 'identity' => $identity];
+        if ('1.2.6' === $targetVersion) {
+            $plan = new CampaignDraftSchemaPlan($this->connection, $this->projectDirectory);
+            $record['draft_schema_plan'] = $plan->prepare($this->schemaParts());
+            $plan->assertState($record['draft_schema_plan'], NativeUpdateJournal::text($record['schema']));
+        }
         $this->save($journalPath, $record);
         $this->connection->insert('release_operation', ['id' => $id, 'operation' => 'update', 'source_version' => $sourceVersion, 'target_version' => $targetVersion, 'package_sha256' => $record['target_sha256'], 'status' => 'started', 'detail_code' => 'verified', 'started_at' => Identity::now(), 'finished_at' => null]);
         $this->connection->executeStatement("UPDATE delivery_runtime SET accepting_work=0 WHERE singleton_key='1'");
@@ -192,7 +202,7 @@ final readonly class NativeSchemaUpdate
         }
         $this->backups->verify($backup['path']);
         $record['backup'] = $backup;
-        $record['data'] = $this->data($versions);
+        $record['data'] = $this->data($versions, isset($record['draft_schema_plan']));
         $record['assets'] = $this->assets();
         $record['phase'] = 'checkpointed';
         $this->save($journalPath, $record);
@@ -202,6 +212,14 @@ final readonly class NativeSchemaUpdate
         } else {
             $this->releases->install($targetArchive);
         }
+        if (\is_array($record['draft_schema_plan'] ?? null)) {
+            $this->assertStable($record, $sourceRoot, $versions);
+            $record['draft_schema_plan'] = (new CampaignDraftSchemaPlan($this->connection, $this->projectDirectory))->forward($record['draft_schema_plan'], function (array $plan) use (&$record, $journalPath): void {
+                $record['draft_schema_plan'] = $plan;
+                $this->save($journalPath, $record);
+            });
+            $this->assertStable($record, $sourceRoot, $versions);
+        }
         $record['phase'] = 'published';
         $this->save($journalPath, $record);
         $this->switch($targetRoot);
@@ -210,6 +228,10 @@ final readonly class NativeSchemaUpdate
         $this->assertStable($record, $targetRoot, $versions);
         if (true !== $this->runtime->verifyRuntime(true)['runtime_verified']) {
             throw new \RuntimeException('The application failed structural verification. Choose Recover; delivery remains held.');
+        }
+        if (\is_array($record['draft_schema_plan'] ?? null)) {
+            $record['draft_schema_plan']['publication'] = 'forward_intent';
+            $this->save($journalPath, $record);
         }
         $this->connection->update('product_identity', ['product_version' => $targetVersion], ['singleton_key' => '1']);
         $this->versionLock($targetVersion, $versions);
@@ -240,7 +262,18 @@ final readonly class NativeSchemaUpdate
             throw new \RuntimeException('The active release is outside the recorded operation.');
         }
         $this->assertStable($record, NativeUpdateJournal::text($current), $versions);
-        // This pair has no DDL or user-data mutation. Recover only the exact
+        if (\is_array($record['draft_schema_plan'] ?? null)) {
+            $liveLock = json_decode(NativeUpdateJournal::text(file_get_contents($this->privateDirectory.'/install.lock')), true, 32, JSON_THROW_ON_ERROR);
+            $record['draft_schema_plan']['reverse_target_lock'] = \is_array($liveLock) && '1.2.6' === ($liveLock['product_version'] ?? null);
+            $record['draft_schema_plan'] = (new CampaignDraftSchemaPlan($this->connection, $this->projectDirectory))->reverse($record['draft_schema_plan'], function (array $plan) use (&$record, $path): void {
+                $record['draft_schema_plan'] = $plan;
+                $this->save($path, $record);
+            });
+            if (($record['schema'] ?? null) !== $this->schema()) {
+                throw new \RuntimeException('The original complete schema and ledger were not recovered. Delivery remains fenced.');
+            }
+        }
+        // Historical pairs have no DDL or user-data mutation. Recover only the exact
         // installation metadata and pointer; a changed dataset requires investigation.
         $identity = $record['identity'] ?? null;
         if (!\is_array($identity) || basename($sourceRoot) !== ($identity['product_version'] ?? null) || !self::supports(basename($sourceRoot), basename($targetRoot))) {
@@ -248,6 +281,19 @@ final readonly class NativeSchemaUpdate
         }
         $this->connection->update('product_identity', ['product_version' => basename($sourceRoot)], ['singleton_key' => '1']);
         $this->versionLock(basename($sourceRoot), $versions);
+        if (\is_array($record['draft_schema_plan'] ?? null)) {
+            $rawLock = \dirname($path).'/'.NativeUpdateJournal::text($record['id']).'/file-2';
+            NativeUpdateJournal::regular($rawLock);
+            $bytes = NativeUpdateJournal::text(file_get_contents($rawLock));
+            $versions->lock($bytes, true);
+            $this->writeLock($bytes);
+            if ($identity !== $this->connection->fetchAssociative("SELECT * FROM product_identity WHERE singleton_key='1'") || hash_file('sha256', $rawLock) !== hash_file('sha256', $this->privateDirectory.'/install.lock')) {
+                throw new \RuntimeException('The raw source identity or installation lock was not restored exactly. Delivery remains fenced.');
+            }
+            $record['draft_schema_plan']['publication'] = 'restored';
+            $this->save($path, $record);
+            $this->assertStable($record, NativeUpdateJournal::text($current), $versions);
+        }
         $this->switch($sourceRoot);
         $this->connection->executeStatement("INSERT INTO release_operation (id,operation,source_version,target_version,package_sha256,status,detail_code,started_at,finished_at) VALUES (?,'update',?,?,?,'failed','verified_source_recovered',?,?) ON DUPLICATE KEY UPDATE status='failed', detail_code='verified_source_recovered', finished_at=VALUES(finished_at)", [NativeUpdateJournal::text($record['id']), basename($sourceRoot), basename($targetRoot), NativeUpdateJournal::text($record['target_sha256']), Identity::now(), Identity::now()]);
         if (is_dir($targetRoot)) {
@@ -275,8 +321,19 @@ final readonly class NativeSchemaUpdate
             throw new \RuntimeException('The installation lock is invalid.');
         }
         $value['product_version'] = $version;
+        if ('1.2.6' === $versions->target) {
+            $value['schema_version'] = $version === $versions->target ? CampaignDraftSchemaPlan::TARGET_SCHEMA : CampaignDraftSchemaPlan::SOURCE_SCHEMA;
+        }
+        $this->writeLock(json_encode($value, JSON_THROW_ON_ERROR)."\n");
+    }
+
+    private function writeLock(string $bytes): void
+    {
+        $path = $this->privateDirectory.'/install.lock';
+        NativeUpdateJournal::regular($path);
+        $s = stat($path);
         $temporary = \dirname($path).'/.native-lock-'.bin2hex(random_bytes(12));
-        if (!\is_array($s) || false === file_put_contents($temporary, json_encode($value, JSON_THROW_ON_ERROR)."\n") || !chmod($temporary, $s['mode'] & 0o777) || !chown($temporary, $s['uid']) || !chgrp($temporary, $s['gid'])) {
+        if (!\is_array($s) || false === file_put_contents($temporary, $bytes) || !chmod($temporary, $s['mode'] & 0o777) || !chown($temporary, $s['uid']) || !chgrp($temporary, $s['gid'])) {
             throw new \RuntimeException('The installation lock cannot be updated safely.');
         }
         $h = fopen($temporary, 'rb');
@@ -306,8 +363,15 @@ final readonly class NativeSchemaUpdate
     /** @param array<string, mixed> $record */
     private function assertStable(array $record, string $current, NativeVersionBinding $versions): void
     {
-        if ($current !== realpath($this->releasesDirectory.'/current') || ($record['schema'] ?? null) !== $this->schema()) {
-            throw new \RuntimeException('The source schema, ledger or current pointer has drifted. Recovery will not overwrite it.');
+        if ($current !== realpath($this->releasesDirectory.'/current')) {
+            throw new \RuntimeException('The current pointer has drifted. Recovery will not overwrite it.');
+        }
+        if (\is_array($record['draft_schema_plan'] ?? null)) {
+            $plan = new CampaignDraftSchemaPlan($this->connection, $this->projectDirectory);
+            $plan->assertState($record['draft_schema_plan'], $this->schema());
+            $plan->assertLock($record['draft_schema_plan'], NativeUpdateJournal::text(file_get_contents($this->privateDirectory.'/install.lock')));
+        } elseif (($record['schema'] ?? null) !== $this->schema()) {
+            throw new \RuntimeException('The source schema or ledger has drifted. Recovery will not overwrite it.');
         }
         $files = $record['files'] ?? null;
         if (!\is_array($files)) {
@@ -340,7 +404,7 @@ final readonly class NativeSchemaUpdate
         if (isset($record['assets']) && $record['assets'] !== $this->assets()) {
             throw new \RuntimeException('Application assets have changed outside the operation. Retain the verified backup and investigate.');
         }
-        if (isset($record['data']) && $record['data'] !== $this->data($versions)) {
+        if (isset($record['data']) && $record['data'] !== $this->data($versions, isset($record['draft_schema_plan']))) {
             throw new \RuntimeException('Application data has changed outside the update. Retain fencing and investigate; no data was restored.');
         }
     }
@@ -375,6 +439,12 @@ final readonly class NativeSchemaUpdate
 
     private function schema(): string
     {
+        return CampaignDraftSchemaPlan::hash($this->schemaParts());
+    }
+
+    /** @return array{definitions: array<string, array<string, string>>, triggers: list<array<string, mixed>>, views: list<array<string, mixed>>, ledger: list<array<string, mixed>>} */
+    private function schemaParts(): array
+    {
         $tables = $this->connection->createSchemaManager()->listTableNames();
         sort($tables);
         $definitions = [];
@@ -383,11 +453,11 @@ final readonly class NativeSchemaUpdate
             if (false === $row) {
                 throw new \RuntimeException('Schema definition is unavailable.');
             }
-            foreach ($row as &$definition) {
-                $definition = preg_replace('/ AUTO_INCREMENT=[0-9]+/', '', NativeUpdateJournal::text($definition));
+            $normalized = [];
+            foreach ($row as $name => $definition) {
+                $normalized[$name] = preg_replace('/ AUTO_INCREMENT=[0-9]+/', '', NativeUpdateJournal::text($definition)) ?? throw new \RuntimeException('Schema normalization failed.');
             }
-            unset($definition);
-            $definitions[$table] = $row;
+            $definitions[$table] = $normalized;
         }
         $triggers = $this->connection->fetchAllAssociative('SELECT TRIGGER_NAME,EVENT_MANIPULATION,EVENT_OBJECT_TABLE,ACTION_ORDER,ACTION_CONDITION,ACTION_STATEMENT,ACTION_ORIENTATION,ACTION_TIMING,SQL_MODE,DEFINER,CHARACTER_SET_CLIENT,COLLATION_CONNECTION,DATABASE_COLLATION FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() ORDER BY TRIGGER_NAME');
         $views = $this->connection->fetchAllAssociative('SELECT TABLE_NAME,VIEW_DEFINITION,CHECK_OPTION,IS_UPDATABLE,DEFINER,SECURITY_TYPE FROM information_schema.VIEWS WHERE TABLE_SCHEMA=DATABASE() ORDER BY TABLE_NAME');
@@ -396,16 +466,16 @@ final readonly class NativeSchemaUpdate
         }
         $ledger = $this->connection->fetchAllAssociative('SELECT * FROM doctrine_migration_versions ORDER BY version');
 
-        return hash('sha256', serialize([$definitions, $triggers, $views, $ledger]));
+        return ['definitions' => $definitions, 'triggers' => $triggers, 'views' => $views, 'ledger' => $ledger];
     }
 
-    private function data(NativeVersionBinding $versions): string
+    private function data(NativeVersionBinding $versions, bool $draftSchemaPlan = false): string
     {
         $hash = hash_init('sha256');
         $tables = $this->connection->createSchemaManager()->listTableNames();
         sort($tables);
         foreach ($tables as $table) {
-            if (\in_array($table, ['release_operation', 'backup_record'], true)) {
+            if (\in_array($table, ['release_operation', 'backup_record'], true) || ($draftSchemaPlan && 'doctrine_migration_versions' === $table)) {
                 continue;
             }
             $primary = $this->connection->createSchemaManager()->introspectTable($table)->getPrimaryKey();
@@ -417,6 +487,9 @@ final readonly class NativeSchemaUpdate
             foreach ($this->connection->executeQuery('SELECT * FROM '.$this->connection->quoteSingleIdentifier($table).' ORDER BY '.$order)->iterateAssociative() as $row) {
                 if ('product_identity' === $table) {
                     $row['product_version'] = $versions->canonical($row['product_version'] ?? null);
+                    if ($draftSchemaPlan) {
+                        $row['schema_version'] = $versions->schema($row['schema_version'] ?? null);
+                    }
                 }
                 hash_update($hash, serialize($row));
             }

@@ -88,8 +88,38 @@ final class BackupRestoreTest extends KernelTestCase
             $database->insert('campaign_audience_snapshot', ['campaign_id' => $campaignId, 'recipient_count' => 1, 'audience_sha256' => hash('sha256', $recipientId."\0backup-recipient@example.test\0{}"), 'created_at' => $now]);
             $database->insert('campaign_recipient', ['id' => $deliveryId, 'campaign_id' => $campaignId, 'recipient_id' => $recipientId, 'state' => 'accepted', 'attempt_count' => 1, 'accepted_at' => $now, 'terminal_at' => $now, 'message_id' => 'synthetic-backup-message', 'operation_version' => 1, 'updated_at' => $now]);
             $database->insert('suppression', ['id' => $suppressionId, 'email_canonical' => 'backup@example.test', 'reason' => 'manual', 'source' => 'synthetic', 'created_at' => '2026-01-01 00:00:00.000000']);
-            $backup = $engine->create();
+            $oldTimestamp = $database->fetchOne('SELECT executed_at FROM doctrine_migration_versions WHERE version = ?', ['DoctrineMigrations\\Version20261014000000']);
+            $database->update('doctrine_migration_versions', ['executed_at' => '2099-01-01 00:00:00'], ['version' => 'DoctrineMigrations\\Version20261014000000']);
+            try {
+                $backup = $engine->create();
+                self::assertSame('20261025000000', $engine->verify($backup['path'])['schema_version']);
+            } finally {
+                $database->update('doctrine_migration_versions', ['executed_at' => $oldTimestamp], ['version' => 'DoctrineMigrations\\Version20261014000000']);
+            }
             self::assertSame('emailer-light-backup-v1', $engine->verify($backup['path'])['format']);
+            $newMigration = $database->fetchAssociative('SELECT * FROM doctrine_migration_versions WHERE version = ?', ['DoctrineMigrations\\Version20261025000000']);
+            self::assertIsArray($newMigration);
+            $database->delete('doctrine_migration_versions', ['version' => 'DoctrineMigrations\\Version20261025000000']);
+            try {
+                $oldSchemaBackup = $engine->create();
+            } finally {
+                $database->insert('doctrine_migration_versions', $newMigration);
+            }
+            $database->update('delivery_runtime', ['accepting_work' => 0, 'active_claims' => 0], ['singleton_key' => '1']);
+            $runtimeBefore = $database->fetchAllAssociative('SELECT * FROM delivery_runtime');
+            $recordsBefore = $database->fetchAllAssociative('SELECT * FROM backup_record ORDER BY id');
+            try {
+                $engine->restore($oldSchemaBackup['path']);
+                self::fail('Cross-schema row-only restore was accepted.');
+            } catch (\RuntimeException $failure) {
+                self::assertStringContainsString('different database schema', $failure->getMessage());
+            }
+            self::assertSame($runtimeBefore, $database->fetchAllAssociative('SELECT * FROM delivery_runtime'));
+            self::assertSame($recordsBefore, $database->fetchAllAssociative('SELECT * FROM backup_record ORDER BY id'));
+            self::assertSame('20261014000000', $engine->verify($oldSchemaBackup['path'])['schema_version']);
+            $ledgerCount = $database->fetchOne('SELECT COUNT(*) FROM doctrine_migration_versions');
+            self::assertIsNumeric($ledgerCount);
+            self::assertSame(2, (int) $ledgerCount);
             $database->delete('suppression', ['id' => $suppressionId]);
             $database->update('delivery_runtime', ['accepting_work' => 0, 'active_claims' => 0], ['singleton_key' => '1']);
             $engine->restore($backup['path']);
@@ -101,6 +131,9 @@ final class BackupRestoreTest extends KernelTestCase
             self::assertIsNumeric($accepting);
             self::assertSame(0, (int) $accepting);
         } finally {
+            if (isset($oldTimestamp)) {
+                $database->update('doctrine_migration_versions', ['executed_at' => $oldTimestamp], ['version' => 'DoctrineMigrations\\Version20261014000000']);
+            }
             $database->delete('campaign_recipient', ['id' => $deliveryId]);
             $database->delete('campaign_audience_snapshot', ['campaign_id' => $campaignId]);
             $database->delete('campaign_audience_recipient', ['campaign_id' => $campaignId]);

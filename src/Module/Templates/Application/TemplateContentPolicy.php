@@ -9,13 +9,13 @@ use Symfony\Component\HtmlSanitizer\HtmlSanitizerConfig;
 
 final readonly class TemplateContentPolicy
 {
-    private const MERGE_FIELDS = [
-        'recipient.first_name',
-        'recipient.display_name',
-        'campaign.name',
-        'unsubscribe_url',
-        'view_in_browser_url',
-        'rsvp_url',
+    public const FIELD_EXAMPLES = [
+        'recipient.first_name' => 'Alex',
+        'recipient.display_name' => 'Alex Example',
+        'campaign.name' => 'October news',
+        'unsubscribe_url' => 'Unsubscribe link',
+        'view_in_browser_url' => 'Read online link',
+        'rsvp_url' => 'RSVP link (requires RSVP enabled)',
     ];
     private const URL_FIELDS = ['unsubscribe_url', 'view_in_browser_url', 'rsvp_url'];
     private HtmlSanitizer $sanitizer;
@@ -63,16 +63,24 @@ final readonly class TemplateContentPolicy
         if ('' === trim($html) || 200_000 < \strlen($html) || str_contains($html, '<?') || str_contains($html, '{%') || str_contains($html, '{#')) {
             throw new \InvalidArgumentException('Template HTML is invalid.');
         }
-        $fields = array_values(array_unique([...$this->fields($subject), ...$this->fields($preheader), ...$this->fields($html), ...$this->fields($text)]));
+        $fields = array_values(array_unique([...$this->fields($subject, 'Subject'), ...$this->fields($preheader, 'Preheader'), ...$this->fields($html, 'HTML'), ...$this->fields($text, 'Plain text')]));
+        // Preserve original source offsets while masking the permitted whole-link tokens.
+        $contexts = $html;
+        foreach (self::URL_FIELDS as $field) {
+            preg_match_all('/href\s*=\s*(["\'])\s*(\{\{\s*'.preg_quote($field, '/').'\s*\}\})\s*\1/i', $html, $valid, PREG_OFFSET_CAPTURE);
+            foreach ($valid[2] as [$placeholder, $offset]) {
+                $contexts = substr_replace($contexts, str_repeat(' ', \strlen($placeholder)), $offset, \strlen($placeholder));
+            }
+            if (1 === preg_match('/\{\{\s*'.preg_quote($field, '/').'\s*\}\}/', $contexts, $invalid, PREG_OFFSET_CAPTURE)) {
+                throw new TemplateMergeException($invalid[0][0], 'HTML', $html, $invalid[0][1], 'Use this URL placeholder as the complete href of a link, for example <a href="{{ '.$field.' }}">Open link</a>.');
+            }
+        }
+        if (1 === preg_match('/<[^>]*(\{\{[^{}]*\}\})/', $contexts, $invalid, PREG_OFFSET_CAPTURE)) {
+            throw new TemplateMergeException($invalid[1][0], 'HTML', $html, $invalid[1][1], 'Move this text placeholder outside the HTML tag, for example <p>Hello {{ recipient.first_name }}</p>. Only URL placeholders may be complete link addresses.');
+        }
         $protected = $html;
         foreach (self::URL_FIELDS as $field) {
             $protected = preg_replace('/href\s*=\s*(["\'])\s*\{\{\s*'.preg_quote($field, '/').'\s*\}\}\s*\1/i', 'href="https://merge.invalid/'.$field.'"', $protected) ?? $protected;
-            if (1 === preg_match('/\{\{\s*'.preg_quote($field, '/').'\s*\}\}/', $protected)) {
-                throw new \InvalidArgumentException('URL merge fields are only allowed as complete link targets.');
-            }
-        }
-        if (1 === preg_match('/<[^>]*\{\{/', $protected)) {
-            throw new \InvalidArgumentException('Merge fields are not allowed in this HTML attribute context.');
         }
         $this->links($protected);
         $this->images($protected);
@@ -106,22 +114,27 @@ final readonly class TemplateContentPolicy
     }
 
     /** @return list<string> */
-    private function fields(string $content): array
+    private function fields(string $content, string $input = 'HTML'): array
     {
-        if (false === preg_match_all('/\{\{\s*([^{}]+?)\s*\}\}/', $content, $matches)) {
-            throw new \InvalidArgumentException('Merge fields are invalid.');
-        }
+        preg_match_all('/\{\{[^{}]*\}\}/', $content, $matches, PREG_OFFSET_CAPTURE);
         $fields = [];
-        foreach ($matches[1] as $field) {
-            $field = trim($field);
-            if (!\in_array($field, self::MERGE_FIELDS, true)) {
-                throw new \InvalidArgumentException('Unknown merge field.');
+        $remaining = $content;
+        foreach ($matches[0] as [$placeholder, $offset]) {
+            $field = trim(substr($placeholder, 2, -2));
+            if (!\in_array($field, array_keys(self::FIELD_EXAMPLES), true)) {
+                $suggestions = ['first_name' => 'recipient.first_name', 'display_name' => 'recipient.display_name', 'name' => 'recipient.display_name', 'unsubscribe' => 'unsubscribe_url', 'campaign_name' => 'campaign.name'];
+                $replacement = $suggestions[$field] ?? null;
+                $correction = null === $replacement ? 'Choose a supported placeholder beside the editor, or remove the double braces to keep literal text.' : 'Replace it with {{ '.$replacement.' }} using Insert placeholder beside the editor.';
+                throw new TemplateMergeException($placeholder, $input, $content, $offset, $correction);
             }
             $fields[] = $field;
+            // Preserve byte offsets and line breaks for malformed syntax diagnostics.
+            $remaining = substr_replace($remaining, str_repeat(' ', \strlen($placeholder)), $offset, \strlen($placeholder));
         }
-        $withoutKnown = preg_replace('/\{\{\s*[^{}]+?\s*\}\}/', '', $content);
-        if (!\is_string($withoutKnown) || str_contains($withoutKnown, '{{') || str_contains($withoutKnown, '}}')) {
-            throw new \InvalidArgumentException('Merge syntax is invalid.');
+        if (1 === preg_match('/\{\{|\}\}/', $remaining, $invalid, PREG_OFFSET_CAPTURE)) {
+            $offset = $invalid[0][1];
+            $line = substr($content, $offset, strcspn($content, "\r\n", $offset));
+            throw new TemplateMergeException($line, $input, $content, $offset, 'Use two opening and two closing braces, for example {{ recipient.first_name }}. Insert a supported placeholder beside the editor.');
         }
 
         return $fields;
@@ -183,7 +196,6 @@ final readonly class TemplateContentPolicy
         if ((!$optional && '' === trim($value)) || mb_strlen($value, 'UTF-8') > $limit || 1 === preg_match('/[\r\n\x00-\x1F\x7F]/', $value)) {
             throw new \InvalidArgumentException('Template header text is invalid.');
         }
-        $this->fields($value);
     }
 
     private function plainText(string $value): string

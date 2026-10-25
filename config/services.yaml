@@ -19,9 +19,9 @@ parameters:
     emailer.releases_dir: '%env(default:emailer.default_releases_dir:EMAILER_RELEASES_DIR)%'
     emailer.default_runtime_configuration_file: ''
     emailer.runtime_configuration_file: '%env(default:emailer.default_runtime_configuration_file:EMAILER_RUNTIME_CONFIGURATION_FILE)%'
-    emailer.app_version: '1.2.5'
+    emailer.app_version: '1.2.6'
     emailer.update_source_version: '%env(default:emailer.app_version:EMAILER_UPDATE_SOURCE_VERSION)%'
-    emailer.schema_version: '20261014000000'
+    emailer.schema_version: '20261025000000'
     emailer.default_uri: '%env(DEFAULT_URI)%'
     emailer.default_master_key_file: ''
     emailer.master_key_file: '%env(default:emailer.default_master_key_file:EMAILER_SECRET_KEY_FILE)%'
@@ -160,6 +160,7 @@ services:
             $contributors: !tagged_iterator emailer.backup_contributor
             $backupDirectory: '%emailer.backup_dir%'
             $sourceVersion: '%emailer.update_source_version%'
+            $expectedSchemaVersion: '%emailer.schema_version%'
             $drillEvidence: '@App\Module\Backup\Application\RestoreDrillEvidence'
             $audit: '@App\Module\Audit\Application\Contract\AuditSink'
 

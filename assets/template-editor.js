@@ -42,6 +42,7 @@ class TemplateEditor {
         this.assets = new Map();
         this.selected = null;
         this.selectionRevision = 0;
+        this.importing = false;
         this.uploading = false;
         this.saving = false;
         this.recoveryPending = false;
@@ -49,7 +50,7 @@ class TemplateEditor {
         this.galleryGeneration = 0;
         this.uploadGeneration = 0;
         this.beforeUnload = event => {
-            if (!this.leaving && (this.dirty() || this.uploading || this.saving)) {
+            if (!this.leaving && (this.dirty() || this.uploading || this.saving || this.importing)) {
                 this.persist();
                 event.preventDefault();
                 event.returnValue = '';
@@ -82,6 +83,53 @@ class TemplateEditor {
         });
         this.form.addEventListener('input', event => { if (FIELDS.includes(event.target.name)) this.schedule(); });
         for (const event of ['select', 'keyup', 'mouseup', 'blur']) this.html.addEventListener(event, () => this.schedule());
+        this.q('[data-template-import]').addEventListener('click', async () => {
+            if (this.saving || this.importing || this.leaving || this.recoveryPending) return;
+            const file = this.q('[data-template-import-file]').files?.[0];
+            if (!file || file.size < 1 || file.size > 200000) {
+                this.message('[data-template-error]', 'Choose a UTF-8 HTML file of up to 200 KB. Your current content is unchanged.'); return;
+            }
+            const previous = this.html.value;
+            this.importing = true; this.controls();
+            try {
+                const text = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer());
+                if (this.leaving || this.saving || this.recoveryPending) return;
+                if (this.q('[data-template-import-file]').files?.[0] !== file || this.html.value !== previous) { this.message('[data-template-error]', 'The HTML changed while the file was read. Your newer content is kept. Choose Import HTML again when ready.'); return; }
+                if (previous.trim() && !window.confirm('Replace the HTML field with this file? Other template fields will be kept.')) return;
+                this.html.value = text; this.html.focus(); this.html.setSelectionRange(0, 0); this.schedule();
+                this.message('[data-template-error]', ''); this.message('[data-template-notice]', 'HTML imported into the editor. Review it, then choose Save template draft. Nothing was published.');
+            } catch { this.message('[data-template-error]', 'The HTML file could not be read as UTF-8 text. Save it as UTF-8 and retry. Your current content is unchanged.'); }
+            finally { this.importing = false; this.controls(); }
+        });
+        this.placeholderCursors = new Map();
+        for (const name of ['subject', 'preheader', 'html_body', 'text_body']) {
+            const input = this.form.elements.namedItem(name);
+            for (const event of ['focus', 'select', 'keyup', 'mouseup', 'blur']) input.addEventListener(event, () => {
+                this.placeholderCursors.set(name, [input.selectionStart, input.selectionEnd]);
+                this.q('[data-placeholder-target]').value = name;
+            });
+        }
+        for (const button of this.form.querySelectorAll('[data-insert-placeholder]')) button.addEventListener('click', () => {
+            if (this.saving || this.recoveryPending) return;
+            const name = this.q('[data-placeholder-target]').value;
+            const input = this.form.elements.namedItem(name);
+            const field = button.dataset.insertPlaceholder;
+            const url = ['unsubscribe_url', 'view_in_browser_url', 'rsvp_url'].includes(field);
+            if (url && !['html_body', 'text_body'].includes(name)) {
+                this.message('[data-template-error]', 'Choose HTML or Plain text for a URL placeholder. HTML gets a complete link; Plain text gets the URL placeholder itself.'); return;
+            }
+            const [start, end] = this.placeholderCursors.get(name) || [input.value.length, input.value.length];
+            if (name === 'html_body' && (!insertionContext(input.value, start) || !insertionContext(input.value, end))) {
+                this.message('[data-template-error]', 'Place the HTML cursor between tags, outside an attribute or existing placeholder. Your content is unchanged.'); return;
+            }
+            const text = url && name === 'html_body' ? '<a href="{{ ' + field + ' }}">' + ({ unsubscribe_url: 'Unsubscribe', view_in_browser_url: 'Read online', rsvp_url: 'RSVP' }[field]) + '</a>' : '{{ ' + field + ' }}';
+            if (input.maxLength > 0 && input.value.length - (end - start) + text.length > input.maxLength) {
+                this.message('[data-template-error]', 'This insertion would exceed the field size limit. Your content is unchanged.'); return;
+            }
+            input.setRangeText(text, start, end, 'end'); input.focus();
+            this.placeholderCursors.set(name, [input.selectionStart, input.selectionEnd]);
+            this.message('[data-template-error]', ''); this.schedule();
+        });
         this.q('[data-template-retry]').addEventListener('click', () => this.upload());
         this.q('[data-template-cancel-upload]').addEventListener('click', () => this.xhr?.abort());
         this.q('[data-template-refresh]').addEventListener('click', () => this.loadGallery(false));
@@ -118,14 +166,15 @@ class TemplateEditor {
     }
 
     controls() {
-        const busy = this.uploading || this.saving || this.recoveryPending;
+        const busy = this.uploading || this.saving || this.importing || this.recoveryPending;
+        this.q('[data-template-import]').disabled = busy;
         this.q('[data-template-save]').disabled = busy;
         this.q('[data-template-upload]').disabled = busy;
         this.q('[data-template-retry]').disabled = busy;
         this.q('[data-template-cancel-upload]').hidden = !this.uploading;
         this.q('[data-template-fields]').disabled = this.recoveryPending;
         this.q('.template-image-library').inert = this.recoveryPending;
-        const guard = !this.leaving && (this.dirty() || this.uploading || this.saving);
+        const guard = !this.leaving && (this.dirty() || this.uploading || this.saving || this.importing);
         if (guard && !this.guarded) window.addEventListener('beforeunload', this.beforeUnload);
         if (!guard && this.guarded) window.removeEventListener('beforeunload', this.beforeUnload);
         this.guarded = guard;
@@ -144,7 +193,7 @@ class TemplateEditor {
             const encoded = JSON.stringify(draft);
             if (encoded.length > 2_000_000) throw new Error('Recovery size exceeded.');
             this.storage.setItem(this.key, encoded);
-            this.message('[data-template-draft-status]', 'Unsaved changes. A recovery copy is kept in this browser tab; use Save to store the template draft.');
+            this.message('[data-template-draft-status]', 'Unsaved changes. A recovery copy is kept in this browser tab; choose Save template draft to store it.');
             return true;
         } catch {
             if (this.dirty()) this.message('[data-template-draft-status]', 'Unsaved changes. Browser recovery is unavailable; save or copy your content before leaving.');
@@ -274,7 +323,7 @@ class TemplateEditor {
             return;
         }
         this.message('[data-template-image-error]', '');
-        this.message('[data-template-notice]', 'Image inserted at the HTML cursor. Save the template draft when ready.');
+        this.message('[data-template-notice]', 'Image inserted at the HTML cursor. Choose Save template draft when ready.');
         this.persist();
     }
 
@@ -320,7 +369,7 @@ class TemplateEditor {
     }
 
     upload() {
-        if (this.uploading || this.saving || this.recoveryPending) return;
+        if (this.uploading || this.saving || this.importing || this.recoveryPending) return;
         const file = this.q('[data-template-file]').files?.[0];
         if (!file) { this.message('[data-template-upload-error]', 'Choose a JPEG, PNG or WebP image first. Your template entries are unchanged.'); return; }
         this.persist();
@@ -363,7 +412,7 @@ class TemplateEditor {
     }
 
     async save() {
-        if (this.saving || this.uploading || this.recoveryPending) return;
+        if (this.saving || this.uploading || this.importing || this.recoveryPending) return;
         const snapshot = JSON.stringify(this.values());
         this.persist(); this.saving = true; this.controls(); this.message('[data-template-error]', '');
         const data = new FormData(this.form); data.delete('image');
@@ -387,10 +436,10 @@ class TemplateEditor {
             // Typing during a slow save must never be replaced by its older reply.
             this.form.action = action.href; this.form.dataset.editorKey = next.key; this.key = this.prefix + next.key;
             this.q('[name=_token]').value = next.token; this.q('[name=_editor_kind]').value = next.kind; this.q('[name=_editor_id]').value = next.id;
-            this.q('[data-template-save]').textContent = next.kind === 'version' ? 'Create new version' : 'Save template';
+            this.q('[data-template-save]').textContent = 'Save template draft';
             history.replaceState(history.state, '', url.href);
             if (this.persist() && previousKey !== this.key) { try { this.storage?.removeItem(previousKey); } catch { /* Keep recovery local to this tab. */ } }
-            this.message('[data-template-notice]', 'The submitted draft was saved. You have newer unsaved edits here; save again when ready.');
+            this.message('[data-template-notice]', 'Template draft saved. You have newer unsaved edits here; choose Save template draft again when ready.');
         } catch {
             this.message('[data-template-error]', 'The save could not be confirmed. Your entries are still here. Check your connection and open Templates in another tab before retrying.');
         } finally { this.saving = false; this.controls(); }
@@ -400,4 +449,20 @@ class TemplateEditor {
 for (const form of document.querySelectorAll('[data-template-editor]')) {
     try { if (!form.dataset.templateEnhanced) new TemplateEditor(form); }
     catch { const error = form.querySelector('[data-template-error]'); if (error) { error.textContent = 'The live editor could not start. Keep a copy of your entries before leaving. The server form will retain submitted entries.'; error.hidden = false; } }
+}
+
+const returnCampaign = new URL(location.href).searchParams.get('return_campaign');
+if (returnCampaign && UUID.test(returnCampaign)) {
+    for (const form of document.querySelectorAll('form[action]')) {
+        if (!new URL(form.action, location.href).pathname.includes('/admin/templates/')) continue;
+        if (!form.querySelector('[name=return_campaign]')) { const input = document.createElement('input'); input.type = 'hidden'; input.name = 'return_campaign'; input.value = returnCampaign; form.append(input); }
+    }
+    document.addEventListener('click', event => {
+        const link = event.target.closest('a[href]');
+        if (!link) return;
+        const url = new URL(link.href, location.href);
+        if (url.origin === location.origin && /\/admin\/templates(?:\/|$)/.test(url.pathname)) {
+            url.searchParams.set('return_campaign', returnCampaign); link.href = url.href;
+        }
+    }, { capture: true });
 }

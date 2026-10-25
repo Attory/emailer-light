@@ -1,15 +1,16 @@
 {% extends 'admin/layout.html.twig' %}
-{% block title %}Campaign guide · Emailer Light{% endblock %}
+{% block title %}Create and edit a campaign{% endblock %}
 {% block admin_body %}
-<h1>Campaign guide</h1>
-<p>Prepare a template, upload a campaign-specific CSV, test, approve, then send or schedule. Saving a draft sends nothing.</p>
+<h1>Create and edit a campaign</h1>
 <ol>
-<li>Create or publish a template. Its subject, HTML and plain text are copied into the approved campaign snapshot.</li>
-<li>Create a campaign and upload UTF-8 CSV with an <code>email</code> column. Optional columns: <code>display_name</code>, <code>first_name</code>, <code>last_name</code>, <code>locale</code>, <code>time_zone</code>. Review imported, invalid, duplicate and suppressed counts.</li>
-<li>While Draft or Review, replace or delete this campaign's recipients. A change invalidates the earlier test. Recipient rows are never reusable lists.</li>
-<li>Send a test to the administrator address and review the current campaign revision. Approval freezes recipients and content. Later edits require a new campaign.</li>
-<li>Send now or schedule for the organisation time zone. Global suppression is checked again before delivery. Shared and destination-domain rate limits also apply.</li>
+<li>Open <a href="{{ path('admin_campaigns') }}">Your campaigns</a>. Enter a name and choose recipients. You can save an incomplete campaign draft.</li>
+<li>Choose a saved template, or choose <strong>or create new Template</strong>. If you have unsaved changes, choose <strong>Save draft and open Templates</strong> to keep the name, rate and uploaded CSV; <strong>Leave without saving</strong> to discard those changes; or <strong>Stay here</strong>.</li>
+<li>In <a href="{{ path('admin_templates') }}">Templates</a>, enter the name, subject, preheader, HTML and optional plain text. Import HTML or upload images there. Use the saved image gallery and supported-placeholder insertion controls. Choose <strong>Save template draft</strong>. A validation error identifies the field and offending placeholder; your entries remain available to correct.</li>
+<li>When the template is ready, explicitly choose <strong>Publish</strong> for its version. Saving a template draft alone does not publish it. Choose <strong>Return to saved Campaign draft</strong>, select the template and choose <strong>Save draft</strong>. If Templates was opened in another tab, use <strong>Refresh template choices</strong>; your fields and selected CSV stay here.</li>
+<li>Open the campaign summary, preview and send yourself an explicit test when SMTP is configured. Review and approve only after the required content and eligible recipients are present. Sending or scheduling is a separate action after approval.</li>
 </ol>
-<p>SMTP acceptance does not prove inbox delivery. Progress and reports distinguish accepted, retry, failed, ambiguous, suppressed and cancelled outcomes. Pausing stops new claims; a message already in progress may finish.</p>
-<p>Send only to recipients you have permission to email. Open and click tracking are configurable and may be inaccurate because of mail-client behavior.</p>
+<p>Campaign-owned CSV recipients are kept with that campaign. Saving and navigating do not create reusable contacts or lists, approve a campaign or send a message. A new CSV replaces the unapproved campaign’s saved recipients; leaving the file picker empty keeps them. Review the saved, invalid, duplicate and suppressed counts after uploading.</p>
+<p>A failed save keeps your fields and selected file in the live editor. Correct the reported problem and retry. If your session expired, sign in in another tab and choose <strong>Refresh security check</strong> here. Browser refresh or navigation away from unsaved changes also warns you. Use a browser with JavaScript enabled for the live navigation and file-preservation workflow.</p>
+<section id="edit"><h2>Edit a saved campaign</h2><p>Open a Draft or Review campaign and choose Edit draft. Saving changes returns Review to Draft and invalidates earlier tests. Its saved recipients remain unless replaced explicitly. For new wording, save a template version in Templates and select that new version in Edit draft. Send a fresh test before review. Approved audience and content snapshots remain immutable.</p></section>
+<section id="send"><h2>Approve and send separately</h2><p>Approval does not start delivery. A permitted approver must review complete, tested content and recipients; Send now or Schedule remains a separate action. Saving a campaign or template draft never approves or sends it.</p></section>
 {% endblock %}

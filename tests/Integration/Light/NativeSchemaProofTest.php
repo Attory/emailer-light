@@ -29,11 +29,11 @@ final class NativeSchemaProofTest extends KernelTestCase
         self::bootKernel();
         $connection = self::getContainer()->get(Connection::class);
         self::assertInstanceOf(Connection::class, $connection);
-        $bytes = file_get_contents(\dirname(__DIR__, 3).'/config/upgrade/native-schema-1.0.0.json');
+        $bytes = file_get_contents(\dirname(__DIR__, 3).'/config/upgrade/native-schema-1.2.6.json');
         self::assertIsString($bytes);
         $expected = json_decode($bytes, true, 32, JSON_THROW_ON_ERROR);
         self::assertIsArray($expected);
-        self::assertSame(hash_file('sha256', \dirname(__DIR__, 3).'/migrations/Version20261014000000.php'), $expected['migration_sha256']);
+        self::assertSame(hash_file('sha256', \dirname(__DIR__, 3).'/migrations/Version20261025000000.php'), $expected['migration_sha256']);
         self::assertSame($expected['definition'], NativeSchemaProof::capture($connection));
     }
 

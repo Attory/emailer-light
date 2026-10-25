@@ -1,0 +1,412 @@
+{
+  "format": "emailer-light-to-ripe-contract-v1",
+  "contract_version": "1.0",
+  "direction": "emailer-light->emailer-ripe",
+  "source": {
+    "product_id": "emailer-light",
+    "product_version": "1.2.6",
+    "schema_version": "20261025000000",
+    "migration_version": "DoctrineMigrations\\Version20261025000000",
+    "database": {
+      "engine": "MariaDB",
+      "minimum": "10.11"
+    },
+    "schema_manifest": "config/upgrade/schema-1.2.6.json",
+    "installation_lock": {
+      "path": "EMAILER_PRIVATE_DIR/install.lock",
+      "format_version": 1,
+      "required_fields": [
+        "product_id",
+        "product_version",
+        "schema_version",
+        "upgrade_contract_version",
+        "installation_uuid"
+      ],
+      "installation_uuid_rule": "must equal product_identity and installation_state",
+      "permissions": "regular file, one link, owner-only"
+    },
+    "migration_versions": [
+      "DoctrineMigrations\\Version20261014000000",
+      "DoctrineMigrations\\Version20261025000000"
+    ]
+  },
+  "target": {
+    "minimum_product_version": "1.3.3",
+    "initial_owner_role": "owner",
+    "initial_security_level": "high",
+    "mfa_enrollment": "unconfigured",
+    "required_capabilities": [
+      "campaign_owned_recipient_id",
+      "case_insensitive_global_suppression_match_key",
+      "light_token_context_read_or_transform"
+    ]
+  },
+  "identifiers": {
+    "installation_uuid": "preserve",
+    "administrator_id": "preserve",
+    "campaign_ids": "preserve",
+    "recipient_ids": "preserve",
+    "delivery_ids": "preserve",
+    "token_ids": "preserve"
+  },
+  "table_mappings": [
+    {
+      "source": "product_identity",
+      "target": "ripe_edition_transition",
+      "rule": "record source identity and one-way transition receipt",
+      "fields": {
+        "product_id": "source_product_id",
+        "product_version": "source_product_version",
+        "schema_version": "source_schema_version",
+        "upgrade_contract_version": "source_contract_version",
+        "installation_uuid": "installation_uuid",
+        "created_at": "source_created_at",
+        "updated_at": "source_updated_at"
+      },
+      "source_only_fields": [
+        "singleton_key"
+      ]
+    },
+    {
+      "source": "app_user",
+      "target": "app_user",
+      "fields": {
+        "id": "id",
+        "login_identifier": "login_identifier",
+        "password_hash": "password_hash",
+        "active": "active",
+        "created_at": "created_at",
+        "updated_at": "updated_at",
+        "password_changed_at": "password_changed_at",
+        "last_login_at": "last_login_at"
+      },
+      "target_defaults": {
+        "role": "owner",
+        "mfa_changed_at": null,
+        "disabled_at": null
+      },
+      "rule": "one row only; retain Argon2id hash byte for byte",
+      "source_only_fields": [
+        "singleton_key"
+      ]
+    },
+    {
+      "source": "organisation_settings",
+      "target": "organisation_settings",
+      "fields": "identity",
+      "target_defaults": {
+        "security_level": "high"
+      }
+    },
+    {
+      "source": "campaign_audience_recipient",
+      "target": "campaign_audience_recipient",
+      "fields": {
+        "campaign_id": "campaign_id",
+        "recipient_id": "recipient_id",
+        "email_canonical": "email_canonical",
+        "profile_json": "profile_json"
+      },
+      "rule": "Ripe target must support campaign-owned recipient_id without a contact FK"
+    },
+    {
+      "source": "campaign_recipient",
+      "target": "campaign_recipient",
+      "fields": {
+        "recipient_id": "recipient_id",
+        "id": "id",
+        "campaign_id": "campaign_id",
+        "state": "state",
+        "attempt_count": "attempt_count",
+        "next_attempt_at": "next_attempt_at",
+        "claimed_at": "claimed_at",
+        "accepted_at": "accepted_at",
+        "terminal_at": "terminal_at",
+        "message_id": "message_id",
+        "operation_version": "operation_version",
+        "last_failure_class": "last_failure_class",
+        "updated_at": "updated_at"
+      },
+      "rule": "Ripe target must retain campaign-owned recipient identity without creating contacts"
+    },
+    {
+      "source": "recipient_token",
+      "target": "recipient_token",
+      "fields": {
+        "recipient_id": "recipient_id",
+        "campaign_id": "campaign_id",
+        "campaign_recipient_id": "campaign_recipient_id",
+        "handle": "handle",
+        "purpose": "purpose",
+        "key_version": "key_version",
+        "expires_at": "expires_at",
+        "id": "id",
+        "email_canonical": "email_canonical",
+        "issued_at": "issued_at",
+        "revoked_at": "revoked_at",
+        "last_used_at": "last_used_at",
+        "use_count": "use_count"
+      },
+      "rule": "preserve token history and either preserve Light token codec/key context or issue compatible redirect tokens without sending"
+    },
+    {
+      "source": "email_template",
+      "target": "email_template",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "template_version",
+      "target": "template_version",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "template_asset",
+      "target": "template_asset",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "campaign",
+      "target": "campaign",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity; retain NULL template_version_id on incomplete drafts without inventing content"
+    },
+    {
+      "source": "campaign_audience_snapshot",
+      "target": "campaign_audience_snapshot",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "campaign_content_snapshot",
+      "target": "campaign_content_snapshot",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "campaign_test_delivery",
+      "target": "campaign_test_delivery",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "delivery_attempt",
+      "target": "delivery_attempt",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "analytics_aggregate",
+      "target": "analytics_aggregate",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "rsvp_response",
+      "target": "rsvp_response",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "suppression",
+      "target": "suppression",
+      "fields": "identity",
+      "rule": "Ripe target must preserve the generated case-insensitive email_match_key or an equivalent unique suppression match key."
+    },
+    {
+      "source": "audit_event",
+      "target": "audit_event",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "encrypted_secret",
+      "target": "encrypted_secret",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "sender_identity",
+      "target": "sender_identity",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "recipient_token_key",
+      "target": "recipient_token_key",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "recipient_token_key_state",
+      "target": "recipient_token_key_state",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "delivery_policy",
+      "target": "delivery_policy",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "delivery_runtime",
+      "target": "delivery_runtime",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "delivery_domain_rate",
+      "target": "delivery_domain_rate",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "privacy_policy",
+      "target": "privacy_policy",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "operations_policy",
+      "target": "operations_policy",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "backup_record",
+      "target": "backup_record",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "backup_transfer",
+      "target": "backup_transfer",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "health_check_run",
+      "target": "health_check_run",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "health_finding_state",
+      "target": "health_finding_state",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "housekeeping_run",
+      "target": "housekeeping_run",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "operations_run",
+      "target": "operations_run",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "installation_state",
+      "target": "installation_state",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "setup_installation_event",
+      "target": "setup_installation_event",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "user_session",
+      "target": "user_session",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "login_throttle",
+      "target": "login_throttle",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "worker_heartbeat",
+      "target": "worker_heartbeat",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "messenger_messages",
+      "target": "messenger_messages",
+      "fields": "identity",
+      "rule": "preserve all rows and referential integrity"
+    },
+    {
+      "source": "release_operation",
+      "target": "release_operation",
+      "fields": "identity",
+      "rule": "preserve Light update and rollback history"
+    },
+    {
+      "source": "doctrine_migration_versions",
+      "target": "ripe_edition_transition",
+      "fields": {
+        "version": "source_migration_version",
+        "executed_at": "source_migration_executed_at",
+        "execution_time": "source_migration_execution_time"
+      },
+      "rule": "verify exactly one Light migration row; record it in the one-way transition receipt and initialize Ripe migration ledger forward-only"
+    }
+  ],
+  "empty_target_tables": [
+    "contact",
+    "contact_attribute",
+    "contact_field_definition",
+    "contact_import",
+    "contact_import_candidate",
+    "contact_list",
+    "list_membership",
+    "campaign_list_selection",
+    "mfa_credential",
+    "password_reset_token"
+  ],
+  "forbidden_transitions": [
+    "emailer-ripe->emailer-light",
+    "silent-campaign-snapshot-to-reusable-list",
+    "auto-resume-or-send"
+  ],
+  "phases": [
+    "verify-signed-ripe-installer",
+    "check-source-identity-and-schema-manifest",
+    "stop-worker-scheduler-delivery",
+    "assert-zero-active-sends-leases-locks",
+    "create-and-verify-protected-complete-backup",
+    "stage-forward-only-schema-and-code",
+    "map-administrator-and-set-high",
+    "preserve-and-verify-all-mapped-data",
+    "initialize-reusable-structures-empty",
+    "run-integrity-schema-app-doctor-checks",
+    "atomically-switch-release",
+    "post-switch-validate-or-rollback-to-unchanged-light",
+    "write-redacted-audit-and-operator-receipt"
+  ],
+  "rollback": {
+    "before_switch": "discard staged Ripe schema/code and restore verified Light backup if mutated",
+    "after_switch": "before acceptance only: stop Ripe services; atomically restore unchanged Light release and verified Light database/private state; validate before resume. Acceptance prohibits recovery replay; retain backup material for supported restoration and investigation",
+    "automatic_downgrade": false
+  },
+  "cryptographic_contexts": {
+    "light_secret_cipher": "emailer-light/encrypted-record",
+    "light_backup": "emailer-light-backup-v1",
+    "light_recipient_token": "emailer-light-recipient-token",
+    "rule": "future Ripe installer must preserve compatible contexts or reencrypt after verified backup; never expose plaintext in logs or receipts"
+  },
+  "preflight_command": "emailer:upgrade:ripe-preflight --json",
+  "fixture": "tests/Fixtures/upgrade-light-1.0.0.json"
+}

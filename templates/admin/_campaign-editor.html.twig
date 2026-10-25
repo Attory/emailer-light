@@ -1,0 +1,27 @@
+<form method="post" action="{{ campaign ? path('admin_campaign_edit', {id: campaign.id}) : path('admin_campaign_create') }}" enctype="multipart/form-data" data-campaign-editor data-campaign-recovery-url="{{ campaign ? path('admin_campaign_edit', {id: campaign.id}) : path('admin_campaigns') }}" data-campaign-unsaved="{{ app.request.isMethod('POST') ? 'true' : 'false' }}">
+<input type="hidden" name="_token" value="{{ csrf_token(campaign ? 'campaign-edit-' ~ campaign.id : 'campaign-create') }}">
+<p role="alert" data-campaign-error hidden></p>
+<button type="button" class="secondary" data-campaign-refresh-security hidden>Refresh security check</button>
+<p role="status" data-campaign-status aria-live="polite">Save whenever you need to. An incomplete draft cannot be reviewed, approved or sent. Nothing is published by saving.</p>
+<fieldset data-campaign-fields><legend>Campaign draft</legend>
+<label>Campaign name <input name="name" value="{{ values.name|default('') }}" maxlength="160"></label>
+<label>Recipient CSV <input type="file" name="recipient_csv" accept="text/csv,.csv"></label>
+<p class="help">Optional while preparing a draft. The header must include <code>email</code>. Optional columns: <code>display_name</code>, <code>first_name</code>, <code>last_name</code>, <code>locale</code>, <code>time_zone</code>. These recipients belong only to this campaign.</p>
+{% if campaign %}<p>{{ campaign.review.selected_count }} recipients already saved. Leave the CSV empty to keep them; a new upload replaces this unapproved campaign’s recipients.</p>{% endif %}
+<label>Saved template <select name="template_version"><option value="">Choose a template later</option>
+{% if campaign and campaign.template_version_id and campaign.template_version_id not in options.templates|column('id') %}<option value="{{ campaign.template_version_id }}"{% if values.template_version == campaign.template_version_id %} selected{% endif %}>{{ campaign.template_name }} · version {{ campaign.template_version }} (currently selected)</option>{% endif %}
+{% for template in options.templates %}<option value="{{ template.id }}"{% if template.id == values.template_version|default(selected_template|default('')) %} selected{% endif %}>{{ template.name }} · version {{ template.version_number }}{% if template.published_at is defined and not template.published_at %} (template draft){% endif %}</option>{% endfor %}</select></label>
+<a href="{{ campaign ? path('admin_templates', {return_campaign: campaign.id}) : path('admin_templates') }}" data-campaign-templates>or create new Template</a>
+<button type="button" class="secondary" data-campaign-refresh-choices>Refresh template choices</button>
+<p class="field-hint" role="status" aria-live="polite" data-campaign-choice-status></p>
+<p class="help">Create, import HTML, edit images and publish templates in Templates. Save a template draft there first. Publish the chosen version separately before testing or reviewing this campaign.</p>
+<label>Messages per minute <input name="messages_per_minute" type="number" min="1" max="600" value="{{ values.messages_per_minute|default('') }}" placeholder="{{ campaign ? campaign.delivery_limits.messages_per_minute : limits.messages_per_minute }}"></label>
+<p class="help">Leave blank for the installation limit. The destination-domain limit also applies.</p>
+<button type="submit" data-campaign-save>Save draft</button>
+</fieldset>
+<dialog data-campaign-leave aria-labelledby="campaign-leave-title">
+<h2 id="campaign-leave-title">Save your Campaign draft before leaving?</h2>
+<p>Saving keeps the campaign name, rate and uploaded recipients. It does not publish, approve or send anything.</p>
+<div class="actions"><button type="button" data-campaign-save-open>Save draft and open Templates</button><button type="button" class="secondary" data-campaign-discard>Leave without saving</button><button type="button" class="secondary" data-campaign-stay autofocus>Stay here</button></div>
+</dialog>
+</form>

@@ -63,7 +63,8 @@ try:
     for dependency in ('mariadb:10.11.19', 'axllent/mailpit:v1.30.5'):
         command(['docker', 'image', 'inspect', dependency])
     stage = 'new isolated services'
-    command(['docker', 'network', 'create', '--internal', '--label', label + '=' + token, name])
+    network_options = ['--subnet', os.environ['EMAILER_BROWSER_NETWORK_SUBNET']] if os.environ.get('EMAILER_BROWSER_NETWORK_SUBNET') else []
+    command(['docker', 'network', 'create', '--internal', '--label', label + '=' + token, *network_options, name])
     network_created = True
     database_password = secrets.token_hex(24)
     write(private / 'database.env', 'MARIADB_DATABASE=emailer_browser_test\nMARIADB_USER=emailer\nMARIADB_PASSWORD=' + database_password + '\nMARIADB_ROOT_PASSWORD=' + secrets.token_hex(24) + '\n')
@@ -113,7 +114,8 @@ try:
     # CI and native packages contain this directory. It must not change routing
     # for private image storage served through the application controller.
     php('-r', 'if(!is_dir("public/template-assets")&&!mkdir("public/template-assets",0775,true)){exit(1);}')
-    php('bin/console', 'doctrine:migrations:migrate', '--env=test', '--no-interaction')
+    php('bin/console', 'cache:clear', '--env=test', '--no-debug', '--no-warmup')
+    command(['docker', 'exec', name + '-web', 'bash', 'tools/quality/check-migrations.sh'])
     php('tools/browser/seed-editor.php')
     php('bin/console', 'asset-map:compile', '--env=test', '--no-interaction')
     php('bin/console', 'emailer:doctor:run', '--env=test', '--no-interaction')
@@ -144,11 +146,21 @@ try:
     php('tools/browser/verify-editor-delivery.php', 'verify')
     for receipt in ('editor-no-send-result.json', 'editor-delivery-result.json'):
         shutil.copyfile(private / receipt, output / receipt)
+    stage = 'campaign browser regressions'
+    php('tools/browser/verify-campaign-workflow.php', 'snapshot')
+    command(['node', str(root / 'tools/browser/campaign-editor.cjs')], env=node_environment)
+    shutil.copyfile(output / 'campaign-browser-result.json', private / 'campaign-browser-result.json')
+    (private / 'campaign-browser-result.json').chmod(0o600)
+    if os.getuid() == 0:
+        os.chown(private / 'campaign-browser-result.json', service_uid, service_gid)
+    stage = 'campaign no-send verification'
+    php('tools/browser/verify-campaign-workflow.php', 'verify')
+    shutil.copyfile(private / 'campaign-no-send-result.json', output / 'campaign-no-send-result.json')
     print('PASS: isolated ' + edition + ' browser, no-send and real worker SMTP regressions; safe receipts in ' + str(output))
 except Exception:
     print('FAIL: editor acceptance at ' + stage + '. Private diagnostics retained; credentials and request details omitted.', file=sys.stderr)
-    receipt = output / 'browser-result.json'
-    if stage == 'real browser regressions' and receipt.is_file():
+    receipt = output / ('campaign-browser-result.json' if stage.startswith('campaign') else 'browser-result.json')
+    if stage in ('real browser regressions', 'campaign browser regressions') and receipt.is_file():
         try:
             failed = json.loads(receipt.read_text())
             failed_phase = failed.get('failedPhase')

@@ -2,6 +2,7 @@
 {% block title %}Template versions — Emailer Light{% endblock %}
 {% block stylesheets %}{{ parent() }}<link rel="stylesheet" href="{{ asset('styles/template-editor.css') }}">{% endblock %}
 {% block javascripts %}{{ parent() }}<script type="module" src="{{ asset('template-editor.js') }}"></script>{% endblock %}
-{% block admin_body %}<h1>Immutable versions</h1>
+{% block admin_body %}
+{% include 'admin/_campaign-template-return.html.twig' %}<h1>Immutable versions</h1>
 {% include 'admin/_template-editor.html.twig' %}
 <table><thead><tr><th scope="col">Version</th><th scope="col">Subject</th><th scope="col">Published</th><th scope="col">Actions</th></tr></thead><tbody>{% for version in versions %}<tr><td>{{ version.version_number }}</td><td>{{ version.subject }}</td><td>{{ version.published_at ?: 'No' }}</td><td><a href="{{ path('admin_template_preview', {versionId: version.id}) }}">Synthetic preview</a><form method="post" action="{{ path('admin_template_test', {versionId: version.id}) }}"><input type="hidden" name="_token" value="{{ csrf_token('template-test-' ~ version.id) }}"><button type="submit">Run fake-only test</button></form><form method="post" action="{{ path('admin_template_publish', {id: template_id, versionId: version.id}) }}"><input type="hidden" name="_token" value="{{ csrf_token('template-publish-' ~ version.id) }}"><button type="submit">Publish</button></form></td></tr>{% endfor %}</tbody></table>{% endblock %}
