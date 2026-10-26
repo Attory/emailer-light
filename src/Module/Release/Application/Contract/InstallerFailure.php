@@ -7,7 +7,7 @@ namespace App\Module\Release\Application\Contract;
 /** A bounded customer-facing category, never an exception message or credential. */
 final class InstallerFailure
 {
-    /** @return array{installer_error: string} */
+    /** @return array{installer_error: string, runtime_blockers?: list<string>} */
     public static function report(\Throwable $error): array
     {
         $message = strtolower($error->getMessage());
@@ -22,6 +22,15 @@ final class InstallerFailure
             str_contains($message, 'supports only'), str_contains($message, 'source installation'), str_contains($message, 'source does not match') => 'source_unsupported',
             default => 'verification_failed',
         };
+
+        if ('verification_failed' === $code) {
+            $cause = $error;
+            for ($depth = 0; null !== $cause && 8 > $depth; ++$depth, $cause = $cause->getPrevious()) {
+                if ($cause instanceof RuntimeVerificationFailed) {
+                    return ['installer_error' => $code, 'runtime_blockers' => $cause->blockers];
+                }
+            }
+        }
 
         return ['installer_error' => $code];
     }

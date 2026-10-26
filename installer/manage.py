@@ -134,10 +134,8 @@ class Manager:
             step = arguments[2] if arguments[0] in ('/usr/bin/php8.4', '/usr/bin/php8.5') and len(arguments) > 2 else Path(arguments[0]).name
             diagnostic = {'step': step, 'exit_code': result.returncode}
             try:
-                report = json.loads(result.stdout)
-                blockers = report.get('runtime_blockers', [])
-                if isinstance(blockers, list) and all(isinstance(code, str) and re.fullmatch(r'[a-z0-9_]+', code) for code in blockers):
-                    diagnostic['runtime_blockers'] = blockers
+                parsed = json.loads(result.stdout)
+                report = parsed if isinstance(parsed, dict) else {}
             except (ValueError, AttributeError):
                 report = {}
             guidance = {
@@ -162,6 +160,9 @@ class Manager:
                     if isinstance(candidate, dict) and candidate.get('installer_error') in guidance:
                         report = candidate
                         break
+            blockers = report.get('runtime_blockers', [])
+            if isinstance(blockers, list) and len(blockers) <= 64 and all(isinstance(item, str) and re.fullmatch(r'[a-z][a-z0-9_]{1,79}', item) for item in blockers):
+                diagnostic['runtime_blockers'] = blockers
             code = report.get('installer_error', 'verification_failed')
             if code not in guidance:
                 code = 'verification_failed'
@@ -169,7 +170,13 @@ class Manager:
             if code == 'delivery_state' and isinstance(report.get('message'), str) and len(report['message']) <= 1200:
                 message = report['message'] + ' ' + guidance[code]
             elif diagnostic.get('runtime_blockers'):
-                message = 'Application checks need attention: ' + ', '.join(diagnostic['runtime_blockers']) + '. Open Doctor for the matching repair steps; delivery remains blocked.'
+                message = 'Application checks need attention: ' + ', '.join(diagnostic['runtime_blockers']) + '. '
+                if step in ('emailer:release:update-native', 'emailer:release:update'):
+                    message += 'Keep delivery held. Start this same setup file and choose Recover, then repair the matching Doctor findings before retrying.'
+                elif self.record.get('host_handoff', {}).get('phase') not in (None, 'complete', 'recovered'):
+                    message += 'Keep delivery held. Repair the matching Doctor findings and choose Finish in this setup file.'
+                else:
+                    message += 'Open Doctor for the matching repair steps; delivery remains blocked.'
             else:
                 message = guidance[code]
             self.installer.durable(self.directory / 'last-error.json', json.dumps(diagnostic) + '\n')

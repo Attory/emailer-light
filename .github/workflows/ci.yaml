@@ -79,6 +79,9 @@ jobs:
       - name: Verify root-controlled incomplete-draft migration and recovery
         run: docker compose run --rm --user root app php bin/phpunit --do-not-cache-result tests/Integration/Light/CampaignDraftSchemaPlanTest.php
 
+      - name: Verify root-run backup copy and update-journal custody
+        run: docker compose run --rm --user root app php bin/phpunit --do-not-cache-result tests/Module/Backup/RootBackupCopyTest.php tests/Module/Health/UpdateDeliveryStateTest.php
+
       - name: Repeat test suite with external egress disabled
         run: bash tools/ci/run-network-isolated-tests.sh
 

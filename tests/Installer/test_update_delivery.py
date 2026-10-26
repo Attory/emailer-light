@@ -191,3 +191,37 @@ class ScopedMaintenanceMarker(unittest.TestCase):
             values=dict(hostname='mailer.example.test',name='emailer-light',public='/srv/emailer-light/releases/current/public',certificate='/etc/letsencrypt/live/mailer.example.test/fullchain.pem',certificate_key='/etc/letsencrypt/live/mailer.example.test/privkey.pem')
             self.assertIn('X-Emailer-Update-State "in-progress"',web.site(**values,maintenance=True))
             self.assertNotIn('X-Emailer-Update-State',web.site(**values,maintenance=False))
+
+class SafeBlockerDiagnostics(unittest.TestCase):
+    def test_progress_before_the_final_typed_report_does_not_hide_actual_blockers(self):
+        from manage import Manager
+        for prefix in ('','Preparing verified recovery material...\n'):
+            m=Manager.__new__(Manager)
+            m.installer=types.SimpleNamespace(durable=Mock());m.directory=Path('/tmp/owned-operation');m.record={}
+            report={'installer_error':'verification_failed','runtime_blockers':['backup_external_recency']}
+            with patch('manage.subprocess.run',return_value=types.SimpleNamespace(returncode=1,stdout=prefix+json.dumps(report)+'\n')):
+                with self.assertRaisesRegex(ManagementError,'backup_external_recency.*choose Recover'):
+                    m.call(['/usr/bin/php8.5','/verified/bin/console','emailer:release:update-native'])
+            saved=json.loads(m.installer.durable.call_args.args[1])
+            self.assertEqual(['backup_external_recency'],saved['runtime_blockers'])
+
+    def test_unbounded_or_unsafe_blocker_text_is_never_echoed(self):
+        from manage import Manager
+        for blockers in (['Synthetic private diagnostic detail'],['backup_destination']*65):
+            m=Manager.__new__(Manager)
+            m.installer=types.SimpleNamespace(durable=Mock());m.directory=Path('/tmp/owned-operation');m.record={}
+            report={'installer_error':'verification_failed','runtime_blockers':blockers}
+            with patch('manage.subprocess.run',return_value=types.SimpleNamespace(returncode=1,stdout='Progress\n'+json.dumps(report))):
+                with self.assertRaises(ManagementError) as raised:m.call(['/usr/bin/php8.5','/verified/bin/console','emailer:release:update-native'])
+            self.assertNotIn('Synthetic private',str(raised.exception))
+            self.assertNotIn('runtime_blockers',json.loads(m.installer.durable.call_args.args[1]))
+
+    def test_non_object_json_is_a_safe_failure_without_a_traceback(self):
+        from manage import Manager
+        for value in ([],None,'text',1,True):
+            m=Manager.__new__(Manager)
+            m.installer=types.SimpleNamespace(durable=Mock());m.directory=Path('/tmp/owned-operation');m.record={}
+            with patch('manage.subprocess.run',return_value=types.SimpleNamespace(returncode=1,stdout=json.dumps(value))):
+                with self.assertRaises(ManagementError):m.call(['/usr/bin/php8.5','/verified/bin/console','emailer:release:update-native'])
+            saved=json.loads(m.installer.durable.call_args.args[1])
+            self.assertEqual('verification_failed',saved['error_code'])

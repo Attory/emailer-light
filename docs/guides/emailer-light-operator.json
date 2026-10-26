@@ -227,6 +227,10 @@
         [
           "Missing SMTP / MFA / sender",
           "Complete the named authenticated application setting, then recheck. A failed connection test sends no DATA."
+        ],
+        [
+          "backup_destination / backup_external_recency",
+          "The configured verified copy is unavailable or failed its integrity/custody check. Check the dedicated backup folder, mounted storage and free space. Preserve the existing object and recovery material; the installer does not overwrite a changed copy. Use the displayed Recover or Finish action before retrying."
         ]
       ]
     },
@@ -266,6 +270,10 @@
     {
       "type": "h2",
       "text": "Update and interruption procedure"
+    },
+    {
+      "type": "p",
+      "text": "Setup creates and verifies its recovery backup. If automatic backups are enabled, it also refreshes and verifies that same encrypted backup at the already-configured destination before changing the application. It keeps your backup policy and does not run retention or send email. If the approved copy cannot be verified, sending remains held and setup names the blocker. Keep the recovery material; follow the displayed Recover or Finish action after correcting the backup folder or storage problem."
     },
     {
       "type": "p",

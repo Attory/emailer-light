@@ -35,3 +35,15 @@ Light 1.2.7 supports the explicit published source versions through 1.2.6. The
 recipients without schema coercion. Older supported releases retain the reviewed
 forward migration and recoverable source-schema path. Light’s supported Apache
 profile remains wildcard-only and its separate-port Nginx coexistence is retained.
+
+
+Exact-package native acceptance also exposed an aged configured backup-copy
+receipt blocking verification after a fresh local safety backup was created.
+The repair now verifies that same encrypted backup at the existing approved
+destination before checkpoint/publication when the existing policy enables it.
+No destination, policy or Doctor severity is changed, and no retention or mail
+operation is run. A saved transfer receipt is rechecked against actual bytes,
+private mode and ownership. Root copies retain service ownership and sync file
+metadata and the destination directory before success. Changed existing objects
+are retained and their stale receipt is marked failed. Only bounded structural
+blocker codes cross child-console and installer error boundaries.

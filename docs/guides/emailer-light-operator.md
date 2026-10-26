@@ -84,6 +84,7 @@ Fresh redacted diagnostics are under `/var/lib/emailer-light-installer/last-erro
 | recovery_required / interrupted | Restart the exact same package and choose Recover before retrying. |
 | finish_required / committed | Choose Finish, or Accept for the edition transition. Never restore a committed operation as a downgrade. |
 | Missing SMTP / MFA / sender | Complete the named authenticated application setting, then recheck. A failed connection test sends no DATA. |
+| backup_destination / backup_external_recency | The configured verified copy is unavailable or failed its integrity/custody check. Check the dedicated backup folder, mounted storage and free space. Preserve the existing object and recovery material; the installer does not overwrite a changed copy. Use the displayed Recover or Finish action before retrying. |
 
 ## Backups and protected recovery material
 
@@ -106,6 +107,8 @@ Use the real returned backup path in place of the example. A verification comman
 A lost master key uses the separately stored encrypted recovery package and the protected interactive `emailer:secrets:recover-master-key` workflow. Supply the password at its hidden prompt, never as an argument. For a lost administrator password use `emailer:administrator:recover-password` on a protected terminal.
 
 ## Update and interruption procedure
+
+Setup creates and verifies its recovery backup. If automatic backups are enabled, it also refreshes and verifies that same encrypted backup at the already-configured destination before changing the application. It keeps your backup policy and does not run retention or send email. If the approved copy cannot be verified, sending remains held and setup names the blocker. Keep the recovery material; follow the displayed Recover or Finish action after correcting the backup folder or storage problem.
 
 Keep the signed setup file and operation journals. Normal same-edition updates acquire the application maintenance lock and the worker claim-row lock, capture the prior delivery state and acquire the hold atomically. The installer fences the dedicated web runtime, drains campaign and explicit-test work, verifies recovery material, then updates. A shared or unrecorded PHP-FPM service cannot be drained safely by this automatic path: setup stops before hold/site mutation and requires a supervised update with verified instance quiescence. Never stop a shared PHP service to work around that check.
 

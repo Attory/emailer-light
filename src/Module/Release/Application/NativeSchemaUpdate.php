@@ -14,7 +14,7 @@ use Doctrine\DBAL\Connection;
 final readonly class NativeSchemaUpdate
 {
     /** @param iterable<\App\Module\Backup\Application\Contract\BackupContributor> $contributors */
-    public function __construct(private Connection $connection, private PackageInspector $packages, private ReleaseManager $releases, private BackupOperations $backups, private RuntimeVerification $runtime, private MaintenanceOperationLock $maintenance, private NativeWriterFence $fence, private string $runtimeConfigurationFile, private string $privateDirectory, private string $masterKeyFile, private string $releasesDirectory, private iterable $contributors, private string $projectDirectory, private bool $retainSourceFence = false)
+    public function __construct(private Connection $connection, private PackageInspector $packages, private ReleaseManager $releases, private BackupOperations $backups, private RuntimeVerification $runtime, private MaintenanceOperationLock $maintenance, private NativeWriterFence $fence, private string $runtimeConfigurationFile, private string $privateDirectory, private string $masterKeyFile, private string $releasesDirectory, private iterable $contributors, private string $projectDirectory, private bool $retainSourceFence = false, private ?RecoveryBackupCopy $backupCopy = null)
     {
     }
 
@@ -205,6 +205,9 @@ final readonly class NativeSchemaUpdate
             throw new \RuntimeException('The verified safety backup cannot be assigned to its dedicated application account.');
         }
         $this->backups->verify($backup['path']);
+        if ('1.2.7' === $targetVersion) {
+            $this->backupCopy?->preserve($backup);
+        }
         $record['backup'] = $backup;
         $record['data'] = $this->data($versions, isset($record['draft_schema_plan']));
         $record['assets'] = $this->assets();
@@ -230,8 +233,10 @@ final readonly class NativeSchemaUpdate
         $record['phase'] = 'activated';
         $this->save($journalPath, $record);
         $this->assertStable($record, $targetRoot, $versions);
-        if (true !== $this->runtime->verifyRuntime(true)['runtime_verified']) {
-            throw new \RuntimeException('The application failed structural verification. Choose Recover; delivery remains held.');
+        $verification = $this->runtime->verifyRuntime(true);
+        if (true !== $verification['runtime_verified']) {
+            $blockers = $verification['runtime_blockers'] ?? [];
+            throw new Contract\RuntimeVerificationFailed(\is_array($blockers) ? $blockers : []);
         }
         if (\is_array($record['draft_schema_plan'] ?? null)) {
             $record['draft_schema_plan']['publication'] = 'forward_intent';

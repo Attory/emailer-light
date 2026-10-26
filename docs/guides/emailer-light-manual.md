@@ -136,6 +136,8 @@ Use Profile for your account and Sessions to review access. Lost administrator p
 
 ## Updates
 
+Setup creates and verifies its recovery backup. If automatic backups are enabled, it also refreshes and verifies that same encrypted backup at the already-configured destination before changing the application. It keeps your backup policy and does not run retention or send email. If the approved copy cannot be verified, sending remains held and setup names the blocker. Keep the recovery material; follow the displayed Recover or Finish action after correcting the backup folder or storage problem.
+
 1. Download the official new Light setup file and start it using the installation action. Light 1.0.0, 1.1.0 and 1.2.0 through 1.2.6 can update directly to 1.2.7. Check the displayed installation address.
 2. Choose Update with a verified backup. Setup acquires a delivery hold, captures the prior state and drains in-flight work before changing the application. It announces paused delivery only when it confirmed an active campaign.
 3. After verification, setup restores the prior operational state. An existing hold remains held; an ordinary idle update succeeds without SMTP. Previously active approved campaigns continue only after normal readiness passes. Successful completion says Update successful. Sign in: followed by your address.
