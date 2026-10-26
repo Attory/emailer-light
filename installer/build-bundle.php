@@ -39,7 +39,7 @@ try {
     if (!is_string($options['predecessors'] ?? null)) {
         throw new RuntimeException('The self-contained installer requires its authenticated predecessor package set.');
     }
-    $priorArchives = ['emailer-light-1.0.0.zip', 'emailer-light-1.1.0.zip', 'emailer-light-1.2.0.zip', 'emailer-light-1.2.1.zip', 'emailer-light-1.2.2.zip', 'emailer-light-1.2.3.zip', 'emailer-light-1.2.4.zip', 'emailer-light-1.2.5.zip'];
+    $priorArchives = ['emailer-light-1.0.0.zip', 'emailer-light-1.1.0.zip', 'emailer-light-1.2.0.zip', 'emailer-light-1.2.1.zip', 'emailer-light-1.2.2.zip', 'emailer-light-1.2.3.zip', 'emailer-light-1.2.4.zip', 'emailer-light-1.2.5.zip', 'emailer-light-1.2.6.zip'];
     foreach ($priorArchives as $prior) {
         $priorVersion = substr($prior, strlen('emailer-light-'), -strlen('.zip'));
         (new App\Module\Release\Application\PackageInspector($options['public-key'], $priorVersion))->inspectInstalledSource($options['predecessors'].'/'.$prior);
@@ -56,7 +56,7 @@ try {
             $contents[$prior.$suffix] = $bytes;
         }
     }
-    foreach (['provision.py', 'resources.py', 'command.py', 'manage.py', 'runtime_env.py', 'hosting.py', 'packages.py', 'isolated_database.py', 'ubuntu-php.asc', 'apt-guard.py', 'host.py', 'host-database.php'] as $file) {
+    foreach (['provision.py', 'resources.py', 'command.py', 'manage.py', 'runtime_env.py', 'hosting.py', 'packages.py', 'isolated_database.py', 'ubuntu-php.asc', 'apt-guard.py', 'host.py', 'host-database.php', 'update-delivery.php'] as $file) {
         $contents[$file] = (string) file_get_contents(__DIR__.'/'.$file);
     }
     $contents['verify-package.php'] = (string) file_get_contents($root.'/tools/release/verify-package.php');

@@ -1,6 +1,6 @@
 {
   "title": "Install Emailer Light",
-  "subtitle": "Version 1.2.6 | Beginner guide | Ubuntu Apache or Debian Nginx VPS",
+  "subtitle": "Version 1.2.7 | Beginner guide | Ubuntu Apache or Debian Nginx VPS",
   "blocks": [
     {
       "type": "p",
@@ -100,11 +100,11 @@
     },
     {
       "type": "code",
-      "text": "curl --fail --location --output emailer-light-1.2.6-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.2.6/\\\nemailer-light-1.2.6-setup.run"
+      "text": "curl --fail --location --output emailer-light-1.2.7-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.2.7/\\\nemailer-light-1.2.7-setup.run"
     },
     {
       "type": "p",
-      "text": "Or download <b>emailer-light-1.2.6-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.2.6\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
+      "text": "Or download <b>emailer-light-1.2.7-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.2.7\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
     },
     {
       "type": "p",
@@ -124,7 +124,7 @@
     },
     {
       "type": "code",
-      "text": "sudo sh emailer-light-1.2.6-setup.run"
+      "text": "sudo sh emailer-light-1.2.7-setup.run"
     },
     {
       "type": "p",
@@ -146,7 +146,7 @@
     {
       "type": "image",
       "file": "emailer-light-ubuntu26-complete.png",
-      "caption": "Actual Light 1.2.6 setup completion on Ubuntu 26.04.1 with Virtualmin. Sign in at the address shown by your installation."
+      "caption": "Actual Light 1.2.7 setup completion on Ubuntu 26.04.1 with Virtualmin. Sign in at the address shown by your installation."
     },
     {
       "type": "h2",
@@ -171,7 +171,7 @@
     },
     {
       "type": "p",
-      "text": "When ready, open <b>Settings &amp; tools &gt; Mail settings</b>. Use your provider's outgoing-mail server, port, encryption, username, SMTP password/key and permitted sender address. The sender name is optional. Saving encrypts the settings; it sends nothing. Choose <b>Test connection without sending</b> to check secure connection and sign-in. To send one message, enter your own address in <b>Test destination</b> and explicitly choose <b>Send test email</b>."
+      "text": "When ready, open <b>Settings &amp; tools &gt; Mail settings</b> and enter your provider details. <b>Test connection without sending</b> tests the current visible fields without saving or emailing anyone. If it says Current settings tested successfully—save to apply, choose <b>Save SMTP settings</b>. A blank password reuses a saved password only for the same host and username. <b>Test saved connection</b> checks only the already-saved configuration. To send one requested message, enter your own address in <b>Test destination</b> and explicitly choose <b>Send test email</b>. See the <a href=\"emailer-light-manual.html\">user manual</a> for examples and error guidance."
     },
     {
       "type": "image",

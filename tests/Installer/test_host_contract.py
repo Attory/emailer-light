@@ -119,7 +119,7 @@ class RecoveryAndDiagnosticContract(unittest.TestCase):
                 def write(path, content, mode):
                     Path(path).write_bytes(content if isinstance(content, bytes) else content.encode())
                     Path(path).chmod(mode)
-                manager = types.SimpleNamespace(prefix='emailer-light', root=root, installer=types.SimpleNamespace(product='emailer-pro', durable=write), record={}, save=lambda: None)
+                manager = types.SimpleNamespace(prefix='emailer-light', product='emailer-light', root=root, installer=types.SimpleNamespace(product='emailer-pro', durable=write), record={}, save=lambda: None)
                 handoff = HostHandoff(manager)
                 handoff.state.update(phase='prepared', site_bytes=base64.b64encode(b'source site').decode(), source_active_pointer={'bytes': base64.b64encode(previous).decode(), 'mode': 0o600, 'uid': os.getuid(), 'gid': os.getgid()} if existed else None)
                 handoff.hold = root / 'hold'

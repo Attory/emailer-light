@@ -44,6 +44,12 @@ final readonly class DeliverCampaignTestHandler
 
                 return false;
             }
+            $runtime = $this->connection->fetchAssociative("SELECT schema_version, accepting_work FROM delivery_runtime WHERE singleton_key = '1' FOR UPDATE");
+            if (false === $runtime || !is_numeric($runtime['schema_version']) || !is_numeric($runtime['accepting_work']) || 1 !== (int) $runtime['schema_version'] || 1 !== (int) $runtime['accepting_work']) {
+                $this->gateway->dispatchTestAfter($message->testDeliveryId, 30_000);
+
+                return false;
+            }
             $this->connection->update('campaign_test_delivery', ['state' => 'processing'], ['id' => $message->testDeliveryId]);
 
             return $row;

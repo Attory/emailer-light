@@ -246,6 +246,8 @@ final class CampaignsController extends AbstractController
         try {
             $operation();
             $this->addFlash('success', $success);
+        } catch (\DomainException $failure) {
+            $this->addFlash('error', $failure->getMessage());
         } catch (\Throwable $failure) {
             $this->addFlash('error', CampaignDraftMessages::save($failure));
         }

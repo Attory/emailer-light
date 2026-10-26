@@ -1,6 +1,6 @@
 # Emailer Light user manual
 
-Version 1.2.6 | Setup and everyday newsletters
+Version 1.2.7 | Setup and everyday newsletters
 
 Prepare, test, approve, then send. Saving a draft sends nothing. Light has one administrator and campaign-specific CSV audiences; it has no reusable contacts, lists, additional administrator accounts or MFA.
 
@@ -12,7 +12,7 @@ Ubuntu 26.04.1 HTTPS acceptance used a local ACME server with real HTTP challeng
 
 Light’s Ubuntu Apache installer supports wildcard virtual hosts. Address-specific Apache websites require Emailer Ripe with its supported address-specific installation profile. Nginx on a separate port, such as 8081, can remain running.
 
-The 1.2.6 setup file supports Ubuntu 22.04/24.04/26.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action.
+The 1.2.7 setup file supports Ubuntu 22.04/24.04/26.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action.
 
 ## Your installed account
 
@@ -22,14 +22,23 @@ Sign in with the administrator email and password chosen during installation. Ex
 
 ## Configure email when ready
 
-1. Open Settings & tools > Mail settings. Use your provider server, port, STARTTLS or direct TLS, username, SMTP password/key and allowed sender address. Sender name and reply-to are optional.
-2. Choose Store secure SMTP configuration. It encrypts settings and sends nothing. Leave the password blank only to retain the saved password for the same server and username. A new server or login needs its password.
-3. Choose Test connection without sending to validate the certificate and sign-in without emailing anyone.
-4. For one explicit message, enter your own address in Test destination, check the address, and choose Send test email. This does not approve a campaign.
+SMTP is optional until you want to send. Sign in, edit templates and prepare campaign drafts without it.
 
-![Actual Mail settings before a provider is configured.](images/emailer-light-mail.png)
+1. Open Settings & tools > Mail settings. Enter your provider server, port, STARTTLS/direct TLS, username, SMTP password/key and permitted sender address. Sender name and reply-to are optional.
+2. Choose <strong>Test connection without sending</strong>. It tests the fields currently visible, including a password you entered. It neither sends a message nor saves changes. You can test while delivery is held.
+3. If the result says <strong>Current settings tested successfully—save to apply</strong>, choose <strong>Save SMTP settings</strong> to apply those settings. A matching recent successful test is carried into that explicit save. Changing the connection fields or password requires another test.
+4. <strong>Test saved connection</strong> is a separate check of the already-saved configuration; it does not apply a different form. A current-form test that exactly matches the saved configuration says so.
+5. To send one message, enter your own address in <strong>Test destination</strong>, check that address, and explicitly choose <strong>Send test email</strong>. This uses saved settings and never approves or sends a campaign. An operational delivery hold still blocks this sending action.
 
-Provider suggestions are conveniences; use your account's current settings. Leave the optional one-click DKIM confirmation unticked unless your provider confirms signing both unsubscribe headers. Normal unsubscribe links work independently.
+![Actual current-form connection-test success. Saving is a separate action; the password field was cleared before capture.](images/emailer-light-smtp-current.png)
+
+Leave the SMTP password blank only to reuse the saved password for the same server hostname and username. If either changes, enter the password. A new password is tested directly even if the old stored credential cannot be read. Passwords stay in the form during in-place test errors and retries; they are never echoed in responses or saved in browser storage.
+
+If a test fails, correct the named problem: incomplete settings, hostname/DNS, connection refusal or timeout, certificate validation, authentication, or an internal application error. Internal failures show a reference for investigation. Your current fields remain entered. If you edit while a test is running, the result describes the earlier values and asks you to test the current entries.
+
+![Actual certificate-error feedback on a mobile-sized screen. The entered provider details remain in the form; no message was sent.](images/emailer-light-smtp-error-mobile.png)
+
+A full-page Save validation error retains non-secret fields and explains that the settings were not saved. Passwords are not redisplayed; enter the SMTP password again if needed. Keep the optional one-click DKIM attestation unticked unless your provider confirms signing both unsubscribe headers.
 
 ## Create or edit a template with images
 
@@ -127,10 +136,11 @@ Use Profile for your account and Sessions to review access. Lost administrator p
 
 ## Updates
 
-1. Download the official new Light setup file and start it using the installation action. Light 1.0.0, 1.1.0, 1.2.0, 1.2.1, 1.2.2, 1.2.3, 1.2.4 and 1.2.5 can update directly to 1.2.6. Check the displayed address before choosing an action.
-2. Choose Update with a verified backup. Setup pauses delivery, verifies recovery material and checks the updated application. Follow any Finish a committed update instruction.
-3. Review Doctor and mail settings. Start the same file and choose Resume delivery after reviewing readiness when ready. Previously approved due work may continue after resume; no draft is approved by this action.
+1. Download the official new Light setup file and start it using the installation action. Light 1.0.0, 1.1.0 and 1.2.0 through 1.2.6 can update directly to 1.2.7. Check the displayed installation address.
+2. Choose Update with a verified backup. Setup acquires a delivery hold, captures the prior state and drains in-flight work before changing the application. It announces paused delivery only when it confirmed an active campaign.
+3. After verification, setup restores the prior operational state. An existing hold remains held; an ordinary idle update succeeds without SMTP. Previously active approved campaigns continue only after normal readiness passes. Successful completion says Update successful. Sign in: followed by your address.
+4. If verification or readiness fails, the hold remains with the actual reason and next action. Follow Finish only when instructed for a committed operation. Recover interrupted operations before retrying. Recovery never automatically retries an uncertain message or starts drafts.
 
 For an interruption, retain the same package and recovery files and choose Recover. A completed update cannot be undone by replaying recovery. See the [operator reference](emailer-light-operator.md). Installation is described in the [beginner guide](emailer-light-install.md). A compatible edition upgrade is separate; there is no general Ripe to Light downgrade.
 
-This release adds a database migration. Update with the guided setup file and keep its recovery material. Normal restore needs the same database schema. Recover older backups with their matching release in an isolated environment. For interrupted updates choose Recover in setup; a completed update cannot be downgraded through recovery.
+Light 1.2.6 and 1.2.7 use the same database schema. Older installations need the guided draft-schema migration; keep verified recovery material. Normal restore needs the same schema. Recover older backups with their matching release in an isolated environment. For interrupted updates choose Recover in setup; a completed update cannot be downgraded through recovery.

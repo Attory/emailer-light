@@ -9,12 +9,13 @@ use App\Module\Health\Application\Doctor;
 
 final readonly class DeliverySendingGate implements SendingGate
 {
-    public function __construct(private Doctor $doctor)
+    public function __construct(private Doctor $doctor, private ?\App\Shared\UpdateDeliveryState $updateState = null)
     {
     }
 
     public function assertReady(): void
     {
+        $this->updateState?->assertSendingAllowed();
         $this->doctor->assertSendingReady();
     }
 

@@ -30,6 +30,8 @@ final readonly class CampaignManager
         private DeliveryConfiguration $configuration,
         private CampaignDeliveryGateway $delivery,
         private SendingGate $sendingGate,
+        private ?\App\Shared\UpdateDeliveryState $updateState = null,
+        private ?\App\Shared\MaintenanceOperationLock $maintenance = null,
     ) {
     }
 
@@ -301,6 +303,17 @@ final readonly class CampaignManager
     public function requestTest(AdministrativeActor $actor, string $campaignId): string
     {
         $this->authorization->assertAtLeastRank($actor, AdministrativeAccessLevel::Administrator, 'campaign.test.request');
+        $this->maintenance?->acquire();
+        try {
+            return $this->requestTestWithMaintenance($actor, $campaignId);
+        } finally {
+            $this->maintenance?->release();
+        }
+    }
+
+    private function requestTestWithMaintenance(AdministrativeActor $actor, string $campaignId): string
+    {
+        $this->updateState?->assertSendingAllowed();
         $this->uuid($campaignId);
         $address = new EmailAddress($actor->loginIdentifier());
         $id = Identity::uuidV7();

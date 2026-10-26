@@ -10,6 +10,7 @@ import re
 import shutil
 import stat
 import subprocess
+import time
 import urllib.parse
 import zipfile
 from runtime_env import parse_environment_text, RuntimeEnvironmentError
@@ -51,7 +52,7 @@ class Manager:
             product = selected.get('product', '')
             if not re.fullmatch(r'emailer-[a-z]+', product):
                 raise ManagementError('The active installation edition is invalid.')
-            candidates = [Path('/etc') / (self.root.name + '-' + product.removeprefix('emailer-') + '-' + suffix) / 'runtime.env' for suffix in ('110', '120', '121', '122', '123', '124', '125', '126')]
+            candidates = [Path('/etc') / (self.root.name + '-' + product.removeprefix('emailer-') + '-' + suffix) / 'runtime.env' for suffix in ('110', '120', '121', '122', '123', '124', '125', '126', '127')]
             expected = Path(selected.get('runtime', ''))
             if selected.get('format') != 'emailer-active-installation-v1' or expected not in candidates:
                 raise ManagementError('The active installation pointer is invalid. It was preserved.')
@@ -143,6 +144,7 @@ class Manager:
                 'database_endpoint': 'The application and maintenance sign-ins could not be proved to use the same database server and data directory. No update or account fencing was started. Keep the configured socket/port and provide administrator access to that exact server; do not substitute the shared server.',
                 'finish_required': 'The application update committed. Choose Finish (or Accept for a Light to Ripe upgrade); recovery cannot undo a completed operation.',
                 'completed_operation': 'This operation already completed. Choose Check the installation. Recovery cannot downgrade it.',
+                'delivery_state': 'Delivery state could not be verified. Sending was not announced as paused. Keep the saved operation; choose Recover if it was interrupted, then retry after correcting the reported state.',
                 'delivery_busy': 'Delivery still has active work. Let it finish; no delivery claim was reset. If an operation was recorded, choose Recover before retrying.',
                 'operation_busy': 'Another operation already owns this installation. Let it finish, then start this package again.',
                 'recovery_required': 'An interrupted operation requires recovery. Start this same package and choose Recover before trying the update again.',
@@ -164,7 +166,9 @@ class Manager:
             if code not in guidance:
                 code = 'verification_failed'
             diagnostic['error_code'] = code
-            if diagnostic.get('runtime_blockers'):
+            if code == 'delivery_state' and isinstance(report.get('message'), str) and len(report['message']) <= 1200:
+                message = report['message'] + ' ' + guidance[code]
+            elif diagnostic.get('runtime_blockers'):
                 message = 'Application checks need attention: ' + ', '.join(diagnostic['runtime_blockers']) + '. Open Doctor for the matching repair steps; delivery remains blocked.'
             else:
                 message = guidance[code]
@@ -286,7 +290,7 @@ class Manager:
     def console(self, arguments, *, data=None):
         return self.call([self.installer.php, str(self.bootstrap / 'bin/console'), *arguments], environment=self.environment, data=data)
 
-    def stop_services(self):
+    def source_service_units(self):
         units = []
         for suffix in ('scheduler.timer', 'operations.timer', 'scheduler.service', 'operations.service', 'worker.service', 'fpm.service'):
             unit = self.source_service_prefix + '-' + suffix
@@ -301,13 +305,61 @@ class Manager:
             elif str(self.original_configuration) not in text or (str(self.releases / 'current') not in text and '--fpm-config ' + str(self.original_configuration.parent / 'fpm.conf') not in text):
                 raise ManagementError('An Emailer service name is used by another installation. It was not stopped.')
             units.append(unit)
+        return units
+
+    def source_web_exit_proof(self, unit):
+        return dict(line.split('=', 1) for line in self.call(['systemctl', 'show', unit, '--property=Result,ExecMainCode,ExecMainStatus,ActiveState']).splitlines() if '=' in line)
+
+    @staticmethod
+    def clean_web_exit(proof):
+        return proof.get('Result') == 'success' and proof.get('ExecMainCode') == '1' and proof.get('ExecMainStatus') == '0' and proof.get('ActiveState') == 'inactive'
+
+    def verify_source_web_runtime(self):
+        unit = self.source_service_prefix + '-fpm.service'
+        if unit not in self.source_service_units():
+            raise ManagementError('This website does not have a recorded dedicated Emailer PHP service. Its shared or custom PHP runtime was preserved. Automatic updating cannot prove that an existing web-triggered mail test finished; use the advanced supervised update path with verified web-request quiescence. No update hold or website change was started.')
+        if subprocess.run(['systemctl', 'is-active', '--quiet', unit]).returncode != 0 and not self.clean_web_exit(self.source_web_exit_proof(unit)):
+            self.record['source_web_drain_uncertain'] = True
+            self.save()
+            raise ManagementError('The source Emailer PHP service has no clean graceful-exit proof. Keep delivery held and review any interrupted test message; Recover the saved operation before retrying. Shared PHP services were preserved.')
+
+    def stop_services(self, *, web_only=False):
+        units = self.source_service_units()
+        if web_only:
+            self.verify_source_web_runtime()
         for unit in units:
             if subprocess.run(['systemctl', 'is-active', '--quiet', unit]).returncode == 0:
-                self.active_units.append(unit)
+                if unit not in self.active_units:
+                    self.active_units.append(unit)
         self.record.setdefault('active_units', self.active_units)
         self.record.setdefault('source_units', units)
         self.save()
         for unit in units:
+            if web_only and not unit.endswith('-fpm.service'):
+                continue
+            if unit.endswith('-fpm.service') and subprocess.run(['systemctl', 'is-active', '--quiet', unit]).returncode == 0:
+                # FPM SIGTERM may abort a synchronous SMTP test. SIGQUIT drains
+                # existing requests; never replace a timeout with forced termination.
+                self.record.setdefault('source_web_drains', {})[unit] = {'state': 'requested', 'signal': 'SIGQUIT'}
+                self.save()
+                self.call(['systemctl', 'kill', '--kill-whom=main', '--signal=SIGQUIT', unit])
+                until = time.monotonic() + 120
+                while True:
+                    pid = self.call(['systemctl', 'show', unit, '--property=MainPID', '--value']).strip()
+                    if pid == '0':
+                        break
+                    if not pid.isdigit() or time.monotonic() >= until:
+                        self.record['source_web_drain_uncertain'] = True
+                        self.save()
+                        raise ManagementError('An Emailer web request has not finished gracefully. No request was forcibly killed. Keep the operation, let the request finish, then choose Recover before retrying; an unfinished SMTP test must not be assumed unsent.')
+                    time.sleep(0.25)
+                proof = self.source_web_exit_proof(unit)
+                if not self.clean_web_exit(proof):
+                    self.record['source_web_drain_uncertain'] = True
+                    self.save()
+                    raise ManagementError('The old Emailer PHP service did not confirm a clean graceful exit. An interrupted mail test must be treated as uncertain. Its recovery evidence was retained; no automatic continuation is allowed.')
+                self.record.setdefault('source_web_drains', {})[unit] = {'signal': 'SIGQUIT', **proof}
+                self.save()
             self.call(['systemctl', 'stop', unit])
 
     def recover_host_preparation(self):
@@ -332,35 +384,100 @@ class Manager:
         if choice == '0':
             return
         if choice == '1' and self.source_version == self.installer.version and (not self.record.get('host_handoff') or self.record['host_handoff'].get('phase') == 'complete'):
+            from host import HostHandoff
+            handoff = HostHandoff(self)
+            snapshot = handoff.current_update_snapshot()
+            if snapshot and snapshot.get('phase') not in ('complete', 'recovered'):
+                self.stage()
+                self.maintenance_environment()
+                handoff.restore_update_delivery()
+                self.report_update_completion()
+                return
             report = json.loads(self.call(['/usr/local/sbin/' + self.prefix, 'emailer:health:verify-runtime', '--allow-operational-hold']))
             print('This release is already installed. No settings, services or delivery state were changed.')
             print('Sign in: ' + self.values['DEFAULT_URI'] + '/login')
             return
         if choice in ('4', '5') and self.source_version != self.installer.version:
-            raise ManagementError('This older release does not include the guided health and delivery controls. Choose Update for a verified backup and installation checks first.')
+            from host import HostHandoff
+            recovered_handoff = HostHandoff(self)
+            recovered_snapshot = recovered_handoff.current_update_snapshot()
+            if not (choice == '5' and recovered_handoff.state.get('phase') == 'recovered' and recovered_snapshot and recovered_snapshot.get('phase') in ('recovered', 'blocked', 'resuming')):
+                raise ManagementError('This source release needs Update for guided runtime checks. A recovered source may instead use Resume delivery after explicitly reviewing readiness.')
         if choice == '4':
             report = json.loads(self.call(['/usr/local/sbin/' + self.prefix, 'emailer:health:verify-runtime', '--allow-operational-hold']))
-            print('Application runtime verified. Delivery ' + ('is ready.' if report['delivery_ready'] else 'is held or needs configuration; open Doctor in the application.'))
+            from host import HostHandoff
+            snapshot = HostHandoff(self).current_update_snapshot()
+            if snapshot and snapshot.get('phase') != 'complete':
+                print('Application runtime verified. Sending is blocked by the update: ' + snapshot.get('reason', 'Choose Finish to complete delivery-state verification.'))
+            else:
+                print('Application runtime verified. Delivery ' + ('is ready.' if report['delivery_ready'] else 'is held or needs configuration; open Doctor in the application.'))
             return
         if choice == '5':
-            print('This removes the operational delivery hold only if the normal sending checks pass. It does not approve a campaign.')
+            print('This removes the operational delivery hold only if the normal sending checks pass. It does not approve a campaign or retry uncertain messages. Review any reported uncertain delivery history first.')
             if input('Resume delivery now? [y/N]: ').strip().lower() != 'y':
                 return
-            self.call(['/usr/local/sbin/' + self.prefix, 'emailer:delivery:resume', '--no-interaction'])
-            self.call(['/usr/local/sbin/' + self.prefix, 'emailer:health:verify-runtime', '--record'])
+            from host import HostHandoff
+            handoff = HostHandoff(self)
+            snapshot = handoff.current_update_snapshot()
+            if snapshot and snapshot.get('phase') != 'complete':
+                if handoff.state.get('phase') not in ('complete', 'recovered'):
+                    raise ManagementError('Host setup is unfinished. Choose Finish before resuming delivery.')
+                self.stage()
+                self.maintenance_environment()
+                inspection = json.loads(handoff.database('inspect-update'))
+                if inspection['active_claims'] or inspection['processing'] or inspection['test_processing']:
+                    raise ManagementError('A message is still in progress. Wait for it to finish; no message was retried.')
+                handoff.database('retain-update-hold')
+                handoff.update_delivery_phase('resuming', explicit=True)
+            try:
+                self.call(['/usr/local/sbin/' + self.prefix, 'emailer:delivery:resume', '--no-interaction'])
+            except ManagementError as error:
+                if snapshot and snapshot.get('phase') != 'complete':
+                    handoff.database('retain-update-hold')
+                    handoff.update_delivery_phase('blocked', str(error))
+                raise
+            if snapshot and snapshot.get('phase') != 'complete':
+                handoff.update_delivery_phase('complete')
+            if self.source_version == self.installer.version:
+                self.call(['/usr/local/sbin/' + self.prefix, 'emailer:health:verify-runtime', '--record'])
             print('Delivery readiness passed and the operational hold was lifted.')
             return
         if choice not in ('1', '2', '3'):
             raise ManagementError('Choose one of the displayed actions.')
         self.stage()
         self.maintenance_environment()
-        result = self.native_action(choice)
+        try:
+            result = self.native_action(choice)
+        except ManagementError as error:
+            from host import HostHandoff
+            handoff = HostHandoff(self)
+            snapshot = handoff.current_update_snapshot()
+            if snapshot and snapshot.get('phase') != 'complete':
+                handoff.database('retain-update-hold')
+                handoff.update_delivery_phase('failed', str(error) + ' Start the same setup package and choose Recover or Finish as indicated.')
+            raise
         if choice == '2':
             self.restore_services()
         self.record.pop('active_units', None)
         self.save()
-        print('Operation verified. Sign in: ' + self.values['DEFAULT_URI'] + '/login')
-        print(('Delivery remains held. When ready, start setup again and choose Resume delivery. ' if result['delivery_held'] else 'Delivery is already enabled. ') + 'Recovery material: ' + str(self.directory))
+        if choice == '2':
+            print('Recovery verified. Delivery remains held. Sign in: ' + self.values['DEFAULT_URI'].rstrip('/') + '/login')
+        else:
+            self.report_update_completion()
+        print('Recovery material: ' + str(self.directory))
+
+    def report_update_completion(self):
+        from host import HostHandoff
+        snapshot = HostHandoff(self).current_update_snapshot()
+        url = self.values['DEFAULT_URI'].rstrip('/') + '/login'
+        if snapshot and snapshot.get('phase') == 'complete':
+            print('Update successful. Sign in: ' + url)
+        elif snapshot:
+            print('Update needs attention. Sending remains blocked: ' + snapshot.get('reason', 'Choose Finish to complete delivery-state verification.'))
+            print('Sign in: ' + url)
+        else:
+            print('Update applied. The prior delivery state could not be confirmed; its hold was retained. Review readiness before using Resume delivery.')
+            print('Sign in: ' + url)
 
     def native_action(self, choice):
         source = self.package.parent / ('emailer-light-' + self.source_version + '.zip')
@@ -370,8 +487,8 @@ class Manager:
         operation = self.original_configuration.parent / ('native-updates/light-' + source_version + '-to-' + self.installer.version + '.json')
         if self.source_version == self.installer.version and choice == '1' and not operation.exists():
             raise ManagementError('This release is already installed. Choose Check the installation.')
-        if source_version not in ('1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5'):
-            raise ManagementError('This installer supports native Light updates from 1.0.0, 1.1.0, 1.2.0, 1.2.1, 1.2.2, 1.2.3, 1.2.4 or 1.2.5.')
+        if source_version not in ('1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5', '1.2.6'):
+            raise ManagementError('This installer supports native Light updates from 1.0.0, 1.1.0, 1.2.0, 1.2.1, 1.2.2, 1.2.3, 1.2.4, 1.2.5 or 1.2.6.')
         self.record['native_source'] = source_version
         self.save()
         source = self.package.parent / ('emailer-light-' + source_version + '.zip')
@@ -404,6 +521,7 @@ class Manager:
         handoff.adopt()
         result = json.loads(self.console(arguments))
         handoff.complete()
+        handoff.restore_update_delivery()
         return result
 
 

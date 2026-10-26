@@ -37,6 +37,51 @@ try {
             exit(0);
         }
     }
+    if ('begin-update' === $input['action']) {
+        require __DIR__.'/update-delivery.php';
+        echo json_encode(EmailerUpdateDelivery::begin($connection, $input['state_file'], $input['operation']), JSON_THROW_ON_ERROR)."\n";
+        exit(0);
+    }
+    if (in_array($input['action'], ['inspect-update', 'restore-idle-update', 'retain-update-hold'], true)) {
+        require __DIR__.'/update-delivery.php';
+        $saved = EmailerUpdateDelivery::read($input['state_file'], $input['operation']);
+        if (null === $saved || $saved['installation_uuid'] !== $connection->fetchOne("SELECT installation_uuid FROM installation_state WHERE singleton_key='1'")) {
+            throw new RuntimeException();
+        }
+        if ('retain-update-hold' === $input['action']) {
+            $connection->executeStatement("UPDATE delivery_runtime SET accepting_work=0 WHERE singleton_key='1'");
+            echo "held\n";
+            exit(0);
+        }
+        $inspection = $connection->transactional(function () use ($connection, $input, $saved): array {
+            $runtime = $connection->fetchAssociative("SELECT active_claims, accepting_work FROM delivery_runtime WHERE singleton_key='1' FOR UPDATE");
+            if (false === $runtime || !is_numeric($runtime['active_claims']) || !in_array((string) $runtime['accepting_work'], ['0', '1'], true)) {
+                throw new RuntimeException();
+            }
+            $uncertain = 0;
+            foreach ($saved['inflight'] as $work) {
+                $uncertain += (int) $connection->fetchOne("SELECT COUNT(*) FROM campaign_recipient WHERE id=? AND state='ambiguous'", [$work['recipient_id']]);
+            }
+            foreach ($saved['test_work'] ?? [] as $work) {
+                $uncertain += (int) $connection->fetchOne("SELECT COUNT(*) FROM campaign_test_delivery WHERE id=? AND state='failed' AND failure_class='ambiguous'", [$work['id']]);
+            }
+            $result = ['accepting_work' => (int) $runtime['accepting_work'], 'active_claims' => (int) $runtime['active_claims'], 'processing' => (int) $connection->fetchOne("SELECT COUNT(*) FROM campaign_recipient WHERE state='processing'"), 'test_processing' => (int) $connection->fetchOne("SELECT COUNT(*) FROM campaign_test_delivery WHERE state='processing'"), 'uncertain' => $uncertain];
+            if ('restore-idle-update' === $input['action']) {
+                if ('resuming' !== $saved['phase'] || 1 !== $saved['prior_accepting_work'] || 0 !== $saved['active_claims'] || 0 !== ($result['active_claims'] + $result['processing'] + $result['test_processing'] + $result['uncertain']) || 0 !== (int) $runtime['accepting_work']) {
+                    throw new RuntimeException();
+                }
+                foreach ($saved['campaigns'] as $campaign) {
+                    if ('sending' === $campaign['state'] && 0 < $campaign['remaining']) {
+                        throw new RuntimeException();
+                    }
+                }
+                $connection->executeStatement("UPDATE delivery_runtime SET accepting_work=1,updated_at=UTC_TIMESTAMP(6) WHERE singleton_key='1'");
+            }
+            return $result;
+        });
+        echo json_encode($inspection, JSON_THROW_ON_ERROR)."\n";
+        exit(0);
+    }
     if ('drain' === $input['action']) {
         $connection->executeStatement("UPDATE delivery_runtime SET accepting_work=0, updated_at=UTC_TIMESTAMP(6) WHERE singleton_key='1'");
         $until = microtime(true) + 120;
@@ -45,7 +90,9 @@ try {
             if (!is_numeric($active) || (int) $active < 0) {
                 throw new RuntimeException();
             }
-            if (0 === (int) $active) {
+            $processing = (int) $connection->fetchOne("SELECT COUNT(*) FROM campaign_recipient WHERE state='processing'");
+            $tests = (int) $connection->fetchOne("SELECT COUNT(*) FROM campaign_test_delivery WHERE state='processing'");
+            if (0 === (int) $active && 0 === $processing && 0 === $tests) {
                 echo "drained\n";
                 exit(0);
             }
@@ -114,7 +161,10 @@ try {
         throw new RuntimeException();
     }
     echo "verified\n";
-} catch (Throwable) {
+} catch (Throwable $failure) {
+    if ($failure instanceof EmailerUpdateDeliveryError) {
+        echo json_encode(['installer_error' => 'delivery_state', 'message' => $failure->getMessage()], JSON_THROW_ON_ERROR)."\n";
+    }
     if (isset($input['action']) && 'verify-endpoint' === $input['action']) {
         echo json_encode(['installer_error' => 'database_endpoint'], JSON_THROW_ON_ERROR)."\n";
     }

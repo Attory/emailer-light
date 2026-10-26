@@ -45,7 +45,7 @@ final readonly class DeliveryReadinessProbe implements LightweightReadinessProbe
         if (false === $runtime || 1 !== $this->integer($runtime['schema_version'])) {
             $findings[] = $this->critical('delivery_schema', 'Delivery runtime compatibility is unavailable.', 'Apply the reviewed compatible schema before sending.');
         } elseif (1 !== $this->integer($runtime['accepting_work'])) {
-            $findings[] = $this->critical('delivery_quiesced', 'Delivery is in maintenance mode.', 'Complete the maintenance operation and explicitly resume delivery.');
+            $findings[] = $this->critical('delivery_quiesced', 'An operational delivery hold is active.', 'Templates and campaign drafts remain available. Keep an intentional hold; when ready to send, configure email and review readiness before choosing Resume delivery.');
         } elseif ('open' === $runtime['circuit_state']) {
             $openUntil = $runtime['circuit_open_until'];
             if (!\is_string($openUntil) || new \DateTimeImmutable($openUntil, new \DateTimeZone('UTC')) > new \DateTimeImmutable('now', new \DateTimeZone('UTC'))) {

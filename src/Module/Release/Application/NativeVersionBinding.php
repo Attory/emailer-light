@@ -23,13 +23,18 @@ final readonly class NativeVersionBinding
         return $this->source;
     }
 
+    public function sourceSchema(): string
+    {
+        return '1.2.6' === $this->source ? CampaignDraftSchemaPlan::TARGET_SCHEMA : CampaignDraftSchemaPlan::SOURCE_SCHEMA;
+    }
+
     public function schema(mixed $schema): string
     {
-        if ('1.2.6' !== $this->target || !\in_array($schema, [CampaignDraftSchemaPlan::SOURCE_SCHEMA, CampaignDraftSchemaPlan::TARGET_SCHEMA], true)) {
+        if (!\in_array($this->target, ['1.2.6', '1.2.7'], true) || !\in_array($schema, [$this->sourceSchema(), CampaignDraftSchemaPlan::TARGET_SCHEMA], true)) {
             throw new \RuntimeException('Installation schema metadata is outside the authenticated draft-migration pair.');
         }
 
-        return CampaignDraftSchemaPlan::SOURCE_SCHEMA;
+        return $this->sourceSchema();
     }
 
     public function lock(string $bytes, bool $sourceOnly = false): string
@@ -39,12 +44,12 @@ final readonly class NativeVersionBinding
             throw new \RuntimeException('The source installation lock version is inconsistent.');
         }
         $recordedVersion = $value['product_version'] ?? null;
-        if ('1.2.6' === $this->target && ($value['schema_version'] ?? null) !== ($recordedVersion === $this->target ? CampaignDraftSchemaPlan::TARGET_SCHEMA : CampaignDraftSchemaPlan::SOURCE_SCHEMA)) {
+        if (\in_array($this->target, ['1.2.6', '1.2.7'], true) && ($value['schema_version'] ?? null) !== ($recordedVersion === $this->target ? CampaignDraftSchemaPlan::TARGET_SCHEMA : $this->sourceSchema())) {
             throw new \RuntimeException('The installation lock version and schema are not a permitted pair.');
         }
         $value['product_version'] = $this->canonical($value['product_version'] ?? null);
-        if ('1.2.6' === $this->target) {
-            if ($sourceOnly && CampaignDraftSchemaPlan::SOURCE_SCHEMA !== ($value['schema_version'] ?? null)) {
+        if (\in_array($this->target, ['1.2.6', '1.2.7'], true)) {
+            if ($sourceOnly && $this->sourceSchema() !== ($value['schema_version'] ?? null)) {
                 throw new \RuntimeException('The source installation lock schema does not match the authenticated source.');
             }
             $value['schema_version'] = $this->schema($value['schema_version'] ?? null);

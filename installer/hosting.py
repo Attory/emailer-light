@@ -107,6 +107,7 @@ class WebServer:
     RewriteCond %{CONN_REMOTE_ADDR} !^127\\.0\\.0\\.1$
     RewriteCond %{CONN_REMOTE_ADDR} !^::1$
     RewriteRule ^ - [R=503,L]
+    Header always set X-Emailer-Update-State "in-progress"
     ErrorDocument 503 "Emailer setup is finishing. Please try again shortly."
 ''' if maintenance else ''
         return http + f'''<VirtualHost *:443>
@@ -150,7 +151,7 @@ class WebServer:
 '''
         if not certificate:
             return http
-        restriction = 'allow 127.0.0.1; allow ::1; deny all;\n    error_page 403 =503 @installing;\n    location @installing { return 503 "Emailer setup is finishing. Please try again shortly."; }' if maintenance else ''
+        restriction = 'allow 127.0.0.1; allow ::1; deny all;\n    error_page 403 =503 @installing;\n    location @installing { add_header X-Emailer-Update-State "in-progress" always; return 503 "Emailer setup is finishing. Please try again shortly."; }' if maintenance else ''
         return http + f'''server {{
     listen 443 ssl;
     server_name {host};
@@ -225,6 +226,8 @@ class WebServer:
                 files=re.findall(r'(?is)<Files\s+index\.php\s*>\s*(SetHandler\s+[^\n]+)\s*</Files\s*>',clean)
                 remainder=re.sub(r'(?is)<Files\s+index\.php\s*>\s*SetHandler\s+[^\n]+\s*</Files\s*>','',clean)
                 directories=re.findall(r'(?im)^\s*<Directory\s+([^>]+)>',clean)
+                # Accept only the bounded temporary root-route repair, never arbitrary redirects.
+                remainder=re.sub(r'(?m)^    RedirectMatch 302 \"\^/\$\" \"/login\"\s*$', '', remainder)
                 if re.search(r'(?im)^\s*(?:SetHandler|AddHandler|Action|Redirect|RedirectMatch|ProxyPassReverse)\b|<\s*(?:Location|LocationMatch|FilesMatch|Proxy)\b',remainder) or len(files)>1 or any(not re.fullmatch(r'SetHandler\s+"proxy:unix:/run/[A-Za-z0-9_.-]+-fpm/php\.sock\|fcgi://localhost/"',value.strip()) for value in files) or any(value.strip('" ')!=root and not re.fullmatch(r'/[A-Za-z0-9_./-]+/\.well-known/acme-challenge',value.strip('" ')) for value in directories):
                     raise self.error('The Apache file contains custom handlers or directory routing. It was preserved; automatic handoff requires a dedicated Emailer front controller.')
                 aliases=re.findall(r'(?im)^\s*Alias\s+([^\n]+)',clean)

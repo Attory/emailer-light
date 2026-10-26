@@ -1,5 +1,7 @@
 """Isolated native-host handoff. Source credentials and shared PHP services are retained untouched."""
 import base64
+import contextlib
+import fcntl
 import grp
 import hashlib
 import json
@@ -33,9 +35,11 @@ class HostHandoff:
 
     def database(self, action):
         values = {'action': action, 'bootstrap': str(self.m.bootstrap), 'maintenance_url': self.m.environment['DATABASE_URL'], 'source_url': self.m.source_values['DATABASE_URL']}
-        if action != 'drain':
+        if action not in ('drain', 'begin-update', 'inspect-update', 'restore-idle-update', 'retain-update-hold'):
             values.update(self.state['database'])
             values['source_url'] = self.m.source_values['DATABASE_URL']
+        if action in ('begin-update', 'inspect-update', 'restore-idle-update', 'retain-update-hold'):
+            values.update(state_file=str(self.update_state_file), operation=str(self.m.directory))
         return self.m.call([self.host.php, str(self.m.package.parent / 'host-database.php')], data=json.dumps(values))
 
     def web(self):
@@ -69,6 +73,7 @@ class HostHandoff:
 
     def profile_check(self):
         m = self.m
+        m.verify_source_web_runtime()
         url = urllib.parse.urlsplit(m.source_values['DATABASE_URL'])
         if url.hostname not in ('localhost', '127.0.0.1', '::1'):
             self.fail('This hosting profile supports a local MariaDB server. The remote database was preserved and no update was started.')
@@ -186,11 +191,155 @@ class HostHandoff:
         m.environment['EMAILER_INSTALLER_REPLACEMENT_RUNTIME'] = str(self.runtime)
         m.environment['EMAILER_INSTALLER_HOLD_FILE'] = str(self.hold)
 
+    @property
+    def update_state_file(self):
+        return self.m.private.parent / 'update-maintenance.json'
+
+    def begin_update_delivery(self):
+        snapshot = json.loads(self.database('begin-update'))
+        if snapshot.get('format') != 'emailer-update-delivery-v1' or snapshot.get('phase') not in ('in_progress', 'blocked', 'failed', 'resuming'):
+            self.fail('Delivery state could not be verified. Sending remains blocked; keep the operation and choose Recover.')
+        self.state['delivery_snapshot'] = snapshot
+        self.m.save()
+        active = [item for item in snapshot['campaigns'] if snapshot['prior_accepting_work'] == 1 and item['state'] == 'sending' and item['remaining'] > 0]
+        if active:
+            print('Active delivery paused for this update.', flush=True)
+            for campaign in active:
+                print(f"Campaign {campaign['id']}: {campaign['sent']} SMTP accepted; {campaign['remaining']} remaining (waiting, retrying or in flight).", flush=True)
+        if snapshot['active_claims']:
+            print(f"Waiting for {snapshot['active_claims']} in-flight campaign message(s). Uncertain outcomes will not be retried automatically.", flush=True)
+        tests = [item for item in snapshot.get('test_work', []) if item['state'] == 'processing']
+        if tests:
+            print(f'Waiting for {len(tests)} explicitly requested test message(s) already in progress.', flush=True)
+
+    def update_delivery_phase(self, phase, reason='', *, explicit=False):
+        from manage import protected
+        snapshot = json.loads(protected(self.update_state_file, public=True).read_text())
+        if snapshot.get('operation') != str(self.m.directory) or snapshot.get('format') != 'emailer-update-delivery-v1':
+            self.fail('A different operation owns the update hold. Its evidence was preserved.')
+        if phase == 'recovered':
+            snapshot['recovered_prior_accepting_work'] = snapshot['prior_accepting_work']
+            snapshot['prior_accepting_work'] = 0
+        snapshot['phase'] = phase
+        if explicit:
+            snapshot['explicit_review'] = True
+        snapshot['reason'] = reason[:1200]
+        from provision import durable
+        durable(self.update_state_file, json.dumps(snapshot, indent=2) + '\n', mode=0o644)
+        self.state['delivery_snapshot'] = snapshot
+        self.m.save()
+
+    def current_update_snapshot(self):
+        from manage import protected
+        if not self.update_state_file.exists() and not self.update_state_file.is_symlink():
+            return None
+        snapshot = json.loads(protected(self.update_state_file, public=True).read_text())
+        if snapshot.get('format') != 'emailer-update-delivery-v1':
+            self.fail('The saved update delivery evidence is invalid. Keep its recovery material.')
+        if snapshot.get('operation') != str(self.m.directory):
+            if snapshot.get('phase') == 'complete':
+                return None  # A previous completed update does not own this operation.
+            self.fail('Another update owns the delivery state. Keep its evidence and finish or recover that update first.')
+        return snapshot
+
+    def restore_update_delivery(self):
+        # Edition transitions retain their separate, explicit acceptance contract.
+        if self.m.product != self.host.product:
+            return
+        snapshot = self.current_update_snapshot()
+        if not snapshot:
+            print('The earlier setup did not record the prior delivery state. Its hold was retained; review readiness before using Resume delivery.')
+            return
+        if snapshot.get('phase') == 'complete':
+            return
+        try:
+            report = json.loads(self.live(['emailer:health:verify-runtime', '--allow-operational-hold']))
+            if not report.get('runtime_verified'):
+                raise self.m.error('Runtime verification did not pass. Open Doctor, repair its findings, then choose Finish.')
+            # This read-only check also rejects uncertain ledger outcomes and any
+            # remaining campaign/test transport activity before lifting a hold.
+            inspection = json.loads(self.database('inspect-update'))
+            if inspection['active_claims'] or inspection['processing'] or inspection['test_processing'] or inspection['uncertain']:
+                raise self.m.error('Delivery has in-flight or uncertain messages. Sending remains blocked. Review delivery history; uncertain messages will not be retried. Use Resume delivery only after this review.')
+            if snapshot['prior_accepting_work'] == 0:
+                self.update_delivery_phase('complete')
+                return  # Preserve an existing operational hold without another prompt.
+            if self.m.record.get('source_web_drain_uncertain') and not snapshot.get('explicit_review'):
+                raise self.m.error('An earlier web request did not have a clean exit. Review any interrupted SMTP test in delivery history, then use Resume delivery explicitly. No uncertain message will be retried automatically.')
+            active = snapshot['active_claims'] > 0 or any(item['state'] == 'sending' and item['remaining'] > 0 for item in snapshot['campaigns'])
+            if active:
+                findings = [item for item in report.get('findings', []) if item.get('sending_blocked') and item.get('severity') == 'critical' and item.get('code') != 'delivery_quiesced']
+                if findings:
+                    reasons = '; '.join(item['summary'] + ' ' + item['remediation'] for item in findings)
+                    raise self.m.error(reasons)
+            self.update_delivery_phase('resuming')
+            if snapshot.get('phase') == 'resuming' and inspection['accepting_work'] == 1:
+                self.live(['emailer:health:verify-runtime', '--allow-operational-hold', '--record'])
+                self.update_delivery_phase('complete')
+                return  # Exact operation already committed resume before a crash.
+            if active:
+                # Retain the normal maintenance lock, edition hold and readiness
+                # checks. Never approve, queue, or change any campaign state.
+                self.live(['emailer:delivery:resume', '--no-interaction'])
+            else:
+                # Idle installations may restore accepting_work even without
+                # optional SMTP. Every future send still uses normal readiness.
+                self.database('restore-idle-update')
+            self.live(['emailer:health:verify-runtime', '--allow-operational-hold', '--record'])
+            self.update_delivery_phase('complete')
+        except self.m.error as error:
+            self.database('retain-update-hold')
+            self.update_delivery_phase('blocked', str(error) + ' Start the same setup package and choose Finish after repairing this issue.')
+            print('Sending remains blocked: ' + str(error), flush=True)
+
+    @contextlib.contextmanager
+    def source_maintenance_lock(self):
+        # Use the published application's actual Symfony flock, including old
+        # predecessors whose Resume command predates update-state awareness.
+        setting = self.m.source_values.get('LOCK_DSN', '')
+        expected = self.m.private / 'locks'
+        if setting != 'flock://' + str(expected):
+            self.fail('The source does not use its dedicated shared maintenance-lock directory. No delivery state was changed. Use the supported native profile before updating; a process-private temporary lock cannot safely coordinate web and background work.')
+        key = 'emailer-maintenance-operation'
+        suffix = base64.b64encode(hashlib.sha256(key.encode()).digest()).decode()[:7].replace('/', '_')
+        parent = os.open(expected, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        descriptor = None
+        name = 'sf.' + key + '.' + suffix + '.lock'
+        try:
+            try:
+                descriptor = os.open(name, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=parent)
+            except FileNotFoundError:
+                descriptor = os.open(name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=parent)
+                os.fchown(descriptor, self.m.account.pw_uid, self.m.account.pw_gid)
+                os.fsync(descriptor)
+                os.fsync(parent)
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1 or metadata.st_uid not in (0, self.m.account.pw_uid):
+                self.fail('The shared maintenance lock is unsafe. No update was started.')
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                self.fail('Another maintenance action is in progress. Wait for it to finish, then run this setup file again. No delivery was paused.')
+            yield
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+            os.close(parent)
+
     def drain(self):
-        print('Pausing new delivery and waiting for any message already in progress …', flush=True)
-        self.apply_site(self.site_text(maintenance=True))
-        self.database('drain')
-        self.m.stop_services()
+        with self.source_maintenance_lock():
+            self.m.verify_source_web_runtime()
+            if self.m.product == self.host.product:
+                self.begin_update_delivery()
+            self.apply_site(self.site_text(maintenance=True))
+            # Drain legacy synchronous mail tests before backup or schema work.
+            # This never stops a shared or untracked PHP runtime.
+            self.m.stop_services(web_only=True)
+            self.database('drain')
+            self.m.stop_services()
+            # Legacy test handlers did not serialize claims on delivery_runtime.
+            # Recheck after all source processes stop; never clear uncertain work.
+            self.database('drain')
         if self.state.get('phase') == 'recovered' and 'runtime_metadata_before' in self.state:
             self.state.setdefault('runtime_metadata_history', []).append(self.state.pop('runtime_metadata_before'))
             self.state['phase'] = 'retrying-preparation'
@@ -535,4 +684,7 @@ class HostHandoff:
             self.claims().write(pointer, base64.b64decode(saved_pointer['bytes']), saved_pointer['mode'], gid=saved_pointer['gid'])
             os.chown(pointer, saved_pointer['uid'], saved_pointer['gid'])
         self.state['phase'] = 'recovered'
+        if self.m.product == self.host.product and self.update_state_file.exists():
+            self.database('retain-update-hold')
+            self.update_delivery_phase('recovered', 'The source installation was recovered. Its delivery hold is retained. Retry the update, or review readiness before deliberately resuming delivery.')
         m.save()

@@ -11,6 +11,12 @@ use Symfony\Component\Routing\Attribute\Route;
 
 final class SecurityController extends AbstractController
 {
+    #[Route('/', name: 'identity_home', methods: ['GET', 'HEAD'])]
+    public function home(): Response
+    {
+        return $this->redirectToRoute(null === $this->getUser() ? 'identity_login' : 'admin_dashboard', status: Response::HTTP_SEE_OTHER);
+    }
+
     #[Route('/login', name: 'identity_login', methods: ['GET', 'POST'])]
     public function login(Request $request): Response
     {

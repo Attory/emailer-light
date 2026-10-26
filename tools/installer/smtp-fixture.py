@@ -7,6 +7,7 @@ from pathlib import Path
 import socketserver
 import ssl
 import threading
+import time
 
 lock = threading.Lock()
 state = {'authenticated': 0, 'messages': 0, 'recipients': []}
@@ -43,6 +44,8 @@ class SMTP(socketserver.StreamRequestHandler):
                 self.wfile = self.connection.makefile('wb', buffering=0)
                 secure = True
             elif command == b'AUTH' and secure:
+                if Path('/evidence/delay-auth').exists():
+                    time.sleep(1.5)
                 mechanism, _, encoded = value.partition(b' ')
                 if not encoded:
                     self.wfile.write(b'334 \r\n')
@@ -52,6 +55,7 @@ class SMTP(socketserver.StreamRequestHandler):
                     accepted = mechanism.upper() == b'PLAIN' and any(hmac.compare_digest(decoded, expected) for expected in (b'\x00synthetic\x00synthetic-acceptance-only', b'synthetic\x00synthetic\x00synthetic-acceptance-only'))
                 except ValueError:
                     accepted = False
+                accepted = accepted and not Path('/evidence/reject-auth').exists()
                 authenticated = accepted
                 if accepted:
                     with lock:
