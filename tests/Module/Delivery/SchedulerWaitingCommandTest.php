@@ -43,7 +43,8 @@ final class SchedulerWaitingCommandTest extends TestCase
 
     public function testExplicitSchedulerStillReportsTheUpdateHold(): void
     {
-        $this->expectException(\App\Shared\UpdateSendingBlocked::class);
+        $this->expectException(SendingNotReady::class);
+        $this->expectExceptionMessage('Update in progress; sending temporarily unavailable.');
         $this->command(update: true)->execute([]);
     }
 

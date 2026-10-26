@@ -31,7 +31,7 @@ final class RunSchedulerCommand extends Command
         $id = substr((false === $hostname ? 'host' : $hostname).'-'.getmypid(), 0, 100);
         try {
             $result = $this->scheduler->run($id);
-        } catch (SendingNotReady|\App\Shared\UpdateSendingBlocked $blocked) {
+        } catch (SendingNotReady $blocked) {
             if (true !== $input->getOption('wait-for-configuration')) {
                 throw $blocked;
             }

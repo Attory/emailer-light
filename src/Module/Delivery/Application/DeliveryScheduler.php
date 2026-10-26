@@ -7,6 +7,7 @@ namespace App\Module\Delivery\Application;
 use App\Module\Delivery\Application\Contract\CampaignDeliveryGateway;
 use App\Module\Delivery\Application\Contract\InterruptedDeliveryRecovery;
 use App\Module\Delivery\Application\Contract\SendingGate;
+use App\Module\Delivery\Application\Contract\SendingNotReady;
 use App\Module\RecipientActions\Application\Contract\RecipientUnsubscribeLinks;
 use App\Shared\Identity;
 use App\Shared\MaintenanceOperationLock;
@@ -36,13 +37,13 @@ final readonly class DeliveryScheduler
                         $this->maintenance->release();
                     }
                 }
-                $this->sendingGate->assertReady();
+                $this->assertReady();
                 throw new \LogicException('Sending gate allowed explicitly quiesced delivery.');
             }
             $this->heartbeat($schedulerId);
             $this->recovery->recover();
             $this->unsubscribeLinks->purgeExpired();
-            $this->sendingGate->assertReady();
+            $this->assertReady();
             $due = $this->connection->fetchAllAssociative("SELECT id, operation_version FROM campaign WHERE state = 'scheduled' AND scheduled_at <= UTC_TIMESTAMP(6) ORDER BY scheduled_at LIMIT 100");
             $scheduled = 0;
             foreach ($due as $row) {
@@ -85,6 +86,16 @@ final readonly class DeliveryScheduler
         }
 
         return (int) $value;
+    }
+
+    private function assertReady(): void
+    {
+        try {
+            $this->sendingGate->assertReady();
+        } catch (\App\Shared\UpdateSendingBlocked $blocked) {
+            // Keep the presentation layer on the existing delivery contract.
+            throw new SendingNotReady($blocked->getMessage(), previous: $blocked);
+        }
     }
 
     private function acceptingWork(): bool
