@@ -47,3 +47,8 @@ private mode and ownership. Root copies retain service ownership and sync file
 metadata and the destination directory before success. Changed existing objects
 are retained and their stale receipt is marked failed. Only bounded structural
 blocker codes cross child-console and installer error boundaries.
+
+Native systemd acceptance caught the supervised scheduler treating the new
+update hold as a startup failure. Its existing wait-for-configuration mode now
+also reports this specific closed gate as waiting (zero queued/reconciled),
+while explicit runs still fail and database/application errors remain errors.

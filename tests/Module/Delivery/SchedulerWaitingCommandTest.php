@@ -34,6 +34,19 @@ final class SchedulerWaitingCommandTest extends TestCase
         $command->execute([]);
     }
 
+    public function testSupervisedSchedulerWaitsForTheUpdateHoldWithoutQueueing(): void
+    {
+        $command = $this->command(update: true);
+        self::assertSame(0, $command->execute(['--wait-for-configuration' => true]));
+        self::assertStringContainsString('scheduled=0 reconciled=0 status=waiting_for_readiness', $command->getDisplay());
+    }
+
+    public function testExplicitSchedulerStillReportsTheUpdateHold(): void
+    {
+        $this->expectException(\App\Shared\UpdateSendingBlocked::class);
+        $this->command(update: true)->execute([]);
+    }
+
     public function testWaitingDoesNotHideDatabaseOrApplicationFailures(): void
     {
         $command = $this->command(true);
@@ -42,7 +55,7 @@ final class SchedulerWaitingCommandTest extends TestCase
         $command->execute(['--wait-for-configuration' => true]);
     }
 
-    private function command(bool $broken = false): CommandTester
+    private function command(bool $broken = false, bool $update = false): CommandTester
     {
         $connection = self::createStub(Connection::class);
         $connection->method('fetchOne')->willReturn(1);
@@ -50,7 +63,7 @@ final class SchedulerWaitingCommandTest extends TestCase
             $connection->method('executeStatement')->willThrowException(new \RuntimeException('synthetic database failure'));
         }
         $gate = self::createStub(SendingGate::class);
-        $gate->method('assertReady')->willThrowException(new SendingNotReady('SMTP is not configured.'));
+        $gate->method('assertReady')->willThrowException($update ? new \App\Shared\UpdateSendingBlocked('Update in progress; sending temporarily unavailable.') : new SendingNotReady('SMTP is not configured.'));
         $gateway = self::createMock(CampaignDeliveryGateway::class);
         $gateway->expects(self::never())->method('materializeAndDispatch');
         $gateway->expects(self::never())->method('dispatchDue');
