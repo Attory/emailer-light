@@ -52,3 +52,13 @@ Native systemd acceptance caught the supervised scheduler treating the new
 update hold as a startup failure. Its existing wait-for-configuration mode now
 also reports this specific closed gate as waiting (zero queued/reconciled),
 while explicit runs still fail and database/application errors remain errors.
+
+Final failure-path review confirmed that host SetupError/filesystem failures
+could bypass the narrower management handler and leave a false in-progress
+receipt. One guarded action boundary now covers menu early returns, host adoption,
+service startup and delivery restoration. Expected readiness blocks and unexpected
+host failures both retain the update restriction and record a safe reason even
+when the database retention command fails. Completed authoritative receipts are
+terminal and never reacquire a hold after a later diagnostic/save error. File
+errors use bounded categories, not paths or raw exception text; a failure to write
+the protected record itself exits nonzero with a fixed recovery instruction.

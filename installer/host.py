@@ -53,7 +53,8 @@ class HostHandoff:
             roots = re.findall(r'root\s+(/[A-Za-z0-9_./-]+);', ' '.join(state.get('acme_locations', [])))
             acme = roots[0] if roots else None
         return self.web().site(hostname=state['hostname'], name=self.name, public=str(self.m.releases / 'current/public'), webroot=acme,
-                               certificate=state['certificate'], certificate_key=state['certificate_key'], maintenance=maintenance)
+                               certificate=state['certificate'], certificate_key=state['certificate_key'], maintenance=maintenance,
+                               maintenance_status=state.get('maintenance_status', 'in-progress'), maintenance_reason=state.get('maintenance_reason', 'verification'))
 
     def apply_site(self, text):
         path = Path(self.state['site'])
@@ -217,6 +218,8 @@ class HostHandoff:
         snapshot = json.loads(protected(self.update_state_file, public=True).read_text())
         if snapshot.get('operation') != str(self.m.directory) or snapshot.get('format') != 'emailer-update-delivery-v1':
             self.fail('A different operation owns the update hold. Its evidence was preserved.')
+        if snapshot.get('phase') == 'complete' and phase != 'complete':
+            self.fail('This update already completed; its verified delivery receipt was preserved. Choose Check the installation.')
         if phase == 'recovered':
             snapshot['recovered_prior_accepting_work'] = snapshot['prior_accepting_work']
             snapshot['prior_accepting_work'] = 0
@@ -242,10 +245,45 @@ class HostHandoff:
             self.fail('Another update owns the delivery state. Keep its evidence and finish or recover that update first.')
         return snapshot
 
+    def owned_maintenance_site(self):
+        if self.state.get('phase') in (None, 'complete', 'recovered'):
+            return False
+        if self.hold.exists():
+            return True  # apply_site still checks every resource claim before writing.
+        if self.state.get('phase') != 'core-accepted' or not self.state.get('site'):
+            return False
+        # complete() can remove its host hold before a later verification fails.
+        # Repaint only this exact still-owned maintenance site, never a live site.
+        actual = self.claims().check(Path(self.state['site']))
+        expected = hashlib.sha256(self.site_text(maintenance=True).encode()).hexdigest()
+        return bool(actual and actual.get('sha256') == expected)
+
+    def block_update(self, reason, *, phase='blocked', public_reason='verification'):
+        if phase not in ('blocked', 'failed'):
+            self.fail('Invalid update failure phase.')
+        snapshot = self.current_update_snapshot()
+        if not snapshot or snapshot.get('phase') == 'complete':
+            return None  # Never retake a completed hold or touch another operation.
+        try:
+            self.database('retain-update-hold')
+        except Exception:
+            reason += ' The database hold could not be confirmed; sending remains blocked by update maintenance. Restore database access before retrying. No uncertain message was retried.'
+        self.update_delivery_phase(phase, reason)
+        try:
+            if self.owned_maintenance_site():
+                self.state['maintenance_status'] = 'failed'
+                self.state['maintenance_reason'] = public_reason
+                self.apply_site(self.site_text(maintenance=True))
+                self.m.save()
+        except Exception:
+            print('The live maintenance notice could not be refreshed. The protected failure receipt and installer diagnostics remain authoritative.', flush=True)
+        return reason
+
     def restore_update_delivery(self):
         # Edition transitions retain their separate, explicit acceptance contract.
         if self.m.product != self.host.product:
             return
+        self.m.failure_action = 'finish'
         snapshot = self.current_update_snapshot()
         if not snapshot:
             print('The earlier setup did not record the prior delivery state. Its hold was retained; review readiness before using Resume delivery.')
@@ -288,9 +326,10 @@ class HostHandoff:
             self.live(['emailer:health:verify-runtime', '--allow-operational-hold', '--record'])
             self.update_delivery_phase('complete')
         except self.m.error as error:
-            self.database('retain-update-hold')
-            self.update_delivery_phase('blocked', str(error) + ' Start the same setup package and choose Finish after repairing this issue.')
-            print('Sending remains blocked: ' + str(error), flush=True)
+            reason = self.block_update(str(error) + ' Start the same setup package and choose Finish after repairing this issue.')
+            if reason is None:
+                raise
+            print('Sending remains blocked: ' + reason, flush=True)
 
     @contextlib.contextmanager
     def source_maintenance_lock(self):
@@ -487,6 +526,9 @@ class HostHandoff:
 
     def adopt(self):
         m = self.m
+        m.failure_action = 'finish' if m.product == self.host.product else 'accept'
+        self.state['maintenance_status'] = 'in-progress'
+        self.state['maintenance_reason'] = 'verification'
         self.prepare()
         if self.state.get('phase') == 'complete':
             return
@@ -558,7 +600,9 @@ class HostHandoff:
         host.release = (m.releases / 'current').resolve(strict=True)
         host.database_profile = 'isolated' if urllib.parse.parse_qs(original_url.query).get('unix_socket') == ['/run/emailer-database/mysql.sock'] else 'shared'
         host.resource_claims = self.claims()
+        m.failure_stage = 'services'
         host.services()
+        m.failure_stage = 'verification'
         launcher = Path('/usr/local/sbin') / m.prefix
         generated = Path('/usr/local/sbin') / self.name
         self.claims().write(launcher, generated.read_bytes(), 0o755)

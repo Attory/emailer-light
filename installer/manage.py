@@ -1,4 +1,6 @@
 """Guided management of an existing native installation from the verified bundle."""
+import contextlib
+import errno
 import fcntl
 import getpass
 import hashlib
@@ -9,6 +11,7 @@ import pwd
 import re
 import shutil
 import stat
+import sys
 import subprocess
 import time
 import urllib.parse
@@ -383,7 +386,51 @@ class Manager:
         for unit in self.record.get('active_units', []):
             self.call(['systemctl', 'start', unit])
 
+    @contextlib.contextmanager
+    def guarded_action(self):
+        try:
+            yield
+        except (Exception, KeyboardInterrupt) as error:
+            if isinstance(error, ManagementError):
+                reason = str(error)
+            elif isinstance(error, (KeyboardInterrupt, EOFError)):
+                reason = 'Setup was interrupted. Its recovery material has been retained.'
+            elif isinstance(error, OSError):
+                reason = {errno.ENOSPC: 'The server ran out of disk space. Free disk space before retrying.',
+                          errno.EACCES: 'A required protected host file could not be accessed. Restore its recorded ownership and permissions.',
+                          errno.EROFS: 'The required host filesystem is read-only. Restore writable storage before retrying.'}.get(error.errno, 'Emailer could not complete a protected host file operation. Check required files and storage permissions.')
+            elif isinstance(error, getattr(self.installer, 'error', ManagementError)):
+                reason = 'The dedicated Emailer services could not be installed or started.' if getattr(self, 'failure_stage', '') == 'services' else 'Emailer host setup did not finish. Check the dedicated host prerequisites.'
+            else:
+                reason = 'An internal setup or saved-state check did not finish. No recovery or sending was started automatically.'
+            action = getattr(self, 'failure_action', 'recover')
+            next_step = {'finish': 'Start this same setup file and choose Finish after repairing the reported issue.',
+                         'accept': 'Start this same setup file and use Recover or Accept as indicated by the saved edition operation.',
+                         'recover': 'Start this same setup file and choose Recover before retrying an interrupted uncommitted operation.'}.get(action)
+            reason = (reason[:1200] + ' ' + next_step) if next_step else reason[:1200]
+            from host import HostHandoff
+            completed = False
+            try:
+                handoff = HostHandoff(self)
+                snapshot = handoff.current_update_snapshot()
+                completed = bool(snapshot and snapshot.get('phase') == 'complete')
+                if completed:
+                    reason = 'This update already completed. Its verified receipt and delivery state were preserved. Choose Check the installation; recovery cannot downgrade it.'
+                else:
+                    handoff.block_update(reason, phase='failed', public_reason='host_storage' if isinstance(error, OSError) else 'host_services' if getattr(self, 'failure_stage', '') == 'services' else 'verification')
+            except Exception:
+                print('The protected update failure record could not be fully saved. Sending has not been resumed. Keep recovery material and repair storage or permissions before starting this setup file again.', file=sys.stderr, flush=True)
+            if isinstance(error, (KeyboardInterrupt, EOFError)):
+                raise
+            if isinstance(error, ManagementError) and not completed:
+                raise
+            raise ManagementError(reason) from None
+
     def run(self):
+        with self.guarded_action():
+            return self.run_menu()
+
+    def run_menu(self):
         print(f'\nFound {self.product} {self.source_version} at {self.values["DEFAULT_URI"]}')
         print('Your administrator account, content, addresses and encryption keys will be retained.')
         print('1. Update with a verified backup\n2. Recover an interrupted update\n3. Finish a committed update\n4. Check the installation\n5. Resume delivery after reviewing readiness\n0. Exit')
@@ -453,16 +500,7 @@ class Manager:
             raise ManagementError('Choose one of the displayed actions.')
         self.stage()
         self.maintenance_environment()
-        try:
-            result = self.native_action(choice)
-        except ManagementError as error:
-            from host import HostHandoff
-            handoff = HostHandoff(self)
-            snapshot = handoff.current_update_snapshot()
-            if snapshot and snapshot.get('phase') != 'complete':
-                handoff.database('retain-update-hold')
-                handoff.update_delivery_phase('failed', str(error) + ' Start the same setup package and choose Recover or Finish as indicated.')
-            raise
+        result = self.native_action(choice)
         if choice == '2':
             self.restore_services()
         self.record.pop('active_units', None)
