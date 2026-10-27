@@ -45,12 +45,18 @@ final class CampaignDraftHttpTest extends WebTestCase
             self::assertTrue($client->getResponse()->isRedirection());
             $loginRedirect = $client->getResponse()->headers->get('location');
             self::assertSame('/login', $loginRedirect);
+            $client->request('GET', '/', server: $server);
+            self::assertResponseRedirects('/login', 303);
             $login = $client->request('GET', '/login', server: $server);
             $client->request('POST', '/login', ['login_identifier' => 'editor@example.test', 'password' => $password,
                 '_token' => self::token($login, 'form input[name="_token"]')], server: $server);
             self::assertSame(303, $client->getResponse()->getStatusCode());
             $authenticatedRedirect = $client->getResponse()->headers->get('location');
             self::assertSame('https://emailer.example.test/admin/templates/assets', $authenticatedRedirect);
+            $client->request('GET', '/', server: $server);
+            self::assertResponseRedirects('/admin', 303);
+            $client->request('GET', '/admin', server: $server);
+            self::assertResponseIsSuccessful();
 
             $database->insert('delivery_policy', ['singleton_key' => '1', 'messages_per_minute' => 20, 'worker_concurrency' => 1, 'retry_limit' => 3, 'maximum_campaign_size' => 100, 'maximum_csv_bytes' => 10240, 'maximum_csv_rows' => 100, 'worker_mode' => 'supervised', 'worker_available' => 1, 'scheduler_available' => 1]);
             $database->insert('privacy_policy', ['singleton_key' => '1', 'open_tracking' => 0, 'click_tracking' => 0, 'rsvp_enabled' => 0, 'operational_retention_days' => 30, 'delivery_retention_days' => 365, 'suppression_mode' => 'global', 'unsubscribe_footer' => 'Unsubscribe']);

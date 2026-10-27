@@ -61,7 +61,7 @@ final class RipePreflightCommand extends Command
             return;
         }
         $identity = $this->connection->fetchAssociative("SELECT product_id, product_version, schema_version, upgrade_contract_version, installation_uuid FROM product_identity WHERE singleton_key = '1'");
-        if (false === $identity || 'emailer-light' !== $identity['product_id'] || !\in_array($identity['product_version'], ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5', '1.2.6'], true) || $this->profile()['schema'] !== $identity['schema_version'] || '1.0' !== $identity['upgrade_contract_version']) {
+        if (false === $identity || 'emailer-light' !== $identity['product_id'] || !\in_array($identity['product_version'], ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5', '1.2.6', '1.2.7'], true) || $this->profile()['schema'] !== $identity['schema_version'] || '1.0' !== $identity['upgrade_contract_version']) {
             $findings[] = 'unsupported_or_ambiguous_identity';
 
             return;
@@ -197,7 +197,7 @@ final class RipePreflightCommand extends Command
     {
         $version = $this->connection->fetchOne("SELECT product_version FROM product_identity WHERE singleton_key='1'");
 
-        return '1.2.6' === $version
+        return \in_array($version, ['1.2.6', '1.2.7'], true)
             ? ['schema' => '20261025000000', 'shape' => 'schema-1.2.6.json', 'migrations' => ['DoctrineMigrations\\Version20261014000000', 'DoctrineMigrations\\Version20261025000000']]
             : ['schema' => '20261014000000', 'shape' => 'schema-1.0.0.json', 'migrations' => ['DoctrineMigrations\\Version20261014000000']];
     }

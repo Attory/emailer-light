@@ -1,4 +1,5 @@
 parameters:
+    env(EMAILER_BROWSER_SMTP_FIXTURE): '0'
     emailer.default_uri: 'https://emailer.example.test'
     emailer.trusted_hosts: '^(localhost|127\.0\.0\.1|emailer\.example\.test)$'
     emailer.private_dir: '%kernel.cache_dir%/emailer-private'
@@ -8,3 +9,10 @@ parameters:
     emailer.proof_file: '%kernel.cache_dir%/.emailer-install-proof'
     emailer.install_lock_file: '%emailer.private_dir%/install.lock'
     emailer.master_key_file: '/tmp/emailer-light-test/emailer-secrets/master.key'
+
+services:
+    App\Tests\Support\BrowserSmtpProbe:
+        arguments:
+            $ordinary: '@App\Module\Configuration\Infrastructure\SmtpMailProbe'
+            $enabled: '%env(bool:EMAILER_BROWSER_SMTP_FIXTURE)%'
+    App\Module\Configuration\Application\Contract\MailProbe: '@App\Tests\Support\BrowserSmtpProbe'

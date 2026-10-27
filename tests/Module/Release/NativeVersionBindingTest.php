@@ -108,4 +108,24 @@ final class NativeVersionBindingTest extends TestCase
             }
         }
     }
+
+    public function testUpdateTo127BindsEveryPriorSourceToItsActualSchemaWithoutCoercing126BackToTheOlderSchema(): void
+    {
+        foreach (['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5', '1.2.6'] as $source) {
+            $binding = new NativeVersionBinding($source, '1.2.7');
+            $sourceSchema = '1.2.6' === $source ? '20261025000000' : '20261014000000';
+            self::assertSame($sourceSchema, $binding->sourceSchema());
+            $sourceLock = ['installation_uuid' => 'synthetic-installation', 'product_version' => $source, 'schema_version' => $sourceSchema, 'administrator_id' => 'preserved-owner'];
+            $targetLock = [...$sourceLock, 'product_version' => '1.2.7', 'schema_version' => '20261025000000'];
+            self::assertSame($binding->lock(json_encode($sourceLock, JSON_THROW_ON_ERROR), true), $binding->lock(json_encode($targetLock, JSON_THROW_ON_ERROR)));
+            try {
+                $binding->lock(json_encode([...$targetLock, 'schema_version' => '20261014000000'], JSON_THROW_ON_ERROR));
+                self::fail('A target with a mismatched schema was accepted.');
+            } catch (\RuntimeException $failure) {
+                self::assertStringContainsString('not a permitted pair', $failure->getMessage());
+            }
+        }
+        $this->expectException(\RuntimeException::class);
+        (new NativeVersionBinding('1.2.6', '1.2.7'))->lock('{"product_version":"1.2.6","schema_version":"20261014000000"}', true);
+    }
 }

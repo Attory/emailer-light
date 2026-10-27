@@ -60,7 +60,7 @@ def php(*args):
 try:
     command(['docker', 'image', 'inspect', image])
     # Require cached images locally; CI explicitly pulls these documented pins.
-    for dependency in ('mariadb:10.11.19', 'axllent/mailpit:v1.30.5'):
+    for dependency in ('mariadb:10.11.19', 'axllent/mailpit:v1.30.5', 'python:3.12.14-slim-bookworm'):
         command(['docker', 'image', 'inspect', dependency])
     stage = 'new isolated services'
     network_options = ['--subnet', os.environ['EMAILER_BROWSER_NETWORK_SUBNET']] if os.environ.get('EMAILER_BROWSER_NETWORK_SUBNET') else []
@@ -72,6 +72,25 @@ try:
     containers.append(name + '-db')
     command(['docker', 'run', '-d', '--name', name + '-mailpit', '--label', label + '=' + token, '--network', name, '--network-alias', 'mailpit', '-e', 'MP_DISABLE_VERSION_CHECK=true', '-e', 'MP_MAX_MESSAGES=1000', 'axllent/mailpit:v1.30.5'])
     containers.append(name + '-mailpit')
+    stage = 'owned SMTP TLS fixture'
+    smtp = private / 'smtp'
+    smtp.mkdir(mode=0o755)
+    evidence = smtp / 'evidence'
+    evidence.mkdir(mode=0o755)
+    if os.getuid() == 0:
+        os.chown(evidence, service_uid, service_gid)
+    command(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=Emailer-Browser-Synthetic-CA', '-addext', 'basicConstraints=critical,CA:TRUE', '-keyout', str(smtp / 'ca.key'), '-out', str(smtp / 'ca.crt')])
+    command(['openssl', 'req', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=smtp-fixture.test', '-keyout', str(smtp / 'server.key'), '-out', str(smtp / 'server.csr')])
+    (smtp / 'extensions').write_text('subjectAltName=DNS:smtp-fixture.test\nextendedKeyUsage=serverAuth\n')
+    command(['openssl', 'x509', '-req', '-in', str(smtp / 'server.csr'), '-CA', str(smtp / 'ca.crt'), '-CAkey', str(smtp / 'ca.key'), '-CAcreateserial', '-days', '1', '-extfile', str(smtp / 'extensions'), '-out', str(smtp / 'server.crt')])
+    command(['docker', 'run', '-d', '--name', name + '-smtp', '--label', label + '=' + token, '--network', name, '--network-alias', 'smtp-fixture.test', '--network-alias', 'wrong-host.test', '-v', str(smtp) + ':/fixture:ro', '-v', str(evidence) + ':/evidence', '-v', str(root / 'tools/installer/smtp-fixture.py') + ':/smtp-fixture.py:ro', 'python:3.12.14-slim-bookworm', 'python', '/smtp-fixture.py'])
+    containers.append(name + '-smtp')
+    for attempt in range(30):
+        if (evidence / 'ready').is_file():
+            break
+        time.sleep(1)
+    else:
+        raise RuntimeError('Owned SMTP fixture did not start.')
     network = inspect('network', name)
     if not network['Internal'] or network['Labels'].get(label) != token:
         raise RuntimeError('Network isolation mismatch.')
@@ -84,9 +103,10 @@ try:
     if os.getuid() == 0:
         os.chown(private / 'test-keys', service_uid, service_gid)
     environment = {
-        'APP_ENV': 'test', 'APP_DEBUG': '0', 'APP_SECRET': secrets.token_hex(32),
+        'EMAILER_BROWSER_SMTP_FIXTURE': '1', 'APP_ENV': 'test', 'APP_DEBUG': '0', 'APP_SECRET': secrets.token_hex(32),
         'DATABASE_URL': 'mysql://emailer:' + database_password + '@database:3306/emailer_browser_test?serverVersion=10.11.19-MariaDB&charset=utf8mb4',
-        'DEFAULT_URI': 'https://emailer.example.test', 'EMAILER_PRIVATE_DIR': '/emailer-browser-secrets/runtime',
+        'DEFAULT_URI': 'https://emailer.example.test', 'EMAILER_PRIVATE_DIR': '/emailer-browser-runtime/private',
+        'EMAILER_UPDATE_TEST_PRIVATE_DIR': '/emailer-browser-runtime/private',
         'EMAILER_SECRET_KEY_FILE': key_directory + '/master.key', 'LOCK_DSN': 'flock',
         'MAILER_DSN': 'smtp://mailpit:1025', 'MESSENGER_TRANSPORT_DSN': 'doctrine://default',
         'TRUSTED_PROXIES': '127.0.0.1,::1,' + gateway,
@@ -96,12 +116,18 @@ try:
     write(private / 'browser-fixture.json', json.dumps({'email': 'editor@example.test', 'password': 'Synthetic editor ' + secrets.token_urlsafe(24)}))
     if os.getuid() == 0:
         os.chown(private / 'browser-fixture.json', service_uid, service_gid)
-    web = ['docker', 'run', '-d', '--name', name + '-web', '--label', label + '=' + token, '--network', name, '--user', str(service_uid) + ':' + str(service_gid), '--env-file', str(private / 'application.env'), '-v', str(private) + ':/emailer-browser-secrets', '-v', str(private / 'test-keys') + ':' + key_directory]
+    web = ['docker', 'run', '-d', '--name', name + '-web', '--label', label + '=' + token, '--network', name, '--user', str(service_uid) + ':' + str(service_gid), '--env-file', str(private / 'application.env'), '-v', str(private) + ':/emailer-browser-secrets', '-v', str(private / 'test-keys') + ':' + key_directory, '-v', str(smtp / 'ca.crt') + ':/emailer-browser-smtp-ca.crt:ro']
     if os.environ.get('EMAILER_BROWSER_SOURCE_TREE') == '1':
         web += ['-v', str(root) + ':/app']
-    web += ['-w', '/app', image, 'php', '-d', 'variables_order=EGPCS', '-S', '0.0.0.0:8080', '-t', 'public', 'tools/browser/router.php']
+    if os.environ.get('EMAILER_BROWSER_VENDOR_DIRECTORY'):
+        vendor = Path(os.environ['EMAILER_BROWSER_VENDOR_DIRECTORY']).resolve()
+        if os.environ.get('EMAILER_BROWSER_SOURCE_TREE') != '1' or not (vendor / 'autoload.php').is_file():
+            raise RuntimeError('A vendor override requires the explicit source-level test profile.')
+        web += ['-v', str(vendor) + ':/app/vendor']
+    web += ['-w', '/app', image, 'php', '-d', 'openssl.cafile=/emailer-browser-smtp-ca.crt', '-d', 'variables_order=EGPCS', '-S', '0.0.0.0:8080', '-t', 'public', 'tools/browser/router.php']
     command(web)
     containers.append(name + '-web')
+    command(['docker', 'exec', '--user', '0:0', name + '-web', 'sh', '-c', 'mkdir -p /emailer-browser-runtime/private && chmod 0755 /emailer-browser-runtime && chown ' + str(service_uid) + ':' + str(service_gid) + ' /emailer-browser-runtime/private && chmod 0700 /emailer-browser-runtime/private'])
     for attempt in range(60):
         ready = subprocess.run(['docker', 'exec', name + '-db', 'healthcheck.sh', '--connect', '--innodb_initialized'], stdout=log, stderr=log)
         if ready.returncode == 0:
@@ -130,33 +156,41 @@ try:
     write(private / 'proxy.json', json.dumps({'upstream': address, 'certificate': str(private / 'tls.crt'), 'key': str(private / 'tls.key')}))
     proxy = subprocess.Popen([sys.executable, str(root / 'tools/browser/tls-proxy.py'), str(private / 'proxy.json')], stdout=subprocess.PIPE, stderr=log, text=True)
     port = int(proxy.stdout.readline().strip())
-    config = {'url': 'https://emailer.example.test', 'port': port, 'spki': base64.b64encode(hashlib.sha256(der).digest()).decode(), 'edition': edition, 'credentials': str(private / 'browser-fixture.json'), 'image': str(private / 'banner.png'), 'output': str(output), 'requireExistingAssets': False}
+    config = {'url': 'https://emailer.example.test', 'port': port, 'spki': base64.b64encode(hashlib.sha256(der).digest()).decode(), 'edition': edition, 'credentials': str(private / 'browser-fixture.json'), 'image': str(private / 'banner.png'), 'output': str(output), 'requireExistingAssets': False, 'maintenanceContainer': name + '-web'}
     write(private / 'browser.json', json.dumps(config))
     stage = 'real browser regressions'
     node_environment = os.environ.copy()
     node_environment['EMAILER_BROWSER_CONFIG'] = str(private / 'browser.json')
-    command(['node', str(root / 'tools/browser/template-editor.cjs')], env=node_environment)
-    shutil.copyfile(output / 'browser-result.json', private / 'browser-result.json')
-    (private / 'browser-result.json').chmod(0o600)
-    if os.getuid() == 0:
-        os.chown(private / 'browser-result.json', service_uid, service_gid)
-    stage = 'no-send and explicit queued SMTP acceptance'
-    php('tools/browser/verify-editor-delivery.php', 'request')
-    php('bin/console', 'messenger:consume', 'async', '--limit=1', '--time-limit=30', '--env=test', '--no-interaction')
-    php('tools/browser/verify-editor-delivery.php', 'verify')
-    for receipt in ('editor-no-send-result.json', 'editor-delivery-result.json'):
-        shutil.copyfile(private / receipt, output / receipt)
-    stage = 'campaign browser regressions'
-    php('tools/browser/verify-campaign-workflow.php', 'snapshot')
-    command(['node', str(root / 'tools/browser/campaign-editor.cjs')], env=node_environment)
-    shutil.copyfile(output / 'campaign-browser-result.json', private / 'campaign-browser-result.json')
-    (private / 'campaign-browser-result.json').chmod(0o600)
-    if os.getuid() == 0:
-        os.chown(private / 'campaign-browser-result.json', service_uid, service_gid)
-    stage = 'campaign no-send verification'
-    php('tools/browser/verify-campaign-workflow.php', 'verify')
-    shutil.copyfile(private / 'campaign-no-send-result.json', output / 'campaign-no-send-result.json')
-    print('PASS: isolated ' + edition + ' browser, no-send and real worker SMTP regressions; safe receipts in ' + str(output))
+    focus = os.environ.get('EMAILER_BROWSER_FOCUS', '')
+    if focus not in ('', 'smtp') or (focus and os.environ.get('EMAILER_BROWSER_SOURCE_TREE') != '1'):
+        raise RuntimeError('Focused suites are available only for explicit source-level verification.')
+    if focus != 'smtp':
+        command(['node', str(root / 'tools/browser/template-editor.cjs')], env=node_environment)
+        shutil.copyfile(output / 'browser-result.json', private / 'browser-result.json')
+        (private / 'browser-result.json').chmod(0o600)
+        if os.getuid() == 0:
+            os.chown(private / 'browser-result.json', service_uid, service_gid)
+        stage = 'no-send and explicit queued SMTP acceptance'
+        php('tools/browser/verify-editor-delivery.php', 'request')
+        php('bin/console', 'messenger:consume', 'async', '--limit=1', '--time-limit=30', '--env=test', '--no-interaction')
+        php('tools/browser/verify-editor-delivery.php', 'verify')
+        for receipt in ('editor-no-send-result.json', 'editor-delivery-result.json'):
+            shutil.copyfile(private / receipt, output / receipt)
+        stage = 'campaign browser regressions'
+        php('tools/browser/verify-campaign-workflow.php', 'snapshot')
+        command(['node', str(root / 'tools/browser/campaign-editor.cjs')], env=node_environment)
+        shutil.copyfile(output / 'campaign-browser-result.json', private / 'campaign-browser-result.json')
+        (private / 'campaign-browser-result.json').chmod(0o600)
+        if os.getuid() == 0:
+            os.chown(private / 'campaign-browser-result.json', service_uid, service_gid)
+        stage = 'campaign no-send verification'
+        php('tools/browser/verify-campaign-workflow.php', 'verify')
+        shutil.copyfile(private / 'campaign-no-send-result.json', output / 'campaign-no-send-result.json')
+    stage = 'SMTP current-form browser regressions'
+    command(['node', str(root / 'tools/browser/mail-settings.cjs')], env=node_environment)
+    if (evidence / 'state.json').exists():
+        raise RuntimeError('Connection form testing transmitted SMTP DATA.')
+    print('PASS: isolated ' + edition + ' ' + (focus or 'complete') + ' browser suite; no unintended delivery; safe receipts in ' + str(output))
 except Exception:
     print('FAIL: editor acceptance at ' + stage + '. Private diagnostics retained; credentials and request details omitted.', file=sys.stderr)
     receipt = output / ('campaign-browser-result.json' if stage.startswith('campaign') else 'browser-result.json')

@@ -17,7 +17,9 @@ openssl req -newkey rsa:2048 -nodes -subj /CN=smtp-fixture.test -keyout "$fixtur
 printf 'subjectAltName=DNS:smtp-fixture.test\nextendedKeyUsage=serverAuth\n' > "$fixture/extensions"
 openssl x509 -req -in "$fixture/server.csr" -CA "$fixture/ca.crt" -CAkey "$fixture/ca.key" -CAcreateserial -days 1 -extfile "$fixture/extensions" -out "$fixture/server.crt" >/dev/null 2>&1
 chmod 0644 "$fixture/ca.crt"
-docker network create --internal "$network" >/dev/null
+network_options=(--internal)
+if [[ -n "${EMAILER_SMTP_FIXTURE_SUBNET:-}" ]]; then network_options+=(--subnet "$EMAILER_SMTP_FIXTURE_SUBNET"); fi
+docker network create "${network_options[@]}" "$network" >/dev/null
 docker run --detach --name "$sink" --network "$network" --network-alias smtp-fixture.test --network-alias wrong-host.test -v "$fixture:/fixture:ro" -v "$fixture/evidence:/evidence" -v "$project_root/tools/installer/smtp-fixture.py:/smtp-fixture.py:ro" "${EMAILER_SMTP_FIXTURE_IMAGE:-python:3.12.14-slim-bookworm}" python /smtp-fixture.py >/dev/null
 for attempt in {1..30}; do
     if [[ -f "$fixture/evidence/ready" ]]; then break; fi

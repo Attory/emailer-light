@@ -82,9 +82,11 @@ class WebServer:
             # No mod_php package, global FPM handler or MPM replacement.
             call(['a2enmod', 'ssl', 'proxy', 'proxy_fcgi', 'rewrite', 'headers'])
 
-    def site(self, *, hostname, name, public, webroot=None, certificate=None, certificate_key=None, maintenance=False):
+    def site(self, *, hostname, name, public, webroot=None, certificate=None, certificate_key=None, maintenance=False, maintenance_status='in-progress', maintenance_reason='verification'):
+        if maintenance_status not in ('in-progress', 'failed') or maintenance_reason not in ('host_services', 'host_storage', 'verification'):
+            raise self.error('Invalid public maintenance state; no website was changed.')
         if self.kind == 'nginx':
-            return self.nginx_site(hostname, name, public, webroot, certificate, certificate_key, maintenance)
+            return self.nginx_site(hostname, name, public, webroot, certificate, certificate_key, maintenance, maintenance_status, maintenance_reason)
         challenge = '' if not webroot else f'''    Alias /.well-known/acme-challenge/ {webroot}/.well-known/acme-challenge/
     <Directory {webroot}/.well-known/acme-challenge>
         Options None
@@ -107,8 +109,12 @@ class WebServer:
     RewriteCond %{CONN_REMOTE_ADDR} !^127\\.0\\.0\\.1$
     RewriteCond %{CONN_REMOTE_ADDR} !^::1$
     RewriteRule ^ - [R=503,L]
+    Header always set X-Emailer-Update-State "in-progress"
     ErrorDocument 503 "Emailer setup is finishing. Please try again shortly."
 ''' if maintenance else ''
+        hold = hold.replace('X-Emailer-Update-State \"in-progress\"', 'X-Emailer-Update-State \"' + maintenance_status + '\"\n    Header always set X-Emailer-Update-Reason \"' + maintenance_reason + '\"')
+        if maintenance_status == 'failed':
+            hold = hold.replace('Emailer setup is finishing. Please try again shortly.', 'Emailer setup stopped. Keep the saved operation and start the same setup file again.')
         return http + f'''<VirtualHost *:443>
     ServerName {hostname}
     SSLEngine on
@@ -138,7 +144,7 @@ class WebServer:
 '''
 
     @staticmethod
-    def nginx_site(host, name, public, webroot, certificate, certificate_key, maintenance):
+    def nginx_site(host, name, public, webroot, certificate, certificate_key, maintenance, maintenance_status='in-progress', maintenance_reason='verification'):
         challenge = '' if not webroot else f'    location ^~ /.well-known/acme-challenge/ {{ root {webroot}; }}\n'
         redirect = f'return 301 https://{host}$request_uri;' if certificate else 'return 503;'
         http = f'''server {{
@@ -150,7 +156,10 @@ class WebServer:
 '''
         if not certificate:
             return http
-        restriction = 'allow 127.0.0.1; allow ::1; deny all;\n    error_page 403 =503 @installing;\n    location @installing { return 503 "Emailer setup is finishing. Please try again shortly."; }' if maintenance else ''
+        restriction = 'allow 127.0.0.1; allow ::1; deny all;\n    error_page 403 =503 @installing;\n    location @installing { add_header X-Emailer-Update-State "in-progress" always; return 503 "Emailer setup is finishing. Please try again shortly."; }' if maintenance else ''
+        restriction = restriction.replace('X-Emailer-Update-State \"in-progress\" always;', 'X-Emailer-Update-State \"' + maintenance_status + '\" always; add_header X-Emailer-Update-Reason \"' + maintenance_reason + '\" always;')
+        if maintenance_status == 'failed':
+            restriction = restriction.replace('Emailer setup is finishing. Please try again shortly.', 'Emailer setup stopped. Keep the saved operation and start the same setup file again.')
         return http + f'''server {{
     listen 443 ssl;
     server_name {host};
@@ -225,6 +234,8 @@ class WebServer:
                 files=re.findall(r'(?is)<Files\s+index\.php\s*>\s*(SetHandler\s+[^\n]+)\s*</Files\s*>',clean)
                 remainder=re.sub(r'(?is)<Files\s+index\.php\s*>\s*SetHandler\s+[^\n]+\s*</Files\s*>','',clean)
                 directories=re.findall(r'(?im)^\s*<Directory\s+([^>]+)>',clean)
+                # Accept only the bounded temporary root-route repair, never arbitrary redirects.
+                remainder=re.sub(r'(?m)^    RedirectMatch 302 \"\^/\$\" \"/login\"\s*$', '', remainder)
                 if re.search(r'(?im)^\s*(?:SetHandler|AddHandler|Action|Redirect|RedirectMatch|ProxyPassReverse)\b|<\s*(?:Location|LocationMatch|FilesMatch|Proxy)\b',remainder) or len(files)>1 or any(not re.fullmatch(r'SetHandler\s+"proxy:unix:/run/[A-Za-z0-9_.-]+-fpm/php\.sock\|fcgi://localhost/"',value.strip()) for value in files) or any(value.strip('" ')!=root and not re.fullmatch(r'/[A-Za-z0-9_./-]+/\.well-known/acme-challenge',value.strip('" ')) for value in directories):
                     raise self.error('The Apache file contains custom handlers or directory routing. It was preserved; automatic handoff requires a dedicated Emailer front controller.')
                 aliases=re.findall(r'(?im)^\s*Alias\s+([^\n]+)',clean)

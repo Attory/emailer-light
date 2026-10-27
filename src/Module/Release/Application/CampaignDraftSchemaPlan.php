@@ -16,8 +16,11 @@ final readonly class CampaignDraftSchemaPlan
     public const FORWARD = 'ALTER TABLE campaign MODIFY template_version_id CHAR(36) DEFAULT NULL';
     public const INVERSE = 'ALTER TABLE campaign MODIFY template_version_id CHAR(36) NOT NULL';
 
-    public function __construct(private Connection $connection, private string $projectDirectory)
+    public function __construct(private Connection $connection, private string $projectDirectory, private string $targetVersion = '1.2.6')
     {
+        if (!\in_array($targetVersion, ['1.2.6', '1.2.7'], true)) {
+            throw new \InvalidArgumentException('The draft schema target is unsupported.');
+        }
     }
 
     /** @param array<string, mixed> $source
@@ -27,7 +30,7 @@ final readonly class CampaignDraftSchemaPlan
     {
         $before = $source['files'] ?? null;
         $after = $target['files'] ?? null;
-        if (!\is_array($before) || !\is_array($after) || self::SOURCE_SCHEMA !== ($source['schema_version'] ?? null) || self::TARGET_SCHEMA !== ($target['schema_version'] ?? null) || '1.2.6' !== ($target['version'] ?? null)) {
+        if (!\is_array($before) || !\is_array($after) || self::SOURCE_SCHEMA !== ($source['schema_version'] ?? null) || self::TARGET_SCHEMA !== ($target['schema_version'] ?? null) || $this->targetVersion !== ($target['version'] ?? null)) {
             throw new \RuntimeException('The incomplete-draft schema plan does not match these authenticated packages.');
         }
         $old = $new = [];
@@ -79,7 +82,7 @@ final readonly class CampaignDraftSchemaPlan
         $parts['ledger'][] = $row;
         $states['target'] = self::hash($parts);
 
-        return ['format' => 'emailer-light-draft-plan-v1', 'state' => 'source', 'publication' => 'source', 'source_version' => $this->connection->fetchOne("SELECT product_version FROM product_identity WHERE singleton_key='1'"), 'schema_hashes' => $states, 'planned_ledger' => $row, 'source_ledger' => $ledger];
+        return ['format' => 'emailer-light-draft-plan-v1', 'state' => 'source', 'publication' => 'source', 'target_version' => $this->targetVersion, 'source_version' => $this->connection->fetchOne("SELECT product_version FROM product_identity WHERE singleton_key='1'"), 'schema_hashes' => $states, 'planned_ledger' => $row, 'source_ledger' => $ledger];
     }
 
     /** @param array{definitions: array<string, array<string, string>>, triggers: list<array<string, mixed>>, views: list<array<string, mixed>>, ledger: list<array<string, mixed>>} $parts */
@@ -93,7 +96,7 @@ final readonly class CampaignDraftSchemaPlan
      */
     public function assertState(array $plan, string $schemaHash): void
     {
-        if ('emailer-light-draft-plan-v1' !== ($plan['format'] ?? null) || !\is_array($plan['schema_hashes'] ?? null)) {
+        if ('emailer-light-draft-plan-v1' !== ($plan['format'] ?? null) || ($plan['target_version'] ?? '1.2.6') !== $this->targetVersion || !\is_array($plan['schema_hashes'] ?? null)) {
             throw new \RuntimeException('The bounded migration intent is invalid.');
         }
         $hashes = $plan['schema_hashes'];
@@ -108,8 +111,8 @@ final readonly class CampaignDraftSchemaPlan
         $version = $this->connection->fetchOne("SELECT product_version FROM product_identity WHERE singleton_key='1'");
         $sourceVersion = $plan['source_version'] ?? null;
         $publication = $plan['publication'] ?? null;
-        $allowedVersions = \in_array($publication, ['forward_intent', 'reverse_intent'], true) ? [$sourceVersion, '1.2.6'] : [$sourceVersion];
-        if (!\is_string($sourceVersion) || !NativeSchemaUpdate::supports($sourceVersion, '1.2.6') || !\in_array($version, $allowedVersions, true) || ('forward_intent' === $publication && 'target' !== $state) || !\in_array($publication, ['source', 'forward_intent', 'reverse_intent', 'restored'], true)) {
+        $allowedVersions = \in_array($publication, ['forward_intent', 'reverse_intent'], true) ? [$sourceVersion, $this->targetVersion] : [$sourceVersion];
+        if (!\is_string($sourceVersion) || !NativeSchemaUpdate::supports($sourceVersion, $this->targetVersion) || !\in_array($version, $allowedVersions, true) || ('forward_intent' === $publication && 'target' !== $state) || !\in_array($publication, ['source', 'forward_intent', 'reverse_intent', 'restored'], true)) {
             throw new \RuntimeException('The installation version is outside the recorded schema/publication phase. Recovery will not repair metadata drift.');
         }
         if (!\is_string($state) || !\in_array($state, $allowed, true) || $identity !== ('target' === $state ? self::TARGET_SCHEMA : self::SOURCE_SCHEMA)) {
@@ -129,11 +132,11 @@ final readonly class CampaignDraftSchemaPlan
         $lock = json_decode($bytes, true, 32, JSON_THROW_ON_ERROR);
         $source = $plan['source_version'] ?? null;
         $sourceLock = \is_array($lock) && ($lock['product_version'] ?? null) === $source && ($lock['schema_version'] ?? null) === self::SOURCE_SCHEMA;
-        $targetLock = \is_array($lock) && ($lock['product_version'] ?? null) === '1.2.6' && ($lock['schema_version'] ?? null) === self::TARGET_SCHEMA;
+        $targetLock = \is_array($lock) && ($lock['product_version'] ?? null) === $this->targetVersion && ($lock['schema_version'] ?? null) === self::TARGET_SCHEMA;
         $version = $this->connection->fetchOne("SELECT product_version FROM product_identity WHERE singleton_key='1'");
         $valid = match ($plan['publication'] ?? null) {
             'source', 'restored' => $sourceLock && $version === $source,
-            'forward_intent' => $sourceLock || ($targetLock && '1.2.6' === $version),
+            'forward_intent' => $sourceLock || ($targetLock && $this->targetVersion === $version),
             'reverse_intent' => $sourceLock || ($targetLock && true === ($plan['reverse_target_lock'] ?? false)),
             default => false,
         };
