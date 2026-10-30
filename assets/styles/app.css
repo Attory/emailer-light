@@ -16,3 +16,11 @@ table{border-collapse:collapse;width:100%;font-size:.93rem;background:var(--surf
 @media print{.admin-header,.skip-link,.page-heading>a,.guide-copy>nav{display:none}.guide-copy{border:0;max-width:none;padding:0}.admin-content{max-width:none;padding:0}body{background:white;color:black}}
 
 .source-footer { padding: 1.5rem; text-align: center; font-size: .875rem; }
+
+/* Compact version actions keep native links and CSRF-protected submit buttons. */
+.template-version-actions{display:flex;flex-wrap:wrap;align-items:center;gap:.25rem 1rem;max-width:27rem;white-space:normal}
+.template-version-actions form{display:contents}
+.template-version-actions .template-text-action{display:inline-flex;align-items:center;min-height:2rem;margin:0;padding:.25rem 0;border:0;border-radius:0;background:none;box-shadow:none;color:var(--accent);font:inherit;font-weight:500;line-height:1.4;text-decoration:underline;text-underline-offset:.18em;cursor:pointer}
+.template-version-actions .template-text-action:hover{background:none;color:var(--ink);text-decoration-thickness:2px}
+.template-version-actions .template-text-action:focus-visible{outline:2px solid currentColor;outline-offset:4px;border-radius:2px}
+@media(max-width:600px){.template-version-actions{min-width:11rem;gap:.25rem .85rem}.template-version-actions .template-text-action{min-height:2.75rem}}

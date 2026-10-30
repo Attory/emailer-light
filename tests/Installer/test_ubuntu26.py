@@ -32,13 +32,14 @@ class Ubuntu26Runtime(unittest.TestCase):
             pass
         selected = [('emailer-light', '/etc/emailer-light-light-124/runtime.env'), ('emailer-light', '/etc/emailer-light-light-125/runtime.env')]
         selected.append(('emailer-light', '/etc/emailer-light-light-127/runtime.env'))
+        selected.append(('emailer-light', '/etc/emailer-light-light-128/runtime.env'))
         for product, runtime in selected:
             pointer = {'format': 'emailer-active-installation-v1', 'product': product, 'runtime': runtime}
             with self.subTest(runtime=runtime), patch.object(Path, 'exists', return_value=True), patch('manage.protected', return_value=types.SimpleNamespace(read_text=lambda: json.dumps(pointer))), patch('manage.read_environment', side_effect=SelectedConfiguration) as reader:
                 with self.assertRaises(SelectedConfiguration):
                     Manager(types.SimpleNamespace(), '/etc/emailer-light/runtime.env')
                 reader.assert_called_once_with(Path(runtime))
-        for runtime in ['/etc/emailer-light-light-128/runtime.env', '/etc/emailer-light-ripe-132/runtime.env', '/tmp/emailer-light-light-124/runtime.env', '/etc/emailer-light-light-124/../runtime.env']:
+        for runtime in ['/etc/emailer-light-light-129/runtime.env', '/etc/emailer-light-ripe-132/runtime.env', '/tmp/emailer-light-light-124/runtime.env', '/etc/emailer-light-light-124/../runtime.env']:
             pointer = {'format': 'emailer-active-installation-v1', 'product': 'emailer-light', 'runtime': runtime}
             with self.subTest(rejected=runtime), patch.object(Path, 'exists', return_value=True), patch('manage.protected', return_value=types.SimpleNamespace(read_text=lambda: json.dumps(pointer))), patch('manage.read_environment') as reader:
                 with self.assertRaisesRegex(ManagementError, 'active installation pointer is invalid'):

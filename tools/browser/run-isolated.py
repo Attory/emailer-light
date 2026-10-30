@@ -162,9 +162,9 @@ try:
     node_environment = os.environ.copy()
     node_environment['EMAILER_BROWSER_CONFIG'] = str(private / 'browser.json')
     focus = os.environ.get('EMAILER_BROWSER_FOCUS', '')
-    if focus not in ('', 'smtp') or (focus and os.environ.get('EMAILER_BROWSER_SOURCE_TREE') != '1'):
+    if focus not in ('', 'smtp', 'actions') or (focus and os.environ.get('EMAILER_BROWSER_SOURCE_TREE') != '1'):
         raise RuntimeError('Focused suites are available only for explicit source-level verification.')
-    if focus != 'smtp':
+    if focus == '':
         command(['node', str(root / 'tools/browser/template-editor.cjs')], env=node_environment)
         shutil.copyfile(output / 'browser-result.json', private / 'browser-result.json')
         (private / 'browser-result.json').chmod(0o600)
@@ -186,8 +186,20 @@ try:
         stage = 'campaign no-send verification'
         php('tools/browser/verify-campaign-workflow.php', 'verify')
         shutil.copyfile(private / 'campaign-no-send-result.json', output / 'campaign-no-send-result.json')
-    stage = 'SMTP current-form browser regressions'
-    command(['node', str(root / 'tools/browser/mail-settings.cjs')], env=node_environment)
+    if focus == 'actions':
+        stage = 'compact template action browser regressions'
+        command(['node', str(root / 'tools/browser/template-actions.cjs')], env=node_environment)
+        php('tools/browser/verify-editor-delivery.php', 'actions')
+        shutil.copyfile(private / 'actions-no-send-result.json', output / 'actions-no-send-result.json')
+    else:
+        stage = 'SMTP current-form browser regressions'
+        command(['node', str(root / 'tools/browser/mail-settings.cjs')], env=node_environment)
+    if focus == '':
+        stage = 'compact template action browser regressions'
+        php('tools/browser/verify-editor-delivery.php', 'snapshot')
+        command(['node', str(root / 'tools/browser/template-actions.cjs')], env=node_environment)
+        php('tools/browser/verify-editor-delivery.php', 'actions')
+        shutil.copyfile(private / 'actions-no-send-result.json', output / 'actions-no-send-result.json')
     if (evidence / 'state.json').exists():
         raise RuntimeError('Connection form testing transmitted SMTP DATA.')
     print('PASS: isolated ' + edition + ' ' + (focus or 'complete') + ' browser suite; no unintended delivery; safe receipts in ' + str(output))
@@ -219,7 +231,7 @@ finally:
     for resource in reversed(containers):
         try:
             if inspect('container', resource)['Config']['Labels'].get(label) == token:
-                command(['docker', 'rm', '-f', resource])
+                command(['docker', 'rm', '-f', '-v', resource])
         except Exception:
             print('Task resource cleanup requires inspection: ' + resource, file=sys.stderr)
     if network_created:

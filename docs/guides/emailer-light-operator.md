@@ -1,6 +1,6 @@
 # Light operator and troubleshooting reference
 
-Version 1.2.7 | Exceptional hosting, updates and recovery
+Version 1.2.8 | Exceptional hosting, updates and recovery
 
 This reference covers exceptional hosting, update and recovery work. Start with the [beginner installation guide](emailer-light-install.md) for the normal path. The installer supplies the runtime, verifier, launcher, database provisioning, keys, services, backup defaults and HTTPS configuration; customers do not assemble these pieces.
 
@@ -66,7 +66,7 @@ sudo emailer-light emailer:doctor:run --json
 
 The health command distinguishes structural installation completion from sending readiness. Deferred SMTP is compatible with structural completion and blocks actual sending. Doctor retains its original sending gates and severity. Open Doctor after changing mail or MFA settings; installer Check does not remove the operational hold.
 
-Fresh redacted diagnostics are under `/var/lib/emailer-light-installer/last-error.json`. Managed operations use `/etc/emailer-light/installer/<edition>/1.2.7/last-error.json`. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status.
+Fresh redacted diagnostics are under `/var/lib/emailer-light-installer/last-error.json`. Managed operations use `/etc/emailer-light/installer/<edition>/1.2.8/last-error.json`. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status.
 
 ## Error reference
 
@@ -140,7 +140,7 @@ If setup says a reserved host resource is occupied or changed, it has kept that 
 
 ## Resume after the 1.2.1 web-server check
 
-If 1.2.1 stopped during Checking this server with Existing Nginx/Caddy was preserved, download the official 1.2.7 setup file and start it with sudo sh as in the installation guide. That check occurs before installation initialization or database creation. Keep the existing installer state directory and its operation lock; no state or database deletion is needed. An operation that progressed beyond this check remains bound to its original signed package; complete it with that package before a normal update. If Light reports an address-specific Apache website, this server configuration requires Ripe; retrying Light will retain the same supported-profile restriction.
+If 1.2.1 stopped during Checking this server with Existing Nginx/Caddy was preserved, download the official 1.2.8 setup file and start it with sudo sh as in the installation guide. That check occurs before installation initialization or database creation. Keep the existing installer state directory and its operation lock; no state or database deletion is needed. An operation that progressed beyond this check remains bound to its original signed package; complete it with that package before a normal update. If Light reports an address-specific Apache website, this server configuration requires Ripe; retrying Light will retain the same supported-profile restriction.
 
 ## Template images and unsaved editor recovery
 
@@ -163,7 +163,7 @@ Earlier uploaded images become visible in the updated gallery. Browser draft rec
 
 ## Incomplete-draft schema update and recovery
 
-Light 1.2.7 and Ripe 1.3.3 allow campaign drafts without a selected template. Their schema is 20261025000000. The guided setup file authenticates both installed and target releases, fences application writers, creates verified recovery material, applies the reviewed migration and checks the final runtime. Publication, approval and delivery remain explicit.
+Light 1.2.8 and Ripe 1.3.3 allow campaign drafts without a selected template. Their schema is 20261025000000. The guided setup file authenticates both installed and target releases, fences application writers, creates verified recovery material, applies the reviewed migration and checks the final runtime. Publication, approval and delivery remain explicit.
 
 Use the same setup file and its Recover action after interruption. Light recovery admits only the recorded complete source or intermediate schema/ledger/identity states and unchanged business data; it never deletes or coerces new incomplete drafts to fit an older schema. Ripe uses its verified complete source schema checkpoint. A completed update cannot be rolled back with an interruption recovery command.
 
