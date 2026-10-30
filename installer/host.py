@@ -14,6 +14,7 @@ import shutil
 import stat
 import subprocess
 import urllib.parse
+import uuid
 
 
 class HostHandoff:
@@ -26,6 +27,60 @@ class HostHandoff:
         self.hold = self.configuration / 'installer-hold.json'
         self.state = manager.record.setdefault('host_handoff', {})
 
+    def owned_delivery(self):
+        version = tuple(int(piece) for piece in getattr(self.host, 'version', '0.0.0').split('.'))
+        return version >= ((1, 3, 5) if self.host.product == 'emailer-ripe' else (1, 2, 9))
+
+    def prepare_delivery_control(self):
+        m = self.m
+        if not self.owned_delivery():
+            return
+        if not getattr(m, 'maintenance_descriptor', None):
+            context = self.source_maintenance_lock()
+            context.__enter__()
+            m.owned_maintenance_context = context
+        if not m.record.get('delivery_source_verified'):
+            version = self.state['source_version']
+            archive = ('emailer-light-' if self.state['source_product'] == 'emailer-light' else 'emailer-next-') + version + '.zip'
+            manifest = json.loads((m.package.parent / (archive + '.manifest.json')).read_text())
+            source = m.releases / version
+            if not source.exists():
+                source = m.releases / ('ripe-' + version)
+            if source.is_symlink() or not source.is_dir() or source.resolve().parent != m.releases.resolve():
+                self.fail('The authenticated source release directory changed.')
+            observed = set()
+            for path in [source, *source.rglob('*')]:
+                metadata = path.lstat()
+                if metadata.st_uid != 0 or metadata.st_mode & 0o222 or not (stat.S_ISREG(metadata.st_mode) or stat.S_ISDIR(metadata.st_mode)):
+                    self.fail('The source inventory is not root-owned and immutable.')
+                if path.is_symlink():
+                    self.fail('The source release contains an unexpected link.')
+                if path.is_file():
+                    metadata = path.stat()
+                    relative = str(path.relative_to(source))
+                    if metadata.st_nlink != 1 or hashlib.sha256(path.read_bytes()).hexdigest() != manifest['files'].get(relative):
+                        self.fail('The installed source does not match its authenticated immutable inventory.')
+                    observed.add(relative)
+            if observed != set(manifest['files']):
+                self.fail('The authenticated source inventory is incomplete.')
+            m.record['delivery_source_verified'] = True
+            m.record['control_private_directory'] = str(m.private)
+            m.record.setdefault('control_operation_id', str(uuid.uuid4()))
+            version_tuple = tuple(int(piece) for piece in self.state['source_version'].split('.'))
+            m.record['control_legacy_source'] = version_tuple < ((1, 3, 5) if self.state['source_product'] == 'emailer-ripe' else (1, 2, 9))
+            m.record['control_capture_invocation'] = m.invocation_id
+            m.save()
+        self.database('control-begin')
+        m.environment['EMAILER_INSTALLER_CONTROL_OPERATION_ID'] = m.record['control_operation_id']
+        m.environment['EMAILER_INSTALLER_CONTROL_PROOF'] = str(m.record_file)
+
+    def allow_target_service_heartbeat(self):
+        if self.owned_delivery():
+            # Core publication is verified and the old account must remain
+            # durably fenced. Permit only the new scheduler's real heartbeat
+            # while the parent still owns the installation maintenance lease.
+            self.database('control-target-ready')
+
     def claims(self):
         from resources import ResourceClaims
         return ResourceClaims(self.state.setdefault('resource_claims', {}), self.m.save, self.m.error)
@@ -35,11 +90,14 @@ class HostHandoff:
 
     def database(self, action):
         values = {'action': action, 'bootstrap': str(self.m.bootstrap), 'maintenance_url': self.m.environment['DATABASE_URL'], 'source_url': self.m.source_values['DATABASE_URL']}
-        if action not in ('drain', 'begin-update', 'inspect-update', 'restore-idle-update', 'retain-update-hold'):
+        if action not in ('drain', 'begin-update', 'inspect-update', 'restore-idle-update', 'retain-update-hold', 'control-begin', 'control-transfer', 'control-source', 'control-complete', 'control-recovered', 'control-review-create', 'control-review-ack', 'control-failed', 'control-target-ready'):
             values.update(self.state['database'])
             values['source_url'] = self.m.source_values['DATABASE_URL']
         if action in ('begin-update', 'inspect-update', 'restore-idle-update', 'retain-update-hold'):
             values.update(state_file=str(self.update_state_file), operation=str(self.m.directory))
+        if action.startswith('control-'):
+            account = pwd.getpwnam(self.name) if action == 'control-transfer' else self.m.account
+            values.update(private_directory=str(self.m.private), control_operation=self.m.record['control_operation_id'], control_proof=str(self.m.record_file), control_invocation=self.m.invocation_id, control_uid=account.pw_uid, control_gid=account.pw_gid)
         return self.m.call([self.host.php, str(self.m.package.parent / 'host-database.php')], data=json.dumps(values))
 
     def web(self):
@@ -151,6 +209,7 @@ class HostHandoff:
             for adopted in (site, launcher, pointer, *enabled_links):
                 self.state['resource_claims'][str(adopted)] = {'current': claims.proof(adopted)}
             m.save()  # Source proofs and identities are durable before any host mutation.
+        self.prepare_delivery_control()
         self.claims().check_all()
         reserved = [self.configuration, self.configuration / 'fpm.conf', self.configuration / 'release-signing.pub', self.configuration / 'keys', self.hold, Path('/usr/local/sbin') / self.name]
         if self.state.get('phase') != 'complete':
@@ -261,6 +320,11 @@ class HostHandoff:
     def block_update(self, reason, *, phase='blocked', public_reason='verification'):
         if phase not in ('blocked', 'failed'):
             self.fail('Invalid update failure phase.')
+        if self.owned_delivery() and self.m.record.get('control_operation_id') and not self.m.record.get('control_release_completed'):
+            try:
+                self.database('control-failed')
+            except Exception:
+                print('The operation fence remains retained; its failed phase could not be confirmed. Keep recovery material and restore protected database/storage access before Finish or Recover.', flush=True)
         snapshot = self.current_update_snapshot()
         if not snapshot or snapshot.get('phase') == 'complete':
             return None  # Never retake a completed hold or touch another operation.
@@ -280,6 +344,8 @@ class HostHandoff:
         return reason
 
     def restore_update_delivery(self):
+        if self.owned_delivery() and self.state.get('phase') == 'complete':
+            return  # Completion retires only the bound operation.
         # Edition transitions retain their separate, explicit acceptance contract.
         if self.m.product != self.host.product:
             return
@@ -333,6 +399,9 @@ class HostHandoff:
 
     @contextlib.contextmanager
     def source_maintenance_lock(self):
+        if getattr(self.m, 'maintenance_descriptor', None) is not None:
+            yield
+            return
         # Use the published application's actual Symfony flock, including old
         # predecessors whose Resume command predates update-state awareness.
         setting = self.m.source_values.get('LOCK_DSN', '')
@@ -353,14 +422,28 @@ class HostHandoff:
                 os.fsync(descriptor)
                 os.fsync(parent)
             metadata = os.fstat(descriptor)
-            if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1 or metadata.st_uid not in (0, self.m.account.pw_uid):
+            allowed = [0, self.m.account.pw_uid]
+            if self.owned_delivery():
+                try:
+                    target = pwd.getpwnam(self.name)
+                    if target.pw_gecos == 'emailer-update-' + self.state['installation_uuid'] + '-' + self.name:
+                        allowed.append(target.pw_uid)
+                except KeyError:
+                    pass
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1 or metadata.st_uid not in allowed:
                 self.fail('The shared maintenance lock is unsafe. No update was started.')
             try:
                 fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
                 self.fail('Another maintenance action is in progress. Wait for it to finish, then run this setup file again. No delivery was paused.')
+            if self.owned_delivery():
+                self.m.maintenance_descriptor = descriptor
+                self.m.environment['EMAILER_INSTALLER_MAINTENANCE_FD'] = str(descriptor)
             yield
         finally:
+            self.m.__dict__.pop('maintenance_descriptor', None)
+            if getattr(self.m, 'environment', None) is not None:
+                self.m.environment.pop('EMAILER_INSTALLER_MAINTENANCE_FD', None)
             if descriptor is not None:
                 os.close(descriptor)
             os.close(parent)
@@ -568,6 +651,8 @@ class HostHandoff:
                 self.fail('An application data path contains a link or special object. It was retained for recovery review.')
         for path in [m.private, *m.private.rglob('*')]:
             os.chown(path, account.pw_uid, account.pw_gid)
+        if self.owned_delivery():
+            self.database('control-transfer')
         backups = Path(values.get('EMAILER_BACKUP_DESTINATION_DIR') or '/var/backups/' + m.prefix)
         values['EMAILER_BACKUP_DESTINATION_DIR'] = str(backups)
         if backups != Path('/var/backups') / m.prefix and not backups.is_relative_to(m.private):
@@ -587,6 +672,7 @@ class HostHandoff:
         self.database('unlock')
         self.state['phase'] = 'target-prepared'
         m.save()
+        self.allow_target_service_heartbeat()
         self.apply_site(self.site_text(maintenance=True))
         # Reuse the reviewed fresh service generator with entirely separate unit/config identities.
         host = self.host
@@ -600,6 +686,8 @@ class HostHandoff:
         host.release = (m.releases / 'current').resolve(strict=True)
         host.database_profile = 'isolated' if urllib.parse.parse_qs(original_url.query).get('unix_socket') == ['/run/emailer-database/mysql.sock'] else 'shared'
         host.resource_claims = self.claims()
+        if self.owned_delivery():
+            host.delivery_control_identity = self.state['installation_uuid']
         m.failure_stage = 'services'
         host.services()
         m.failure_stage = 'verification'
@@ -630,9 +718,31 @@ class HostHandoff:
         self.live(['emailer:health:verify-runtime', '--allow-operational-hold', '--record'])
         self.apply_site(self.site_text(maintenance=False))
         self.state['phase'] = 'complete'
+        if self.owned_delivery():
+            self.state['control_runtime_verified'] = True
         self.state.get('resource_claims', {}).pop(str(self.runtime), None)
         m.record.pop('active_units', None)
         m.save()
+        if self.owned_delivery():
+            snapshot = self.current_update_snapshot()
+            if snapshot and snapshot.get('phase') != 'complete':
+                inspection = json.loads(self.database('inspect-update'))
+                if inspection['active_claims'] or inspection['processing'] or inspection['test_processing']:
+                    self.fail('Delivery still has in-flight work. Keep the operation and Finish after it drains; no claim was reset.')
+                if inspection['uncertain']:
+                    m.record.setdefault('delivery_review_operation_id', str(uuid.uuid4()))
+                    m.record['delivery_review_count'] = inspection['uncertain']
+                    m.save()
+                    self.database('control-review-create')
+                    print('Maintenance completed; uncertain delivery outcomes require operator review. No message was retried. Review delivery history, then use this setup’s Resume action.')
+                self.update_delivery_phase('complete')
+            self.m.failure_action = 'finish'
+            self.database('control-complete')
+            self.m.record['control_release_completed'] = True
+            self.m.save()
+            report = json.loads(self.live(['emailer:health:verify-runtime', '--allow-operational-hold']))
+            blockers = [item['summary'] for item in report['findings'] if item.get('sending_blocked') and item['severity'] == 'critical']
+            print('Installer temporary hold retired. ' + ('Sending requires: ' + '; '.join(blockers) if blockers else 'Current sending readiness passed.'))
 
     def disable_cron(self):
         # Retain every unrelated entry verbatim. Never replace an entire shared crontab.
@@ -712,6 +822,9 @@ class HostHandoff:
             if path.exists():
                 os.chown(path, metadata[0], metadata[1])
                 os.chmod(path, metadata[2])
+        if self.owned_delivery() and self.m.record.get('control_operation_id'):
+            self.database('control-source')
+            self.database('control-recovered')
         self.apply_site(base64.b64decode(self.state['site_bytes']))
         saved = self.state.get('launcher_bytes')
         if saved is not None:

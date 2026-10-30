@@ -39,7 +39,7 @@ class Ubuntu26Runtime(unittest.TestCase):
                 with self.assertRaises(SelectedConfiguration):
                     Manager(types.SimpleNamespace(), '/etc/emailer-light/runtime.env')
                 reader.assert_called_once_with(Path(runtime))
-        for runtime in ['/etc/emailer-light-light-129/runtime.env', '/etc/emailer-light-ripe-132/runtime.env', '/tmp/emailer-light-light-124/runtime.env', '/etc/emailer-light-light-124/../runtime.env']:
+        for runtime in ['/etc/emailer-light-light-130/runtime.env', '/etc/emailer-light-ripe-132/runtime.env', '/tmp/emailer-light-light-124/runtime.env', '/etc/emailer-light-light-124/../runtime.env']:
             pointer = {'format': 'emailer-active-installation-v1', 'product': 'emailer-light', 'runtime': runtime}
             with self.subTest(rejected=runtime), patch.object(Path, 'exists', return_value=True), patch('manage.protected', return_value=types.SimpleNamespace(read_text=lambda: json.dumps(pointer))), patch('manage.read_environment') as reader:
                 with self.assertRaisesRegex(ManagementError, 'active installation pointer is invalid'):

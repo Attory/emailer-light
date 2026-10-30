@@ -147,7 +147,7 @@ final readonly class Doctor implements ScheduledHealthOperations, Contract\Runti
                 }
                 $codes = $probe->maintenanceFindings();
                 foreach ($codes as $code) {
-                    if ($offlineMaintenance || \in_array($code, ['sender_identity', 'smtp_transport_security'], true) || ($allowOperationalHold && $probe->offlineVerificationReady() && 'delivery_quiesced' === $code)) {
+                    if ($offlineMaintenance || \in_array($code, ['sender_identity', 'smtp_transport_security'], true) || ($allowOperationalHold && $probe->offlineVerificationReady() && \in_array($code, ['delivery_quiesced', 'operation_delivery_hold', 'delivery_outcome_review'], true))) {
                         $expected[] = $code;
                     }
                 }

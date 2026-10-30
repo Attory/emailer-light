@@ -39,6 +39,7 @@ final readonly class DeliverCampaignRecipientHandler
         private SendingGate $sendingGate,
         private ?RecipientAnalyticsLinks $analyticsLinks = null,
         private ?RecipientRsvpLinks $rsvpLinks = null,
+        private ?Contract\DeliveryControl $control = null,
     ) {
     }
 
@@ -52,7 +53,18 @@ final readonly class DeliverCampaignRecipientHandler
             return;
         }
         $configuration = $this->configuration->current();
-        $claim = $this->claim($message, $configuration);
+        try {
+            $lease = $this->control?->claimLease();
+        } catch (\DomainException) {
+            $this->gateway->dispatchAfter($message->recipientId, $message->operationVersion, 30_000);
+
+            return;
+        }
+        try {
+            $claim = $this->claim($message, $configuration);
+        } finally {
+            $lease?->release();
+        }
         if (null === $claim) {
             return;
         }

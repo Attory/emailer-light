@@ -19,7 +19,7 @@ parameters:
     emailer.releases_dir: '%env(default:emailer.default_releases_dir:EMAILER_RELEASES_DIR)%'
     emailer.default_runtime_configuration_file: ''
     emailer.runtime_configuration_file: '%env(default:emailer.default_runtime_configuration_file:EMAILER_RUNTIME_CONFIGURATION_FILE)%'
-    emailer.app_version: '1.2.8'
+    emailer.app_version: '1.2.9'
     emailer.update_source_version: '%env(default:emailer.app_version:EMAILER_UPDATE_SOURCE_VERSION)%'
     emailer.schema_version: '20261025000000'
     emailer.default_uri: '%env(DEFAULT_URI)%'
@@ -149,6 +149,13 @@ services:
     App\Module\Delivery\Application\Contract\DeliveryTransport: '@App\Module\Delivery\Infrastructure\SymfonySmtpDeliveryTransport'
     App\Module\Delivery\Application\Contract\InterruptedDeliveryRecovery: '@App\Module\Delivery\Application\InterruptedDeliveryRecoverer'
     App\Module\Campaigns\Application\Contract\SendingGate: '@App\Module\Health\Infrastructure\CampaignSendingGate'
+    App\Module\Delivery\Application\Contract\DeliveryControl:
+        alias: App\Module\Delivery\Infrastructure\FilesystemDeliveryControl
+
+    App\Module\Delivery\Infrastructure\FilesystemDeliveryControl:
+        arguments:
+            $privateDirectory: '%emailer.private_dir%'
+
     App\Module\Delivery\Application\Contract\SendingGate: '@App\Module\Health\Infrastructure\DeliverySendingGate'
 
     App\Module\Health\Application\Doctor:

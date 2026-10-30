@@ -82,6 +82,13 @@ jobs:
       - name: Verify root-run backup copy and update-journal custody
         run: docker compose run --rm --user root app php bin/phpunit --do-not-cache-result tests/Module/Backup/RootBackupCopyTest.php tests/Module/Health/UpdateDeliveryStateTest.php
 
+      - name: Verify operation-owned delivery controls and crash boundaries
+        run: >-
+          docker compose run --rm --user root
+          -e EMAILER_CONTROL_DATABASE_FIXTURE=1
+          -e "DATABASE_URL=mysql://root:local-root-only@database:3306/emailer_test?serverVersion=${MARIADB_SERVER_VERSION}&charset=utf8mb4"
+          app php bin/phpunit --do-not-cache-result tests/Module/Delivery
+
       - name: Repeat test suite with external egress disabled
         run: bash tools/ci/run-network-isolated-tests.sh
 

@@ -10,13 +10,22 @@ use Doctrine\DBAL\Connection;
 
 final readonly class DeliveryQuiescer
 {
-    public function __construct(private Connection $connection, private InterruptedDeliveryRecovery $recovery, private MaintenanceOperationLock $maintenance)
+    public function __construct(private Connection $connection, private InterruptedDeliveryRecovery $recovery, private MaintenanceOperationLock $maintenance, private ?Contract\DeliveryControl $control = null)
     {
     }
 
     public function quiesce(): int
     {
-        $this->maintenance->acquire();
+        // Persist independent owner intent before a busy maintenance lock can refuse DB access.
+        $recorded = $this->control?->pause() ?? false;
+        try {
+            $this->maintenance->acquire();
+        } catch (\Throwable $error) {
+            if ($recorded) {
+                throw new \DomainException('Owner pause was recorded. Active maintenance currently owns the database gate; no delivery was resumed.');
+            }
+            throw $error;
+        }
         try {
             $this->connection->executeStatement("UPDATE delivery_runtime SET accepting_work = 0, updated_at = UTC_TIMESTAMP(6) WHERE singleton_key = '1'");
             $this->recovery->recover();

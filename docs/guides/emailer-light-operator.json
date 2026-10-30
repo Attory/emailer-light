@@ -1,6 +1,6 @@
 {
   "title": "Light operator and troubleshooting reference",
-  "subtitle": "Version 1.2.8 | Exceptional hosting, updates and recovery",
+  "subtitle": "Version 1.2.9 | Exceptional hosting, updates and recovery",
   "blocks": [
     {
       "type": "p",
@@ -154,6 +154,10 @@
       "text": "Updates create an isolated target account, settings and FPM/service namespace; the canonical launcher and protected active-installation pointer select it. Read the actual completion summary and protected runtime receipt after an update. Do not assume the fresh service account or key path remains active. Never restart shared PHP to repair an Emailer instance."
     },
     {
+      "type": "p",
+      "text": "For a supervised native service-unit update, prepare the root-owned delivery-control parent before starting a unit whose ReadWritePaths names it: sudo install -d -o root -g root -m 0755 /var/lib/emailer/delivery-control. Substitute the verified parent of the intended private directory when its installation path differs. Do not create owner intent or operation records by hand; the authenticated updater binds those records to the installation. Retain this directory with disaster-recovery material outside private/database checkpoint restoration. Never replace a newer live owner-intent generation with an older backup."
+    },
+    {
       "type": "h2",
       "text": "Safe diagnostics"
     },
@@ -167,7 +171,7 @@
     },
     {
       "type": "p",
-      "text": "Fresh redacted diagnostics are under <code>/var/lib/emailer-light-installer/last-error.json</code>. Managed operations use <code>/etc/emailer-light/installer/&lt;edition&gt;/1.2.8/last-error.json</code>. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status."
+      "text": "Fresh redacted diagnostics are under <code>/var/lib/emailer-light-installer/last-error.json</code>. Managed operations use <code>/etc/emailer-light/installer/&lt;edition&gt;/1.2.9/last-error.json</code>. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status."
     },
     {
       "type": "h2",
@@ -289,7 +293,7 @@
     },
     {
       "type": "p",
-      "text": "After successful verification, an originally idle accepting installation is restored without requiring optional SMTP. A prior operational hold stays held. Active approved delivery uses normal readiness before continuation. Uncertain in-flight outcomes are held for explicit investigation, never automatically retried. Verification failures retain the hold and a specific action. Recover deliberately leaves delivery held; an explicit guided Resume requires readiness and never approves drafts. A completed operation is terminal and cannot be replayed as recovery."
+      "text": "After successful whole-operation verification, only the matching installer hold is released. Current independent owner intent determines whether delivery is enabled; normal readiness still blocks sending for required MFA, SMTP or another actual requirement. A prior owner pause stays paused. Uncertain in-flight outcomes retain a separate review hold and are never automatically retried. Verification failures retain the operation hold and a specific action. Recover deliberately leaves delivery held; finish the verified retry before guided Resume, which requires readiness and never approves drafts. A completed operation is terminal and cannot be replayed as recovery."
     },
     {
       "type": "h3",
@@ -337,7 +341,7 @@
     },
     {
       "type": "p",
-      "text": "If 1.2.1 stopped during Checking this server with Existing Nginx/Caddy was preserved, download the official 1.2.8 setup file and start it with sudo sh as in the installation guide. That check occurs before installation initialization or database creation. Keep the existing installer state directory and its operation lock; no state or database deletion is needed. An operation that progressed beyond this check remains bound to its original signed package; complete it with that package before a normal update. If Light reports an address-specific Apache website, this server configuration requires Ripe; retrying Light will retain the same supported-profile restriction."
+      "text": "If 1.2.1 stopped during Checking this server with Existing Nginx/Caddy was preserved, download the official 1.2.9 setup file and start it with sudo sh as in the installation guide. That check occurs before installation initialization or database creation. Keep the existing installer state directory and its operation lock; no state or database deletion is needed. An operation that progressed beyond this check remains bound to its original signed package; complete it with that package before a normal update. If Light reports an address-specific Apache website, this server configuration requires Ripe; retrying Light will retain the same supported-profile restriction."
     },
     {
       "type": "h2",
@@ -398,7 +402,7 @@
     },
     {
       "type": "p",
-      "text": "Light 1.2.8 and Ripe 1.3.3 allow campaign drafts without a selected template. Their schema is 20261025000000. The guided setup file authenticates both installed and target releases, fences application writers, creates verified recovery material, applies the reviewed migration and checks the final runtime. Publication, approval and delivery remain explicit."
+      "text": "Light 1.2.9 and Ripe 1.3.3 allow campaign drafts without a selected template. Their schema is 20261025000000. The guided setup file authenticates both installed and target releases, fences application writers, creates verified recovery material, applies the reviewed migration and checks the final runtime. Publication, approval and delivery remain explicit."
     },
     {
       "type": "p",
@@ -407,6 +411,18 @@
     {
       "type": "p",
       "text": "Normal backup restore requires archive, current database and running application to share the same schema. Older archives remain verifiable and retained but must be recovered with their matching signed release in an isolated recovery environment, or through the recorded guided update recovery. Do not apply an old row-only archive over the new nullable schema. A refusal occurs before maintenance state, restore safety copies or database rows are changed."
+    },
+    {
+      "type": "h2",
+      "text": "Installer holds and owner pauses"
+    },
+    {
+      "type": "p",
+      "text": "A successful operation releases only its own temporary installer hold after runtime verification and any required Accept action. An independent owner pause or another operation hold remains. Doctor reports the actual MFA, SMTP or other readiness requirement instead of calling a completed installation unfinished. Completing a requirement can allow previously approved due work to continue if the owner already enabled delivery; inspect that work before changing readiness."
+    },
+    {
+      "type": "p",
+      "text": "An interrupted or recovered operation retains its operation identifier, lifecycle and Finish or Recover action. Use the same verified setup and retained recovery material. Failed and uncertain messages are never retried by completion. An unattributed legacy hold remains unknown until its owner explicitly reviews and resumes it; a zero delivery flag alone never proves installer ownership."
     }
   ]
 }

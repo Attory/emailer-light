@@ -20,7 +20,7 @@ final readonly class NativeSchemaUpdate
 
     public static function supports(string $source, string $target): bool
     {
-        return (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5', '1.2.6', '1.2.7'], true) && '1.2.8' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5', '1.2.6'], true) && '1.2.7' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5'], true) && '1.2.6' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4'], true) && '1.2.5' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3'], true) && '1.2.4' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2'], true) && '1.2.3' === $target) || ('1.0.0' === $source && '1.1.0' === $target) || (\in_array($source, ['1.0.0', '1.1.0'], true) && '1.2.0' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0'], true) && '1.2.1' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1'], true) && '1.2.2' === $target);
+        return (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5', '1.2.6', '1.2.7', '1.2.8'], true) && '1.2.9' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5', '1.2.6', '1.2.7'], true) && '1.2.8' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5', '1.2.6'], true) && '1.2.7' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5'], true) && '1.2.6' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4'], true) && '1.2.5' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3'], true) && '1.2.4' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2'], true) && '1.2.3' === $target) || ('1.0.0' === $source && '1.1.0' === $target) || (\in_array($source, ['1.0.0', '1.1.0'], true) && '1.2.0' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0'], true) && '1.2.1' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1'], true) && '1.2.2' === $target);
     }
 
     /** @return array{status: string, delivery_held: bool} */
@@ -40,7 +40,7 @@ final readonly class NativeSchemaUpdate
         if (!self::supports(NativeUpdateJournal::text($source['version']), NativeUpdateJournal::text($target['version']))) {
             throw new \RuntimeException('The authenticated source and target are not a supported native Light update pair.');
         }
-        if (\in_array($target['version'], ['1.2.6', '1.2.7', '1.2.8'], true) && CampaignDraftSchemaPlan::SOURCE_SCHEMA === $source['schema_version']) {
+        if (\in_array($target['version'], ['1.2.6', '1.2.7', '1.2.8', '1.2.9'], true) && CampaignDraftSchemaPlan::SOURCE_SCHEMA === $source['schema_version']) {
             (new CampaignDraftSchemaPlan($this->connection, $this->projectDirectory, NativeUpdateJournal::text($target['version'])))->assertPackages($source, $target);
         } elseif (!\in_array($source['schema_version'], [CampaignDraftSchemaPlan::SOURCE_SCHEMA, CampaignDraftSchemaPlan::TARGET_SCHEMA], true) || $source['schema_version'] !== $target['schema_version'] || $this->migrations($source) !== $this->migrations($target)) {
             throw new \RuntimeException('This native update supports only the explicit verified schema-preserving Light release pairs.');
@@ -54,6 +54,17 @@ final readonly class NativeSchemaUpdate
             }
             $locked = true;
             $status = $this->execute($targetArchive, $sourceArchive, $source, $target, $recover);
+            if ('1.2.9' === $target['version'] && !$recover && !$this->retainSourceFence) {
+                $verification = $this->runtime->verifyRuntime(false, true);
+                if (true !== $verification['runtime_verified']) {
+                    throw new \RuntimeException('Native publication succeeded; live services still require verification. Keep the operation and rerun the same verified update after restoring the supervised target services.');
+                }
+                $path = \dirname($this->runtimeConfigurationFile).'/native-updates/light-'.NativeUpdateJournal::text($source['version']).'-to-1.2.9.json';
+                $record = NativeUpdateJournal::read($path);
+                $record['control_runtime_verified'] = true;
+                $this->save($path, $record);
+                (new InstallerDeliveryControl($this->connection, $this->privateDirectory))->completeLightNative(NativeUpdateJournal::text($record['id']), $path);
+            }
 
             return ['status' => $status, 'delivery_held' => 0 === NativeUpdateJournal::integer($this->connection->fetchOne("SELECT accepting_work FROM delivery_runtime WHERE singleton_key='1'"))];
         } finally {
@@ -102,6 +113,7 @@ final readonly class NativeSchemaUpdate
         $this->installed($sourceRoot, $source);
         $binding = hash('sha256', serialize([$this->connection->getDatabase(), $this->connection->fetchAssociative('SELECT @@hostname h,@@port p,@@server_id i,@@socket s,@@datadir d'), $this->privateDirectory, $this->releasesDirectory]));
         $record = file_exists($journalPath) ? NativeUpdateJournal::read($journalPath) : [];
+        $previousOperation = null;
         if ([] !== $record) {
             if (($record['binding'] ?? null) !== $binding || ($record['target_sha256'] ?? null) !== hash_file('sha256', $targetArchive) || ($record['source_sha256'] ?? null) !== hash_file('sha256', $sourceArchive)) {
                 throw new \RuntimeException('Retained operation and selected installation or packages differ.');
@@ -149,6 +161,7 @@ final readonly class NativeSchemaUpdate
 
                     return 'already_recovered';
                 }
+                $previousOperation = $operation;
                 // Retain the previous recovery record before a deliberate retry.
                 NativeUpdateJournal::write($base.'/recovered-'.$operation.'.json', json_encode($record, JSON_THROW_ON_ERROR));
                 $record = [];
@@ -186,13 +199,25 @@ final readonly class NativeSchemaUpdate
             throw new \RuntimeException('The source installation identity is inconsistent.');
         }
         $id = Identity::uuidV7();
-        $record = ['format' => 'emailer-light-native-update-v1', 'id' => $id, 'phase' => 'preparing', 'retain_source_fence' => $this->retainSourceFence, 'binding' => $binding, 'source_sha256' => hash_file('sha256', $sourceArchive), 'target_sha256' => hash_file('sha256', $targetArchive), 'schema' => $this->schema(), 'account' => $this->fence->identify(), 'files' => $this->captureFiles($base.'/'.$id, $versions), 'identity' => $identity];
-        if (\in_array($targetVersion, ['1.2.6', '1.2.7', '1.2.8'], true) && !$draftSource) {
+        $record = ['format' => 'emailer-light-native-update-v1', 'id' => $id, 'previous_operation_id' => $previousOperation, 'phase' => 'preparing', 'retain_source_fence' => $this->retainSourceFence, 'binding' => $binding, 'source_sha256' => hash_file('sha256', $sourceArchive), 'target_sha256' => hash_file('sha256', $targetArchive), 'schema' => $this->schema(), 'account' => $this->fence->identify(), 'files' => $this->captureFiles($base.'/'.$id, $versions), 'identity' => $identity];
+        if (\in_array($targetVersion, ['1.2.6', '1.2.7', '1.2.8', '1.2.9'], true) && !$draftSource) {
             $plan = new CampaignDraftSchemaPlan($this->connection, $this->projectDirectory, $versions->target);
             $record['draft_schema_plan'] = $plan->prepare($this->schemaParts());
             $plan->assertState($record['draft_schema_plan'], NativeUpdateJournal::text($record['schema']));
         }
         $this->save($journalPath, $record);
+        if ('1.2.9' === $targetVersion && !$this->retainSourceFence) {
+            $key = stat($this->masterKeyFile);
+            if (!\is_array($key) || 0 >= $key['uid'] || !\is_string($installation)) {
+                throw new \RuntimeException('Native delivery owner custody is unavailable.');
+            }
+            $prior = NativeUpdateJournal::integer($this->connection->fetchOne("SELECT accepting_work FROM delivery_runtime WHERE singleton_key='1'"));
+            $control = new \App\Shared\DeliveryControlFiles($this->privateDirectory, $installation);
+            $control->prepare($key['uid'], $key['gid'], 1 === $prior ? 'enabled' : 'unknown');
+            $control->hold($id, 'native', ['proof_path' => $journalPath]);
+            $record['delivery_control_owned'] = true;
+            $this->save($journalPath, $record);
+        }
         $this->connection->insert('release_operation', ['id' => $id, 'operation' => 'update', 'source_version' => $sourceVersion, 'target_version' => $targetVersion, 'package_sha256' => $record['target_sha256'], 'status' => 'started', 'detail_code' => 'verified', 'started_at' => Identity::now(), 'finished_at' => null]);
         $this->connection->executeStatement("UPDATE delivery_runtime SET accepting_work=0 WHERE singleton_key='1'");
         if (0 !== NativeUpdateJournal::integer($this->connection->fetchOne("SELECT active_claims FROM delivery_runtime WHERE singleton_key='1'"))) {
@@ -205,7 +230,7 @@ final readonly class NativeSchemaUpdate
             throw new \RuntimeException('The verified safety backup cannot be assigned to its dedicated application account.');
         }
         $this->backups->verify($backup['path']);
-        if (\in_array($targetVersion, ['1.2.7', '1.2.8'], true)) {
+        if (\in_array($targetVersion, ['1.2.7', '1.2.8', '1.2.9'], true)) {
             $this->backupCopy?->preserve($backup);
         }
         $record['backup'] = $backup;
@@ -330,7 +355,7 @@ final readonly class NativeSchemaUpdate
             throw new \RuntimeException('The installation lock is invalid.');
         }
         $value['product_version'] = $version;
-        if (\in_array($versions->target, ['1.2.6', '1.2.7', '1.2.8'], true)) {
+        if (\in_array($versions->target, ['1.2.6', '1.2.7', '1.2.8', '1.2.9'], true)) {
             $value['schema_version'] = $version === $versions->target ? CampaignDraftSchemaPlan::TARGET_SCHEMA : $versions->sourceSchema();
         }
         $this->writeLock(json_encode($value, JSON_THROW_ON_ERROR)."\n");
@@ -580,6 +605,24 @@ final readonly class NativeSchemaUpdate
     private function save(string $path, array $record): void
     {
         NativeUpdateJournal::write($path, json_encode($record, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+        if (true === ($record['delivery_control_owned'] ?? null) && 'completed' === ($record['phase'] ?? null)) {
+            $identity = $record['identity'] ?? null;
+            if (!\is_array($identity)) {
+                throw new \RuntimeException('Native delivery identity is unavailable.');
+            }
+            $control = new \App\Shared\DeliveryControlFiles($this->privateDirectory, NativeUpdateJournal::text($identity['installation_uuid'] ?? null));
+            $operation = NativeUpdateJournal::text($record['id'] ?? null);
+            if ('released' !== $control->operationState($operation)['phase']) {
+                $control->phase($operation, 'handoff');
+            } // A repeated successful Finish never reactivates its terminal hold.
+        }
+        if (true === ($record['delivery_control_owned'] ?? null) && 'recovered' === ($record['phase'] ?? null) && true === ($record['fence_restored'] ?? null)) {
+            $identity = $record['identity'] ?? null;
+            if (!\is_array($identity)) {
+                throw new \RuntimeException('Recovery delivery identity is unavailable.');
+            }
+            (new \App\Shared\DeliveryControlFiles($this->privateDirectory, NativeUpdateJournal::text($identity['installation_uuid'] ?? null)))->phase(NativeUpdateJournal::text($record['id'] ?? null), 'recovered');
+        }
     }
 
     /** @param array<string, mixed> $record

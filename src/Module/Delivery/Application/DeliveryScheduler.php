@@ -16,7 +16,7 @@ use Symfony\Component\Lock\LockFactory;
 
 final readonly class DeliveryScheduler
 {
-    public function __construct(private Connection $connection, private CampaignDeliveryGateway $gateway, private LockFactory $lockFactory, private RecipientUnsubscribeLinks $unsubscribeLinks, private SendingGate $sendingGate, private InterruptedDeliveryRecovery $recovery, private MaintenanceOperationLock $maintenance)
+    public function __construct(private Connection $connection, private CampaignDeliveryGateway $gateway, private LockFactory $lockFactory, private RecipientUnsubscribeLinks $unsubscribeLinks, private SendingGate $sendingGate, private InterruptedDeliveryRecovery $recovery, private MaintenanceOperationLock $maintenance, private ?Contract\DeliveryControl $control = null)
     {
     }
 
@@ -36,6 +36,11 @@ final readonly class DeliveryScheduler
                     } finally {
                         $this->maintenance->release();
                     }
+                } elseif ($this->committedHandoffPermitsHeartbeat()) {
+                    // All outstanding installer cores are durably committed
+                    // and old writers are fenced. This is a real scheduler
+                    // run, but it may only heartbeat: no recovery or queue mutation.
+                    $this->heartbeat($schedulerId);
                 }
                 $this->assertReady();
                 throw new \LogicException('Sending gate allowed explicitly quiesced delivery.');
@@ -71,6 +76,26 @@ final readonly class DeliveryScheduler
         } finally {
             $lock->release();
         }
+    }
+
+    private function committedHandoffPermitsHeartbeat(): bool
+    {
+        $state = $this->control?->status();
+        if (null === $state) {
+            return false;
+        }
+        $handoff = false;
+        foreach ($state['holds'] as $hold) {
+            if (!\in_array($hold['kind'] ?? null, ['host', 'native', 'edition'], true)) {
+                continue;
+            }
+            if (\in_array($hold['phase'] ?? null, ['active', 'failed'], true)) {
+                return false; // No runtime writes while any installer core is mutable.
+            }
+            $handoff = $handoff || 'handoff' === ($hold['phase'] ?? null);
+        }
+
+        return $handoff;
     }
 
     private function heartbeat(string $schedulerId): void
