@@ -17,3 +17,11 @@ their required synthetic emailer_test name; initial suite's only failure was the
 separate test database name. Static/architecture PASS. Release plumbing includes
 1.2.7→1.2.8 without DDL and a release-specific public Ripe1.3.4 contract with the
 same schema. Remaining: final gates, PR/CI, signed candidate and package acceptance.
+
+Draft PR15 https://github.com/Attory/emailer-light/pull/15, initial head
+2a194f7f395184755c7965dc8048380f562df519, verified before repair. CI's obsolete
+negative128 path test is now a positive case;129/other-edition/path negatives stay.
+Required dependency audit identified CVE-2026-45070; the only dependency update
+is symfony/mime7.4.17→7.4.22. Both edition audits pass without weakening checks.
+No migration or production change. Composer Flex's unrelated importmap side effect
+was retained as a private review patch and reversed before committing.
