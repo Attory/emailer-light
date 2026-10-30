@@ -1,6 +1,6 @@
 {
   "title": "Install Emailer Light",
-  "subtitle": "Version 1.2.8 | Beginner guide | Ubuntu Apache or Debian Nginx VPS",
+  "subtitle": "Version 1.2.9 | Beginner guide | Ubuntu Apache or Debian Nginx VPS",
   "blocks": [
     {
       "type": "p",
@@ -100,11 +100,11 @@
     },
     {
       "type": "code",
-      "text": "curl --fail --location --output emailer-light-1.2.8-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.2.8/\\\nemailer-light-1.2.8-setup.run"
+      "text": "curl --fail --location --output emailer-light-1.2.9-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.2.9/\\\nemailer-light-1.2.9-setup.run"
     },
     {
       "type": "p",
-      "text": "Or download <b>emailer-light-1.2.8-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.2.8\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
+      "text": "Or download <b>emailer-light-1.2.9-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.2.9\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
     },
     {
       "type": "p",
@@ -124,7 +124,7 @@
     },
     {
       "type": "code",
-      "text": "sudo sh emailer-light-1.2.8-setup.run"
+      "text": "sudo sh emailer-light-1.2.9-setup.run"
     },
     {
       "type": "p",
@@ -234,6 +234,18 @@
     {
       "type": "p",
       "text": "Next: <a href=\"emailer-light-manual.html\">Light user manual</a>."
+    },
+    {
+      "type": "h2",
+      "text": "Installer holds and owner pauses"
+    },
+    {
+      "type": "p",
+      "text": "A successful operation releases only its own temporary installer hold after runtime verification and any required Accept action. An independent owner pause or another operation hold remains. Doctor reports the actual MFA, SMTP or other readiness requirement instead of calling a completed installation unfinished. Completing a requirement can allow previously approved due work to continue if the owner already enabled delivery; inspect that work before changing readiness."
+    },
+    {
+      "type": "p",
+      "text": "An interrupted or recovered operation retains its operation identifier, lifecycle and Finish or Recover action. Use the same verified setup and retained recovery material. Failed and uncertain messages are never retried by completion. An unattributed legacy hold remains unknown until its owner explicitly reviews and resumes it; a zero delivery flag alone never proves installer ownership."
     }
   ]
 }

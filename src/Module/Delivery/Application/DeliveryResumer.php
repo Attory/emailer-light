@@ -10,7 +10,7 @@ use Doctrine\DBAL\Connection;
 
 final readonly class DeliveryResumer
 {
-    public function __construct(private Connection $connection, private SendingGate $sendingGate, private MaintenanceOperationLock $maintenance, private ?\App\Shared\UpdateDeliveryState $updateState = null)
+    public function __construct(private Connection $connection, private SendingGate $sendingGate, private MaintenanceOperationLock $maintenance, private ?\App\Shared\UpdateDeliveryState $updateState = null, private ?Contract\DeliveryControl $control = null)
     {
     }
 
@@ -20,9 +20,12 @@ final readonly class DeliveryResumer
         $this->maintenance->acquire();
         try {
             $this->sendingGate->assertMaintenanceReady();
-            $this->connection->transactional(function (): void {
+            $independent = $this->control?->status();
+            $recordedPause = null !== $independent && $independent['configured'] && 'enabled' !== $independent['owner'];
+            $this->control?->enable();
+            $this->connection->transactional(function () use ($recordedPause): void {
                 $runtime = $this->connection->fetchAssociative("SELECT schema_version, accepting_work FROM delivery_runtime WHERE singleton_key = '1' FOR UPDATE");
-                if (false === $runtime || !is_numeric($runtime['schema_version']) || !is_numeric($runtime['accepting_work']) || 1 !== (int) $runtime['schema_version'] || 0 !== (int) $runtime['accepting_work']) {
+                if (false === $runtime || !is_numeric($runtime['schema_version']) || !is_numeric($runtime['accepting_work']) || 1 !== (int) $runtime['schema_version'] || (0 !== (int) $runtime['accepting_work'] && !(1 === (int) $runtime['accepting_work'] && $recordedPause))) {
                     throw new \RuntimeException('Delivery runtime was not quiesced or compatible.');
                 }
                 $this->updateState?->assertResumeAllowed();

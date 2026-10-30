@@ -1,6 +1,6 @@
 # Install Emailer Light
 
-Version 1.2.8 | Beginner guide | Ubuntu Apache or Debian Nginx VPS
+Version 1.2.9 | Beginner guide | Ubuntu Apache or Debian Nginx VPS
 
 Install a usable Emailer Light website with one guided server setup. You need your administrator email, a new password, and the address you want people to use. Email delivery can wait.
 
@@ -40,12 +40,12 @@ Choose a spare address such as `news.your-domain.com`. In your domain provider's
 In the server terminal, paste this download action. It saves the official installation package in your current folder.
 
 ```bash
-curl --fail --location --output emailer-light-1.2.8-setup.run \
-  https://github.com/Attory/emailer-light/releases/download/v1.2.8/\
-emailer-light-1.2.8-setup.run
+curl --fail --location --output emailer-light-1.2.9-setup.run \
+  https://github.com/Attory/emailer-light/releases/download/v1.2.9/\
+emailer-light-1.2.9-setup.run
 ```
 
-Or download **emailer-light-1.2.8-setup.run** from the [official release](https://github.com/Attory/emailer-light/releases/tag/v1.2.8) in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path.
+Or download **emailer-light-1.2.9-setup.run** from the [official release](https://github.com/Attory/emailer-light/releases/tag/v1.2.9) in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path.
 
 Initial trust comes from obtaining the setup action itself from the official HTTPS release or an authorized private channel. Its embedded, established edition signing identity then verifies the package inventory, runtime and release identity before installer code runs. A key supplied beside an arbitrary download would not establish that initial trust.
 
@@ -56,7 +56,7 @@ Ubuntu 22.04 also retrieves an authenticated MariaDB runtime of about 360 MB. Al
 From the folder containing the downloaded file, paste this single setup action:
 
 ```bash
-sudo sh emailer-light-1.2.8-setup.run
+sudo sh emailer-light-1.2.9-setup.run
 ```
 
 sudo may ask for your server account password once. Setup needs host permission to install services; the application itself runs under a dedicated account. Keep the terminal open. Password entry is hidden, so no letters or dots may appear.
@@ -104,3 +104,9 @@ For a fresh Light installation, backups are under `/var/lib/emailer-light/privat
 After successful installation, running the file again opens an installation management menu. **Check the installation** is safe to repeat; an already-installed update leaves settings and delivery state unchanged. For other errors, use the [operator and troubleshooting reference](emailer-light-operator.md). Do not delete installer state or database files to retry.
 
 Next: [Light user manual](emailer-light-manual.md).
+
+## Installer holds and owner pauses
+
+A successful operation releases only its own temporary installer hold after runtime verification and any required Accept action. An independent owner pause or another operation hold remains. Doctor reports the actual MFA, SMTP or other readiness requirement instead of calling a completed installation unfinished. Completing a requirement can allow previously approved due work to continue if the owner already enabled delivery; inspect that work before changing readiness.
+
+An interrupted or recovered operation retains its operation identifier, lifecycle and Finish or Recover action. Use the same verified setup and retained recovery material. Failed and uncertain messages are never retried by completion. An unattributed legacy hold remains unknown until its owner explicitly reviews and resumes it; a zero delivery flag alone never proves installer ownership.

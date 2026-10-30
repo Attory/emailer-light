@@ -22,7 +22,7 @@ final class RuntimeSocketSetupTest extends KernelTestCase
         self::bootKernel();
         $baseline = self::getContainer()->get(Connection::class);
         self::assertInstanceOf(Connection::class, $baseline);
-        self::assertSame('emailer_test', $baseline->getDatabase());
+        self::assertMatchesRegularExpression('/^emailer(?:_(?:ripe|light))?_test$/D', (string) $baseline->getDatabase());
         $alive = $baseline->fetchOne('SELECT 1');
         self::assertTrue(\is_string($alive) || \is_int($alive));
         self::assertSame('1', (string) $alive);

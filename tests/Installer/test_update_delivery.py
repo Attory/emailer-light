@@ -106,6 +106,41 @@ class SourceMaintenanceBoundaries(unittest.TestCase):
                 self.assertEqual(75,subprocess.run(command,capture_output=True).returncode)
             self.assertEqual(0,subprocess.run(command,capture_output=True).returncode)
 
+    def test_owned_parent_lease_is_nested_and_only_inherited_by_privileged_console(self):
+        import os
+        import subprocess
+        from manage import Manager
+        with tempfile.TemporaryDirectory() as d:
+            private = Path(d) / 'private'
+            (private / 'locks').mkdir(parents=True)
+            m = types.SimpleNamespace(prefix='emailer', private=private,
+                source_values={'LOCK_DSN': 'flock://' + str(private / 'locks')},
+                account=types.SimpleNamespace(pw_uid=os.getuid(), pw_gid=os.getgid()),
+                record={}, environment={}, error=ManagementError,
+                installer=types.SimpleNamespace(product='emailer-ripe', version='1.3.5', php='/usr/bin/php8.4'),
+                bootstrap=Path('/immutable'), directory=Path(d))
+            h = HostHandoff(m)
+            h.state['installation_uuid'] = '01900000-0000-7000-8000-000000000001'
+            with patch('host.pwd.getpwnam', side_effect=KeyError):
+                with Manager.guarded_action(m):
+                    context = h.source_maintenance_lock()
+                    context.__enter__()
+                    m.owned_maintenance_context = context
+                    descriptor = m.maintenance_descriptor
+                    self.assertEqual(str(descriptor), m.environment['EMAILER_INSTALLER_MAINTENANCE_FD'])
+                    with h.source_maintenance_lock():
+                        self.assertEqual(descriptor, m.maintenance_descriptor)
+                    with patch('manage.subprocess.run', return_value=types.SimpleNamespace(returncode=0, stdout='', stderr='')) as run:
+                        Manager.call(m, ['/usr/bin/php8.4', '/immutable/bin/console', 'emailer:health:verify-runtime'], environment=m.environment)
+                        self.assertEqual((descriptor,), run.call_args.kwargs['pass_fds'])
+                        Manager.call(m, ['/usr/local/sbin/emailer', 'emailer:health:verify-runtime'])
+                        self.assertEqual((), run.call_args.kwargs['pass_fds'])
+                        self.assertNotIn('EMAILER_INSTALLER_MAINTENANCE_FD', run.call_args.kwargs['env'])
+            self.assertFalse(hasattr(m, 'maintenance_descriptor'))
+            self.assertNotIn('EMAILER_INSTALLER_MAINTENANCE_FD', m.environment)
+            with self.assertRaises(OSError):
+                os.fstat(descriptor)
+
     def service_fixture(self, proof):
         from manage import Manager
         m=Manager.__new__(Manager)

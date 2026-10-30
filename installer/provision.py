@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import urllib.parse
+import uuid
 import zipfile
 
 
@@ -740,11 +741,32 @@ class Installer:
         if not self.application_completed():
             raise SetupError('Account setup was interrupted before completion. Your saved settings were retained. Start this same setup file again to finish; background services and the public website were not enabled.')
 
+    def owned_delivery(self):
+        version = tuple(int(piece) for piece in getattr(self, 'version', '0.0.0').split('.'))
+        return version >= ((1, 3, 5) if self.product == 'emailer-ripe' else (1, 2, 9))
+
+    def fresh_delivery_control(self, action):
+        if not self.owned_delivery():
+            return
+        account = pwd.getpwnam(self.user)
+        identity = json.loads((self.private / 'install.lock').read_text())['installation_uuid']
+        self.state.setdefault('control_operation_id', str(uuid.uuid4()))
+        self.state['control_installation_uuid'] = identity
+        self.state['control_private_directory'] = str(self.private)
+        self.save()
+        values = {'action': action, 'bootstrap': str(self.release), 'database_url': self.environment()['DATABASE_URL'], 'private_directory': str(self.private), 'operation': self.state['control_operation_id'], 'proof': str(self.journal), 'uid': account.pw_uid, 'gid': account.pw_gid}
+        result = subprocess.run([self.php, str(self.bundle / 'control-files.php')], input=json.dumps(values), capture_output=True, text=True)
+        if result.returncode:
+            raise SetupError('The installation delivery-control step stopped. Its protected operation was retained; finish this same setup after reviewing the recovery reference.')
+        self.delivery_control_identity = identity  # The privileged RPC bound this to the database UUID.
+
     def service_file(self, name, content):
         self.check_unit(name)
         self.claims().write(Path('/etc/systemd/system') / name, content, 0o644)
 
     def services(self):
+        if self.owned_delivery() and not getattr(self, 'resource_claims', None):
+            self.fresh_delivery_control('begin-fresh')
         runtime = self.config / 'runtime.env'
         database_service = 'emailer-database.service' if self.database_profile == 'isolated' else 'mariadb.service'
         socket_path = f'/run/{self.name}-fpm/php.sock'
@@ -769,6 +791,12 @@ clear_env = no
 chdir = {self.base}/releases/current
 catch_workers_output = no
 ''', 0o644)
+        control_write = ''
+        if self.owned_delivery():
+            identity = getattr(self, 'delivery_control_identity', '')
+            if not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', identity):
+                raise SetupError('The protected delivery control identity is unavailable.')
+            control_write = ' ' + str(self.private.parent / 'delivery-control' / identity / 'owner')
         common = f'''User={self.user}
 Group={self.user}
 WorkingDirectory={self.base}/releases/current
@@ -777,7 +805,7 @@ UMask=0077
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
-ReadWritePaths={self.private} {self.keys} {self.backups}
+ReadWritePaths={self.private} {self.keys} {self.backups}{control_write}
 '''
         self.service_file(self.name + '-fpm.service', f'''[Unit]
 Description={self.product} isolated PHP runtime
@@ -793,7 +821,7 @@ UMask=0077
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
-ReadWritePaths={self.private} {self.keys} {self.backups} /run/{self.name}-fpm
+ReadWritePaths={self.private} {self.keys} {self.backups}{control_write} /run/{self.name}-fpm
 [Install]
 WantedBy=multi-user.target
 ''')
@@ -889,7 +917,9 @@ WantedBy=multi-user.target
         if path.is_symlink() or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != backup['sha256']:
             raise SetupError('The initial backup is missing or has changed. It was not replaced. Restore its saved copy or use the backup recovery reference before continuing.')
         self.console(['emailer:backup:verify', str(path)])
-        report = json.loads(self.console(['emailer:health:verify-runtime', '--record']))
+        report = json.loads(self.console(['emailer:health:verify-runtime', '--record', *(['--allow-operational-hold'] if self.owned_delivery() else [])]))
+        if self.owned_delivery():
+            self.state['control_runtime_verified'] = report.get('runtime_verified') is True
         codes = {finding['code'] for finding in report['findings']}
         self.state['mail_status'] = 'not configured; open Mail settings when ready' if 'sender_identity' in codes else ('configured; complete the connection check in Mail settings' if 'smtp_transport_security' in codes else 'configured')
         self.save()
@@ -928,6 +958,7 @@ WantedBy=multi-user.target
                              ('Installing background services', self.services), ('Creating recovery material and initial backup', self.recovery), ('Setting up trusted HTTPS', self.website),
                              ('Checking application health and initial backup', self.health)]:
             self.phase(name, action)
+        self.fresh_delivery_control('complete-fresh')
         print(f"\nInstallation successful. Sign in: https://{self.state['hostname']}/login\nEmail delivery: {self.state.get('mail_status', 'not configured') }.\nVerified backups: {self.private}/backups\nRecovery package: {self.keys}/recovery-key.enxkey\nRecovery password file (keep separately): {self.state_dir}/recovery-password\nLocal backup destination: {self.backups}\nServer command: sudo {self.name}\nKeep this package to resume or recover the installation.")
 
 

@@ -21,7 +21,7 @@ use Symfony\Component\Messenger\Exception\UnrecoverableMessageHandlingException;
 #[AsMessageHandler]
 final readonly class DeliverCampaignTestHandler
 {
-    public function __construct(private Connection $connection, private PublishedTemplateProvider $templates, private DeliveryConfiguration $configuration, private DeliveryTransport $transport, private SuppressionLookup $suppressions, private SendingGate $sendingGate, private CampaignDeliveryGateway $gateway)
+    public function __construct(private Connection $connection, private PublishedTemplateProvider $templates, private DeliveryConfiguration $configuration, private DeliveryTransport $transport, private SuppressionLookup $suppressions, private SendingGate $sendingGate, private CampaignDeliveryGateway $gateway, private ?Contract\DeliveryControl $control = null)
     {
     }
 
@@ -34,26 +34,37 @@ final readonly class DeliverCampaignTestHandler
 
             return;
         }
-        $row = $this->connection->transactional(function () use ($message): array|false {
-            $row = $this->connection->fetchAssociative('SELECT t.state, t.recipient_address, t.draft_version, c.operation_version, c.state campaign_state, c.id campaign_id, c.name, c.template_version_id, c.rsvp_enabled FROM campaign_test_delivery t INNER JOIN campaign c ON c.id = t.campaign_id WHERE t.id = ? FOR UPDATE', [$message->testDeliveryId]);
-            if (false === $row || 'pending' !== $row['state']) {
-                return false;
-            }
-            if (!is_numeric($row['draft_version']) || !is_numeric($row['operation_version']) || (int) $row['draft_version'] !== (int) $row['operation_version'] || !\in_array($row['campaign_state'], ['draft', 'review'], true)) {
-                $this->connection->update('campaign_test_delivery', ['state' => 'failed', 'failure_class' => 'superseded'], ['id' => $message->testDeliveryId]);
+        try {
+            $lease = $this->control?->claimLease();
+        } catch (\DomainException) {
+            $this->gateway->dispatchTestAfter($message->testDeliveryId, 30_000);
 
-                return false;
-            }
-            $runtime = $this->connection->fetchAssociative("SELECT schema_version, accepting_work FROM delivery_runtime WHERE singleton_key = '1' FOR UPDATE");
-            if (false === $runtime || !is_numeric($runtime['schema_version']) || !is_numeric($runtime['accepting_work']) || 1 !== (int) $runtime['schema_version'] || 1 !== (int) $runtime['accepting_work']) {
-                $this->gateway->dispatchTestAfter($message->testDeliveryId, 30_000);
+            return;
+        }
+        try {
+            $row = $this->connection->transactional(function () use ($message): array|false {
+                $row = $this->connection->fetchAssociative('SELECT t.state, t.recipient_address, t.draft_version, c.operation_version, c.state campaign_state, c.id campaign_id, c.name, c.template_version_id, c.rsvp_enabled FROM campaign_test_delivery t INNER JOIN campaign c ON c.id = t.campaign_id WHERE t.id = ? FOR UPDATE', [$message->testDeliveryId]);
+                if (false === $row || 'pending' !== $row['state']) {
+                    return false;
+                }
+                if (!is_numeric($row['draft_version']) || !is_numeric($row['operation_version']) || (int) $row['draft_version'] !== (int) $row['operation_version'] || !\in_array($row['campaign_state'], ['draft', 'review'], true)) {
+                    $this->connection->update('campaign_test_delivery', ['state' => 'failed', 'failure_class' => 'superseded'], ['id' => $message->testDeliveryId]);
 
-                return false;
-            }
-            $this->connection->update('campaign_test_delivery', ['state' => 'processing'], ['id' => $message->testDeliveryId]);
+                    return false;
+                }
+                $runtime = $this->connection->fetchAssociative("SELECT schema_version, accepting_work FROM delivery_runtime WHERE singleton_key = '1' FOR UPDATE");
+                if (false === $runtime || !is_numeric($runtime['schema_version']) || !is_numeric($runtime['accepting_work']) || 1 !== (int) $runtime['schema_version'] || 1 !== (int) $runtime['accepting_work']) {
+                    $this->gateway->dispatchTestAfter($message->testDeliveryId, 30_000);
 
-            return $row;
-        });
+                    return false;
+                }
+                $this->connection->update('campaign_test_delivery', ['state' => 'processing'], ['id' => $message->testDeliveryId]);
+
+                return $row;
+            });
+        } finally {
+            $lease?->release();
+        }
         if (false === $row || !\is_string($row['template_version_id']) || !\is_string($row['recipient_address']) || !\is_string($row['campaign_id']) || !\is_string($row['name'])) {
             return;
         }

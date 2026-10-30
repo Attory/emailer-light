@@ -7,5 +7,5 @@ namespace App\Module\Health\Application\Contract;
 interface RuntimeVerification
 {
     /** @return array<string, mixed> */
-    public function verifyRuntime(bool $offlineMaintenance = false): array;
+    public function verifyRuntime(bool $offlineMaintenance = false, bool $allowOperationalHold = false): array;
 }
