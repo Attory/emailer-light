@@ -192,6 +192,18 @@
     },
     {
       "type": "h2",
+      "text": "Installer holds and owner pauses"
+    },
+    {
+      "type": "p",
+      "text": "A successful operation releases only its own temporary installer hold after runtime verification and any required Accept action. An independent owner pause or another operation hold remains. Doctor reports the actual MFA, SMTP or other readiness requirement instead of calling a completed installation unfinished. Completing a requirement can allow previously approved due work to continue if the owner already enabled delivery; inspect that work before changing readiness."
+    },
+    {
+      "type": "p",
+      "text": "An interrupted or recovered operation retains its operation identifier, lifecycle and Finish or Recover action. Use the same verified setup and retained recovery material. Failed and uncertain messages are never retried by completion. An unattributed legacy hold remains unknown until its owner explicitly reviews and resumes it; a zero delivery flag alone never proves installer ownership."
+    },
+    {
+      "type": "h2",
       "text": "If setup stops"
     },
     {
@@ -234,18 +246,6 @@
     {
       "type": "p",
       "text": "Next: <a href=\"emailer-light-manual.html\">Light user manual</a>."
-    },
-    {
-      "type": "h2",
-      "text": "Installer holds and owner pauses"
-    },
-    {
-      "type": "p",
-      "text": "A successful operation releases only its own temporary installer hold after runtime verification and any required Accept action. An independent owner pause or another operation hold remains. Doctor reports the actual MFA, SMTP or other readiness requirement instead of calling a completed installation unfinished. Completing a requirement can allow previously approved due work to continue if the owner already enabled delivery; inspect that work before changing readiness."
-    },
-    {
-      "type": "p",
-      "text": "An interrupted or recovered operation retains its operation identifier, lifecycle and Finish or Recover action. Use the same verified setup and retained recovery material. Failed and uncertain messages are never retried by completion. An unattributed legacy hold remains unknown until its owner explicitly reviews and resumes it; a zero delivery flag alone never proves installer ownership."
     }
   ]
 }

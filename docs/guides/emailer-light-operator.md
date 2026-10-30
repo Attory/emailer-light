@@ -57,6 +57,8 @@ The generated launcher is `/usr/local/sbin/emailer-light`. Use `sudo emailer-lig
 
 Updates create an isolated target account, settings and FPM/service namespace; the canonical launcher and protected active-installation pointer select it. Read the actual completion summary and protected runtime receipt after an update. Do not assume the fresh service account or key path remains active. Never restart shared PHP to repair an Emailer instance.
 
+For a supervised native service-unit update, prepare the root-owned delivery-control parent before starting a unit whose ReadWritePaths names it: sudo install -d -o root -g root -m 0755 /var/lib/emailer/delivery-control. Substitute the verified parent of the intended private directory when its installation path differs. Do not create owner intent or operation records by hand; the authenticated updater binds those records to the installation. Retain this directory with disaster-recovery material outside private/database checkpoint restoration. Never replace a newer live owner-intent generation with an older backup.
+
 ## Safe diagnostics
 
 ```bash
@@ -175,4 +177,3 @@ A successful operation releases only its own temporary installer hold after runt
 
 An interrupted or recovered operation retains its operation identifier, lifecycle and Finish or Recover action. Use the same verified setup and retained recovery material. Failed and uncertain messages are never retried by completion. An unattributed legacy hold remains unknown until its owner explicitly reviews and resumes it; a zero delivery flag alone never proves installer ownership.
 
-For a supervised native service-unit update, prepare the root-owned delivery-control parent before starting a unit whose ReadWritePaths names it: sudo install -d -o root -g root -m 0755 /var/lib/emailer/delivery-control. Substitute the verified parent of the intended private directory when its installation path differs. Do not create owner intent or operation records by hand; the authenticated updater binds those records to the installation. Retain this directory with disaster-recovery material outside private/database checkpoint restoration. Never replace a newer live owner-intent generation with an older backup.

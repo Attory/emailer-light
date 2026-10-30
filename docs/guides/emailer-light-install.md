@@ -90,6 +90,12 @@ The completion summary gives your verified backup folder, local backup destinati
 
 For a fresh Light installation, backups are under `/var/lib/emailer-light/private/backups`, the local destination is `/var/backups/emailer-light`, the recovery package is `/var/lib/emailer-light/keys/recovery-key.enxkey`, and the password is `/var/lib/emailer-light-installer/recovery-password`. Host permission is needed to read the password. Never paste it into a support ticket. After updates or edition changes, use the locations printed by that operation.
 
+## Installer holds and owner pauses
+
+A successful operation releases only its own temporary installer hold after runtime verification and any required Accept action. An independent owner pause or another operation hold remains. Doctor reports the actual MFA, SMTP or other readiness requirement instead of calling a completed installation unfinished. Completing a requirement can allow previously approved due work to continue if the owner already enabled delivery; inspect that work before changing readiness.
+
+An interrupted or recovered operation retains its operation identifier, lifecycle and Finish or Recover action. Use the same verified setup and retained recovery material. Failed and uncertain messages are never retried by completion. An unattributed legacy hold remains unknown until its owner explicitly reviews and resumes it; a zero delivery flag alone never proves installer ownership.
+
 ## If setup stops
 
 | What you see | Smallest next action |
@@ -104,9 +110,3 @@ For a fresh Light installation, backups are under `/var/lib/emailer-light/privat
 After successful installation, running the file again opens an installation management menu. **Check the installation** is safe to repeat; an already-installed update leaves settings and delivery state unchanged. For other errors, use the [operator and troubleshooting reference](emailer-light-operator.md). Do not delete installer state or database files to retry.
 
 Next: [Light user manual](emailer-light-manual.md).
-
-## Installer holds and owner pauses
-
-A successful operation releases only its own temporary installer hold after runtime verification and any required Accept action. An independent owner pause or another operation hold remains. Doctor reports the actual MFA, SMTP or other readiness requirement instead of calling a completed installation unfinished. Completing a requirement can allow previously approved due work to continue if the owner already enabled delivery; inspect that work before changing readiness.
-
-An interrupted or recovered operation retains its operation identifier, lifecycle and Finish or Recover action. Use the same verified setup and retained recovery material. Failed and uncertain messages are never retried by completion. An unattributed legacy hold remains unknown until its owner explicitly reviews and resumes it; a zero delivery flag alone never proves installer ownership.
