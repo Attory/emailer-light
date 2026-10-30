@@ -171,6 +171,46 @@ final class DeliveryControlFilesTest extends TestCase
         self::assertSame($before, $files->status());
     }
 
+    public function testAcknowledgedPauseWaitsForAnAdmittedClaimThenBlocksTheNextClaim(): void
+    {
+        $files = $this->files();
+        $files->prepare(1000, 1000, 'enabled');
+        $lease = $files->claimLease();
+        $script = <<<'PHP'
+require $argv[1];
+try {
+    if (!posix_setgid(1000) || !posix_setuid(1000)) { exit(2); }
+    $files = new App\Shared\DeliveryControlFiles($argv[2], $argv[3]);
+    fwrite(STDOUT, "attempting\n"); fflush(STDOUT);
+    $files->pause();
+    fwrite(STDOUT, "acknowledged\n");
+} catch (Throwable) { exit(1); }
+PHP;
+        $child = proc_open([PHP_BINARY, '-r', $script, \dirname(__DIR__, 3).'/vendor/autoload.php', $this->directory.'/private', self::INSTALLATION], [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'a']], $pipes);
+        if (!\is_resource($child) || !isset($pipes[1])) {
+            $lease->release();
+            throw new \RuntimeException('Fixture process unavailable.');
+        }
+        stream_set_timeout($pipes[1], 3);
+        try {
+            self::assertSame("attempting\n", fgets($pipes[1]));
+            $read = [$pipes[1]];
+            $write = $except = [];
+            self::assertSame(0, stream_select($read, $write, $except, 0, 200000));
+            self::assertSame('enabled', $files->status()['owner']);
+            $lease->release();
+            self::assertSame("acknowledged\n", fgets($pipes[1]));
+            self::assertSame('paused', $files->status()['owner']);
+            self::assertSame(1, $files->status()['generation']);
+            $this->expectException(\DomainException::class);
+            $files->claimLease();
+        } finally {
+            $lease->release();
+            fclose($pipes[1]);
+            self::assertSame(0, proc_close($child));
+        }
+    }
+
     private function files(): DeliveryControlFiles
     {
         return new DeliveryControlFiles($this->directory.'/private', self::INSTALLATION);
