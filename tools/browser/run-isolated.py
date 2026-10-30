@@ -231,7 +231,7 @@ finally:
     for resource in reversed(containers):
         try:
             if inspect('container', resource)['Config']['Labels'].get(label) == token:
-                command(['docker', 'rm', '-f', resource])
+                command(['docker', 'rm', '-f', '-v', resource])
         except Exception:
             print('Task resource cleanup requires inspection: ' + resource, file=sys.stderr)
     if network_created:
