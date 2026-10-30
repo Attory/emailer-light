@@ -1,6 +1,6 @@
 # Emailer Light user manual
 
-Version 1.2.10 | Setup and everyday newsletters
+Version 1.2.11 | Setup and everyday newsletters
 
 Prepare, test, approve, then send. Saving a draft sends nothing. Light has one administrator and campaign-specific CSV audiences; it has no reusable contacts, lists, additional administrator accounts or MFA.
 
@@ -12,7 +12,7 @@ Ubuntu 26.04.1 HTTPS acceptance used a local ACME server with real HTTP challeng
 
 Light’s Ubuntu Apache installer supports wildcard virtual hosts. Address-specific Apache websites require Emailer Ripe with its supported address-specific installation profile. Nginx on a separate port, such as 8081, can remain running.
 
-The 1.2.10 setup file supports Ubuntu 22.04/24.04/26.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action.
+The 1.2.11 setup file supports Ubuntu 22.04/24.04/26.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action.
 
 ## Your installed account
 
@@ -140,14 +140,14 @@ If host setup stops, sending stays blocked and the saved operation records the f
 
 Setup creates and verifies its recovery backup. If automatic backups are enabled, it also refreshes and verifies that same encrypted backup at the already-configured destination before changing the application. It keeps your backup policy and does not run retention or send email. If the approved copy cannot be verified, sending remains held and setup names the blocker. Keep the recovery material; follow the displayed Recover or Finish action after correcting the backup folder or storage problem.
 
-1. Official Light 1.0.0, 1.1.0 and 1.2.0 through 1.2.9 retain their supported direct update to 1.2.10. Start the signed setup and check the displayed installation address.
+1. Official Light 1.0.0, 1.1.0 and 1.2.0 through 1.2.10 retain their supported direct update to 1.2.11. Start the signed setup and check the displayed installation address.
 2. Choose Update with a verified backup. The installer tracks its own operation hold and drains current work without retrying failed or uncertain messages.
 3. Successful completion retires only this operation’s hold. Existing owner pauses and other holds remain; Doctor names any actual SMTP or readiness blocker. Previously approved due work can continue when delivery was already enabled and readiness passes.
 4. For an interrupted operation use its retained Finish or Recover action. Recovery remains held until explicitly reviewed. Keep the verified recovery material.
 
 For an interruption, retain the same package and recovery files and choose Recover. A completed update cannot be undone by replaying recovery. See the [operator reference](emailer-light-operator.md). Installation is described in the [beginner guide](emailer-light-install.md). A compatible edition upgrade is separate; there is no general Ripe to Light downgrade.
 
-Light 1.2.6 and 1.2.10 use the same database schema. Older installations need the guided draft-schema migration; keep verified recovery material. Normal restore needs the same schema. Recover older backups with their matching release in an isolated environment. For interrupted updates choose Recover in setup; a completed update cannot be downgraded through recovery.
+Light 1.2.6 and 1.2.11 use the same database schema. Older installations need the guided draft-schema migration; keep verified recovery material. Normal restore needs the same schema. Recover older backups with their matching release in an isolated environment. For interrupted updates choose Recover in setup; a completed update cannot be downgraded through recovery.
 
 Template version actions use compact text controls with keyboard focus and wrapping on small screens. Synthetic preview opens a read-only preview. Run fake-only test and Publish remain explicit protected form submissions; saving a template draft does neither.
 
@@ -158,3 +158,5 @@ A successful operation releases only its own temporary installer hold after runt
 An interrupted or recovered operation retains its operation identifier, lifecycle and Finish or Recover action. Use the same verified setup and retained recovery material. Failed and uncertain messages are never retried by completion. An unattributed legacy hold remains unknown until its owner explicitly reviews and resumes it; a zero delivery flag alone never proves installer ownership.
 
 After recovery to an older release, that release may record Pause only in its database. A standalone retry treats its zero delivery flag as unknown intent instead of automatically restoring inferred enabled intent. Successful retry retires only the installer holds; review readiness and use supported Resume explicitly. A newer independently recorded owner pause is preserved. Use this signed follow-up rather than the standalone recovery/retry route in 1.2.9.
+
+Standalone native updates that reopen an older source writer before live-service verification cannot prove whether that source acknowledged a database-only Pause. Completion releases its installer hold but keeps inferred owner intent unknown for explicit review and supported Resume. Independently recorded owner actions are preserved. Guided host updates keep the source continuously fenced through completion and can automatically restore proven enabled intent.

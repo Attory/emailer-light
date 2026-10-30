@@ -1,6 +1,6 @@
 {
   "title": "Install Emailer Light",
-  "subtitle": "Version 1.2.10 | Beginner guide | Ubuntu Apache or Debian Nginx VPS",
+  "subtitle": "Version 1.2.11 | Beginner guide | Ubuntu Apache or Debian Nginx VPS",
   "blocks": [
     {
       "type": "p",
@@ -100,11 +100,11 @@
     },
     {
       "type": "code",
-      "text": "curl --fail --location --output emailer-light-1.2.10-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.2.10/\\\nemailer-light-1.2.10-setup.run"
+      "text": "curl --fail --location --output emailer-light-1.2.11-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.2.11/\\\nemailer-light-1.2.11-setup.run"
     },
     {
       "type": "p",
-      "text": "Or download <b>emailer-light-1.2.10-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.2.10\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
+      "text": "Or download <b>emailer-light-1.2.11-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.2.11\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
     },
     {
       "type": "p",
@@ -124,7 +124,7 @@
     },
     {
       "type": "code",
-      "text": "sudo sh emailer-light-1.2.10-setup.run"
+      "text": "sudo sh emailer-light-1.2.11-setup.run"
     },
     {
       "type": "p",
@@ -246,6 +246,10 @@
     {
       "type": "p",
       "text": "Next: <a href=\"emailer-light-manual.html\">Light user manual</a>."
+    },
+    {
+      "type": "p",
+      "text": "Standalone native updates that reopen an older source writer before live-service verification cannot prove whether that source acknowledged a database-only Pause. Completion releases its installer hold but keeps inferred owner intent unknown for explicit review and supported Resume. Independently recorded owner actions are preserved. Guided host updates keep the source continuously fenced through completion and can automatically restore proven enabled intent."
     }
   ]
 }

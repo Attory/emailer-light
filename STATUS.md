@@ -25,3 +25,6 @@ Required dependency audit identified CVE-2026-45070; the only dependency update
 is symfony/mime7.4.17→7.4.22. Both edition audits pass without weakening checks.
 No migration or production change. Composer Flex's unrelated importmap side effect
 was retained as a private review patch and reversed before committing.
+
+
+Light1.2.11 preparation: actual signed1210 standalone post-core legacy Pause loss reproduced. New authenticated source-awareness guards Finish, preserving ambiguous legacy intent as unknown while retiring successful installer holds. No production mutation; tests/release gates recorded in docs/RELEASE-1.2.11-PREPARATION.md.

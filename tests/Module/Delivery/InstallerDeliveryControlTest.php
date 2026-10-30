@@ -271,7 +271,7 @@ final class InstallerDeliveryControlTest extends TestCase
         $base = $this->directory.'/native-updates';
         mkdir($base, 0o700);
         $path = $base.'/light-1.2.8-to-1.2.9.json';
-        $common = ['format' => 'emailer-light-native-update-v1', 'identity' => ['installation_uuid' => self::INSTALLATION], 'binding' => str_repeat('a', 64), 'source_sha256' => str_repeat('b', 64), 'target_sha256' => str_repeat('c', 64), 'fence_restored' => true];
+        $common = ['delivery_control_source_aware' => true, 'format' => 'emailer-light-native-update-v1', 'identity' => ['installation_uuid' => self::INSTALLATION], 'binding' => str_repeat('a', 64), 'source_sha256' => str_repeat('b', 64), 'target_sha256' => str_repeat('c', 64), 'fence_restored' => true];
         file_put_contents($base.'/recovered-'.self::OTHER.'.json', json_encode([...$common, 'id' => self::OTHER, 'phase' => 'recovered', 'previous_operation_id' => null], JSON_THROW_ON_ERROR));
         chmod($base.'/recovered-'.self::OTHER.'.json', 0o600);
         file_put_contents($path, json_encode([...$common, 'id' => self::OPERATION, 'phase' => 'completed', 'control_runtime_verified' => true, 'previous_operation_id' => self::OTHER], JSON_THROW_ON_ERROR));
@@ -344,6 +344,53 @@ final class InstallerDeliveryControlTest extends TestCase
         self::assertSame('accepted', $this->db->fetchOne('SELECT state FROM campaign_test_delivery'));
         $handler($message); // Redelivery must not invoke the transport again.
         self::assertSame('accepted', $this->db->fetchOne('SELECT state FROM campaign_test_delivery'));
+    }
+
+    /** @return iterable<string, array{?bool, bool, string, int}> */
+    public static function standaloneWriterIntent(): iterable
+    {
+        yield 'legacy reopened writer requires review' => [false, false, 'enabled', 0];
+        yield 'missing provenance fails closed' => [null, false, 'enabled', 0];
+        yield 'continuously fenced legacy writer' => [false, true, 'enabled', 1];
+        yield 'aware source preserves enabled intent' => [true, false, 'enabled', 1];
+        yield 'aware source preserves pause' => [true, false, 'paused', 0];
+        yield 'legacy source preserves newer pause' => [false, false, 'paused', 0];
+        yield 'legacy source preserves explicit Resume generation' => [false, false, 'resumed', 1];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('standaloneWriterIntent')]
+    public function testStandaloneFinishDoesNotEraseAnAcknowledgedLegacyPause(?bool $aware, bool $fenced, string $intent, int $expected): void
+    {
+        $files = $this->files();
+        $files->prepare(1000, 1000, 'enabled');
+        if ('paused' === $intent) {
+            $files->pause();
+        } elseif ('resumed' === $intent) {
+            $files->pause();
+            $files->enable();
+        }
+        $base = $this->directory.'/native-updates';
+        mkdir($base, 0o700);
+        $proof = $base.'/light-1.2.8-to-1.2.11.json';
+        file_put_contents($proof, json_encode(['format' => 'emailer-light-native-update-v1', 'identity' => ['installation_uuid' => self::INSTALLATION], 'id' => self::OPERATION, 'phase' => 'completed', 'binding' => str_repeat('a', 64), 'source_sha256' => str_repeat('b', 64), 'target_sha256' => str_repeat('c', 64), 'fence_restored' => true, 'control_runtime_verified' => true, 'retain_source_fence' => $fenced, 'delivery_control_source_aware' => $aware], JSON_THROW_ON_ERROR));
+        chmod($proof, 0o600);
+        $files->hold(self::OPERATION, 'native', ['proof_path' => $proof]);
+        $this->db->insert('release_operation', ['id' => self::OPERATION, 'operation' => 'update', 'status' => 'succeeded', 'started_at' => '2026-01-01 00:00:00']);
+        // An old source's acknowledged Pause writes precisely this projection.
+        $this->db->executeStatement('UPDATE delivery_runtime SET accepting_work=0');
+        $control = new InstallerDeliveryControl($this->db, $this->directory.'/private');
+        $control->completeLightNative(self::OPERATION, $proof);
+        self::assertSame($expected, $this->accepting());
+        self::assertSame([], $files->status()['holds']);
+        self::assertSame('released', $files->operationState(self::OPERATION)['phase']);
+        if (true !== $aware && !$fenced && 'enabled' === $intent) {
+            self::assertSame('unknown', $files->status()['owner']);
+        }
+        $files->pause();
+        $this->db->executeStatement('UPDATE delivery_runtime SET accepting_work=0,active_claims=1');
+        $control->completeLightNative(self::OPERATION, $proof);
+        self::assertSame(0, $this->accepting());
+        self::assertSame('paused', $files->status()['owner']);
     }
 
     private function accepting(): int
