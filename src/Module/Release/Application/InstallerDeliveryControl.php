@@ -124,6 +124,11 @@ final readonly class InstallerDeliveryControl
         if ('released' === $hold['phase']) {
             return;
         }
+        if (true !== ($record['delivery_control_source_aware'] ?? null) && true !== ($record['retain_source_fence'] ?? null)) {
+            // A legacy writer reopened before live verification can acknowledge
+            // Pause only in the DB. Do not project inferred enabled intent over it.
+            $this->files->invalidateUnprovenLegacyIntent();
+        }
         $lease = $this->files->projectionLease();
         try {
             $holds = [];
