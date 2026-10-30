@@ -140,7 +140,7 @@ If host setup stops, sending stays blocked and the saved operation records the f
 
 Setup creates and verifies its recovery backup. If automatic backups are enabled, it also refreshes and verifies that same encrypted backup at the already-configured destination before changing the application. It keeps your backup policy and does not run retention or send email. If the approved copy cannot be verified, sending remains held and setup names the blocker. Keep the recovery material; follow the displayed Recover or Finish action after correcting the backup folder or storage problem.
 
-1. Official Light 1.0.0, 1.1.0 and 1.2.0 through 1.2.9 retain their supported direct update to 1.2.11. Start the signed setup and check the displayed installation address.
+1. Official Light 1.0.0, 1.1.0 and 1.2.0 through 1.2.10 retain their supported direct update to 1.2.11. Start the signed setup and check the displayed installation address.
 2. Choose Update with a verified backup. The installer tracks its own operation hold and drains current work without retrying failed or uncertain messages.
 3. Successful completion retires only this operation’s hold. Existing owner pauses and other holds remain; Doctor names any actual SMTP or readiness blocker. Previously approved due work can continue when delivery was already enabled and readiness passes.
 4. For an interrupted operation use its retained Finish or Recover action. Recovery remains held until explicitly reviewed. Keep the verified recovery material.
