@@ -1,6 +1,6 @@
 {
   "title": "Emailer Light user manual",
-  "subtitle": "Version 1.2.9 | Setup and everyday newsletters",
+  "subtitle": "Version 1.2.10 | Setup and everyday newsletters",
   "blocks": [
     {
       "type": "p",
@@ -24,7 +24,7 @@
     },
     {
       "type": "p",
-      "text": "The 1.2.9 setup file supports Ubuntu 22.04/24.04/26.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action."
+      "text": "The 1.2.10 setup file supports Ubuntu 22.04/24.04/26.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action."
     },
     {
       "type": "h2",
@@ -284,7 +284,7 @@
     {
       "type": "ol",
       "items": [
-        "Official Light 1.0.0, 1.1.0 and 1.2.0 through 1.2.8 retain their supported direct update to 1.2.9. Start the signed setup and check the displayed installation address.",
+        "Official Light 1.0.0, 1.1.0 and 1.2.0 through 1.2.9 retain their supported direct update to 1.2.10. Start the signed setup and check the displayed installation address.",
         "Choose Update with a verified backup. The installer tracks its own operation hold and drains current work without retrying failed or uncertain messages.",
         "Successful completion retires only this operation’s hold. Existing owner pauses and other holds remain; Doctor names any actual SMTP or readiness blocker. Previously approved due work can continue when delivery was already enabled and readiness passes.",
         "For an interrupted operation use its retained Finish or Recover action. Recovery remains held until explicitly reviewed. Keep the verified recovery material."
@@ -296,7 +296,7 @@
     },
     {
       "type": "callout",
-      "text": "Light 1.2.6 and 1.2.9 use the same database schema. Older installations need the guided draft-schema migration; keep verified recovery material. Normal restore needs the same schema. Recover older backups with their matching release in an isolated environment. For interrupted updates choose Recover in setup; a completed update cannot be downgraded through recovery."
+      "text": "Light 1.2.6 and 1.2.10 use the same database schema. Older installations need the guided draft-schema migration; keep verified recovery material. Normal restore needs the same schema. Recover older backups with their matching release in an isolated environment. For interrupted updates choose Recover in setup; a completed update cannot be downgraded through recovery."
     },
     {
       "type": "p",
@@ -313,6 +313,10 @@
     {
       "type": "p",
       "text": "An interrupted or recovered operation retains its operation identifier, lifecycle and Finish or Recover action. Use the same verified setup and retained recovery material. Failed and uncertain messages are never retried by completion. An unattributed legacy hold remains unknown until its owner explicitly reviews and resumes it; a zero delivery flag alone never proves installer ownership."
+    },
+    {
+      "type": "p",
+      "text": "After recovery to an older release, that release may record Pause only in its database. A standalone retry treats its zero delivery flag as unknown intent instead of automatically restoring inferred enabled intent. Successful retry retires only the installer holds; review readiness and use supported Resume explicitly. A newer independently recorded owner pause is preserved. Use this signed follow-up rather than the standalone recovery/retry route in 1.2.9."
     }
   ]
 }

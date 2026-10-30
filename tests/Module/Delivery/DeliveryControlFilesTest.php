@@ -211,6 +211,23 @@ PHP;
         }
     }
 
+    public function testLegacyZeroReconciliationPreservesNewerExplicitOwnerGenerations(): void
+    {
+        $files = $this->files();
+        $files->prepare(1000, 1000, 'enabled');
+        $files->invalidateUnprovenLegacyIntent();
+        self::assertSame('unknown', $files->status()['owner']);
+        self::assertSame(1, $files->status()['generation']);
+        $files->enable(); // An explicit reviewed Resume is a newer authority.
+        $enabled = $files->status();
+        $files->invalidateUnprovenLegacyIntent();
+        self::assertSame($enabled, $files->status());
+        $files->pause();
+        $paused = $files->status();
+        $files->invalidateUnprovenLegacyIntent();
+        self::assertSame($paused, $files->status());
+    }
+
     private function files(): DeliveryControlFiles
     {
         return new DeliveryControlFiles($this->directory.'/private', self::INSTALLATION);

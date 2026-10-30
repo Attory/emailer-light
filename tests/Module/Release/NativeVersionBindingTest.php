@@ -9,6 +9,17 @@ use PHPUnit\Framework\TestCase;
 
 final class NativeVersionBindingTest extends TestCase
 {
+    public function testRecoveryIntentFollowupPreservesCurrentSourceSchemaAndExactIdentity(): void
+    {
+        foreach (['1.2.6', '1.2.7', '1.2.8', '1.2.9'] as $source) {
+            $binding = new NativeVersionBinding($source, '1.2.10');
+            $original = ['installation_uuid' => 'unchanged', 'product_version' => $source, 'schema_version' => '20261025000000'];
+            $before = $binding->lock(json_encode($original, JSON_THROW_ON_ERROR), true);
+            self::assertSame('20261025000000', $binding->sourceSchema());
+            self::assertSame($before, $binding->lock(json_encode([...$original, 'product_version' => '1.2.10'], JSON_THROW_ON_ERROR)));
+        }
+    }
+
     public function testOriginalAndUpdatedLocksHaveTheSameOperationBoundFingerprint(): void
     {
         foreach (['1.0.0', '1.1.0'] as $source) {
