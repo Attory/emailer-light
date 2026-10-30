@@ -1,6 +1,6 @@
 # Emailer Light user manual
 
-Version 1.2.7 | Setup and everyday newsletters
+Version 1.2.8 | Setup and everyday newsletters
 
 Prepare, test, approve, then send. Saving a draft sends nothing. Light has one administrator and campaign-specific CSV audiences; it has no reusable contacts, lists, additional administrator accounts or MFA.
 
@@ -12,7 +12,7 @@ Ubuntu 26.04.1 HTTPS acceptance used a local ACME server with real HTTP challeng
 
 Light’s Ubuntu Apache installer supports wildcard virtual hosts. Address-specific Apache websites require Emailer Ripe with its supported address-specific installation profile. Nginx on a separate port, such as 8081, can remain running.
 
-The 1.2.7 setup file supports Ubuntu 22.04/24.04/26.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action.
+The 1.2.8 setup file supports Ubuntu 22.04/24.04/26.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action.
 
 ## Your installed account
 
@@ -140,11 +140,13 @@ If host setup stops, sending stays blocked and the saved operation records the f
 
 Setup creates and verifies its recovery backup. If automatic backups are enabled, it also refreshes and verifies that same encrypted backup at the already-configured destination before changing the application. It keeps your backup policy and does not run retention or send email. If the approved copy cannot be verified, sending remains held and setup names the blocker. Keep the recovery material; follow the displayed Recover or Finish action after correcting the backup folder or storage problem.
 
-1. Download the official new Light setup file and start it using the installation action. Light 1.0.0, 1.1.0 and 1.2.0 through 1.2.6 can update directly to 1.2.7. Check the displayed installation address.
+1. Download the official new Light setup file and start it using the installation action. Light 1.0.0, 1.1.0 and 1.2.0 through 1.2.6 can update directly to 1.2.8. Check the displayed installation address.
 2. Choose Update with a verified backup. Setup acquires a delivery hold, captures the prior state and drains in-flight work before changing the application. It announces paused delivery only when it confirmed an active campaign.
 3. After verification, setup restores the prior operational state. An existing hold remains held; an ordinary idle update succeeds without SMTP. Previously active approved campaigns continue only after normal readiness passes. Successful completion says Update successful. Sign in: followed by your address.
 4. If verification or readiness fails, the hold remains with the actual reason and next action. Follow Finish only when instructed for a committed operation. Recover interrupted operations before retrying. Recovery never automatically retries an uncertain message or starts drafts.
 
 For an interruption, retain the same package and recovery files and choose Recover. A completed update cannot be undone by replaying recovery. See the [operator reference](emailer-light-operator.md). Installation is described in the [beginner guide](emailer-light-install.md). A compatible edition upgrade is separate; there is no general Ripe to Light downgrade.
 
-Light 1.2.6 and 1.2.7 use the same database schema. Older installations need the guided draft-schema migration; keep verified recovery material. Normal restore needs the same schema. Recover older backups with their matching release in an isolated environment. For interrupted updates choose Recover in setup; a completed update cannot be downgraded through recovery.
+Light 1.2.6 and 1.2.8 use the same database schema. Older installations need the guided draft-schema migration; keep verified recovery material. Normal restore needs the same schema. Recover older backups with their matching release in an isolated environment. For interrupted updates choose Recover in setup; a completed update cannot be downgraded through recovery.
+
+Template version actions use compact text controls with keyboard focus and wrapping on small screens. Synthetic preview opens a read-only preview. Run fake-only test and Publish remain explicit protected form submissions; saving a template draft does neither.

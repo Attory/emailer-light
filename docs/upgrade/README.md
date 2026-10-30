@@ -16,3 +16,5 @@ readiness-checked action. There is no general Ripe to Light downgrade.
 The public contracts are [1.0](contract-1.0.json) and [1.1](contract-1.1.json), and
 [1.2](contract-1.2.1.json).
 This repository contains only Light implementation and its public contract.
+
+Light1.2.8 uses [its release-specific contract](contract-1.2.8.json) and the unchanged draft schema proof. Its corresponding Ripe minimum is1.3.4; original releases and contracts remain unchanged.

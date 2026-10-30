@@ -20,7 +20,7 @@ final readonly class NativeSchemaUpdate
 
     public static function supports(string $source, string $target): bool
     {
-        return (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5', '1.2.6'], true) && '1.2.7' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5'], true) && '1.2.6' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4'], true) && '1.2.5' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3'], true) && '1.2.4' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2'], true) && '1.2.3' === $target) || ('1.0.0' === $source && '1.1.0' === $target) || (\in_array($source, ['1.0.0', '1.1.0'], true) && '1.2.0' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0'], true) && '1.2.1' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1'], true) && '1.2.2' === $target);
+        return (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5', '1.2.6', '1.2.7'], true) && '1.2.8' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5', '1.2.6'], true) && '1.2.7' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4', '1.2.5'], true) && '1.2.6' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3', '1.2.4'], true) && '1.2.5' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2', '1.2.3'], true) && '1.2.4' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.2'], true) && '1.2.3' === $target) || ('1.0.0' === $source && '1.1.0' === $target) || (\in_array($source, ['1.0.0', '1.1.0'], true) && '1.2.0' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0'], true) && '1.2.1' === $target) || (\in_array($source, ['1.0.0', '1.1.0', '1.2.0', '1.2.1'], true) && '1.2.2' === $target);
     }
 
     /** @return array{status: string, delivery_held: bool} */
@@ -40,7 +40,7 @@ final readonly class NativeSchemaUpdate
         if (!self::supports(NativeUpdateJournal::text($source['version']), NativeUpdateJournal::text($target['version']))) {
             throw new \RuntimeException('The authenticated source and target are not a supported native Light update pair.');
         }
-        if (\in_array($target['version'], ['1.2.6', '1.2.7'], true) && CampaignDraftSchemaPlan::SOURCE_SCHEMA === $source['schema_version']) {
+        if (\in_array($target['version'], ['1.2.6', '1.2.7', '1.2.8'], true) && CampaignDraftSchemaPlan::SOURCE_SCHEMA === $source['schema_version']) {
             (new CampaignDraftSchemaPlan($this->connection, $this->projectDirectory, NativeUpdateJournal::text($target['version'])))->assertPackages($source, $target);
         } elseif (!\in_array($source['schema_version'], [CampaignDraftSchemaPlan::SOURCE_SCHEMA, CampaignDraftSchemaPlan::TARGET_SCHEMA], true) || $source['schema_version'] !== $target['schema_version'] || $this->migrations($source) !== $this->migrations($target)) {
             throw new \RuntimeException('This native update supports only the explicit verified schema-preserving Light release pairs.');
@@ -187,7 +187,7 @@ final readonly class NativeSchemaUpdate
         }
         $id = Identity::uuidV7();
         $record = ['format' => 'emailer-light-native-update-v1', 'id' => $id, 'phase' => 'preparing', 'retain_source_fence' => $this->retainSourceFence, 'binding' => $binding, 'source_sha256' => hash_file('sha256', $sourceArchive), 'target_sha256' => hash_file('sha256', $targetArchive), 'schema' => $this->schema(), 'account' => $this->fence->identify(), 'files' => $this->captureFiles($base.'/'.$id, $versions), 'identity' => $identity];
-        if (\in_array($targetVersion, ['1.2.6', '1.2.7'], true) && !$draftSource) {
+        if (\in_array($targetVersion, ['1.2.6', '1.2.7', '1.2.8'], true) && !$draftSource) {
             $plan = new CampaignDraftSchemaPlan($this->connection, $this->projectDirectory, $versions->target);
             $record['draft_schema_plan'] = $plan->prepare($this->schemaParts());
             $plan->assertState($record['draft_schema_plan'], NativeUpdateJournal::text($record['schema']));
@@ -205,7 +205,7 @@ final readonly class NativeSchemaUpdate
             throw new \RuntimeException('The verified safety backup cannot be assigned to its dedicated application account.');
         }
         $this->backups->verify($backup['path']);
-        if ('1.2.7' === $targetVersion) {
+        if (\in_array($targetVersion, ['1.2.7', '1.2.8'], true)) {
             $this->backupCopy?->preserve($backup);
         }
         $record['backup'] = $backup;
@@ -330,7 +330,7 @@ final readonly class NativeSchemaUpdate
             throw new \RuntimeException('The installation lock is invalid.');
         }
         $value['product_version'] = $version;
-        if (\in_array($versions->target, ['1.2.6', '1.2.7'], true)) {
+        if (\in_array($versions->target, ['1.2.6', '1.2.7', '1.2.8'], true)) {
             $value['schema_version'] = $version === $versions->target ? CampaignDraftSchemaPlan::TARGET_SCHEMA : $versions->sourceSchema();
         }
         $this->writeLock(json_encode($value, JSON_THROW_ON_ERROR)."\n");

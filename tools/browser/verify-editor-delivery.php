@@ -52,6 +52,12 @@ try {
         exit(0);
     }
     $baseline = $read($directory.'/editor-no-send-baseline.json');
+    if (in_array($mode, ['actions', 'mfa'], true)) {
+        $ensure($counts() === $baseline['counts'] && $mail()['total'] === $baseline['mail_count']);
+        $write($directory.'/'.$mode.'-no-send-result.json', ['status' => 'PASS', 'counts_unchanged' => true, 'sink_messages_unchanged' => true]);
+        echo "Focused browser no-send checks PASS.\n";
+        exit(0);
+    }
     $browser = $read($directory.'/browser-result.json');
     $ensure('PASS' === $browser['status']);
     if ('request' === $mode) {
