@@ -1,6 +1,6 @@
 # Light operator and troubleshooting reference
 
-Version 1.2.13 | Exceptional hosting, updates and recovery
+Version 1.2.14 | Exceptional hosting, updates and recovery
 
 This reference covers exceptional hosting, update and recovery work. Start with the [beginner installation guide](emailer-light-install.md) for the normal path. The installer supplies the runtime, verifier, launcher, database provisioning, keys, services, backup defaults and HTTPS configuration; customers do not assemble these pieces.
 
@@ -68,7 +68,7 @@ sudo emailer-light emailer:doctor:run --json
 
 The health command distinguishes structural installation completion from sending readiness. Deferred SMTP is compatible with structural completion and blocks actual sending. Doctor retains its original sending gates and severity. Open Doctor after changing mail or MFA settings; installer Check does not remove the operational hold.
 
-Fresh redacted diagnostics are under `/var/lib/emailer-light-installer/last-error.json`. Managed operations use `/etc/emailer-light/installer/<edition>/1.2.13/last-error.json`. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status.
+Fresh redacted diagnostics are under `/var/lib/emailer-light-installer/last-error.json`. Managed operations use `/etc/emailer-light/installer/<edition>/1.2.14/last-error.json`. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status.
 
 ## Error reference
 
@@ -142,7 +142,7 @@ If setup says a reserved host resource is occupied or changed, it has kept that 
 
 ## Resume after the 1.2.1 web-server check
 
-If 1.2.1 stopped during Checking this server with Existing Nginx/Caddy was preserved, download the official 1.2.13 setup file and start it with sudo sh as in the installation guide. That check occurs before installation initialization or database creation. Keep the existing installer state directory and its operation lock; no state or database deletion is needed. An operation that progressed beyond this check remains bound to its original signed package; complete it with that package before a normal update. If Light reports an address-specific Apache website, this server configuration requires Ripe; retrying Light will retain the same supported-profile restriction.
+If 1.2.1 stopped during Checking this server with Existing Nginx/Caddy was preserved, download the official 1.2.14 setup file and start it with sudo sh as in the installation guide. That check occurs before installation initialization or database creation. Keep the existing installer state directory and its operation lock; no state or database deletion is needed. An operation that progressed beyond this check remains bound to its original signed package; complete it with that package before a normal update. If Light reports an address-specific Apache website, this server configuration requires Ripe; retrying Light will retain the same supported-profile restriction.
 
 ## Template images and unsaved editor recovery
 
@@ -165,7 +165,7 @@ Earlier uploaded images become visible in the updated gallery. Browser draft rec
 
 ## Incomplete-draft schema update and recovery
 
-Light 1.2.13 and Ripe 1.3.3 allow campaign drafts without a selected template. Their schema is 20261025000000. The guided setup file authenticates both installed and target releases, fences application writers, creates verified recovery material, applies the reviewed migration and checks the final runtime. Publication, approval and delivery remain explicit.
+Light 1.2.14 and Ripe 1.3.3 allow campaign drafts without a selected template. Their schema is 20261025000000. The guided setup file authenticates both installed and target releases, fences application writers, creates verified recovery material, applies the reviewed migration and checks the final runtime. Publication, approval and delivery remain explicit.
 
 Use the same setup file and its Recover action after interruption. Light recovery admits only the recorded complete source or intermediate schema/ledger/identity states and unchanged business data; it never deletes or coerces new incomplete drafts to fit an older schema. Ripe uses its verified complete source schema checkpoint. A completed update cannot be rolled back with an interruption recovery command.
 
@@ -183,13 +183,10 @@ Standalone native updates that reopen an older source writer before live-service
 
 ## Corrected control access and incident recovery
 
-Ripe 1.3.6 and Light 1.2.13 correct delivery-control directory access under restrictive installer umask0077. Root-owned control base, installation namespace and holds are explicitly root:root0755; only the owner directory is application-owned0700, with private0600 intent and lock files. An unreadable, malformed or inaccessible namespace blocks sending with delivery_control_unavailable; it is never accepted as absent legacy state. Production requires configured controls. Missing records on an already protocol-aware source require protected recovery; the installer will not recreate them over a potentially lost owner pause.
+Ripe 1.3.6 and Light 1.2.14 correct delivery-control directory access under restrictive installer umask0077. Root-owned control base, installation namespace and holds are explicitly root:root0755; only the owner directory is application-owned0700, with private0600 intent and lock files. An unreadable, malformed or inaccessible namespace blocks sending with delivery_control_unavailable; it is never accepted as absent legacy state. Production requires configured controls. Missing records on an already protocol-aware source require protected recovery; the installer will not recreate them over a potentially lost owner pause.
 
 Use the corrected signed setup through its normal authenticated Update/Finish flow. It verifies the installed source before repairing safe product-owned directory metadata. Keep independent pauses, other operation holds and any incident worker/scheduler fence. Do not recursively chmod private storage, edit journals or patch the installed package. A database-only Pause acknowledged while old controls were inaccessible may require explicit owner review; newer independent intent is preserved. Before restarting dedicated delivery services, verify control status and hold rejection as their actual nonroot accounts inside their service namespaces. Then verify genuine fresh heartbeats and readiness. Release only the completed installer-owned hold; do not send test mail or retry failed work.
 
-
 ## Automatic maintenance completion
 
-Manually initiated setup temporarily excludes sending while files, database and services change. Successful live verification automatically removes that operation’s temporary exclusion and matching recovered predecessor blocks. No extra Finish or Resume is required after success. An edition transition that needs Accept automatically completes delivery release after successful Accept. Independent owner pauses, campaign approval, suppression/unsubscribe, MFA and SMTP sending rules remain enforced. Existing approved due work can continue; drafts are never approved and failed or uncertain messages are never retried.
-
-A failed or interrupted installation remains blocked with the concrete failure and its recovery action. Finish is an interrupted service-handoff recovery action, not a normal post-success delivery step. Historical recovery receipt omissions do not invalidate a later fully verified successful handoff. Original recovery journals and backups remain unchanged. Standalone native core migration is only part of a supervised operation: its caller must finish service verification and automatic completion within that same operation; core-only output is not whole-operation success.
+After a successful manually initiated install/update and live service verification, setup automatically releases the operation temporary sending exclusion. Successful edition Accept does the same. Normal owner pauses, campaign approval, suppression, authentication and SMTP rules remain. Already approved delivery may continue; drafts are never approved and failed or uncertain messages are never retried. A failed or incomplete operation names its concrete failure and recovery action, not a misleading successful-maintenance hold.

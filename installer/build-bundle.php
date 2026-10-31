@@ -39,7 +39,7 @@ try {
     if (!is_string($options['predecessors'] ?? null)) {
         throw new RuntimeException('The self-contained installer requires its authenticated predecessor package set.');
     }
-    $priorArchives = ['emailer-light-1.2.9.zip', 'emailer-light-1.2.8.zip', 'emailer-light-1.0.0.zip', 'emailer-light-1.1.0.zip', 'emailer-light-1.2.0.zip', 'emailer-light-1.2.1.zip', 'emailer-light-1.2.2.zip', 'emailer-light-1.2.3.zip', 'emailer-light-1.2.4.zip', 'emailer-light-1.2.5.zip', 'emailer-light-1.2.6.zip', 'emailer-light-1.2.7.zip'];
+    $priorArchives = ['emailer-light-1.2.13.zip', 'emailer-light-1.2.9.zip', 'emailer-light-1.2.8.zip', 'emailer-light-1.0.0.zip', 'emailer-light-1.1.0.zip', 'emailer-light-1.2.0.zip', 'emailer-light-1.2.1.zip', 'emailer-light-1.2.2.zip', 'emailer-light-1.2.3.zip', 'emailer-light-1.2.4.zip', 'emailer-light-1.2.5.zip', 'emailer-light-1.2.6.zip', 'emailer-light-1.2.7.zip'];
     if (version_compare($options['version'], '1.2.13', '>=')) {
         array_unshift($priorArchives, 'emailer-light-1.2.12.zip');
     }

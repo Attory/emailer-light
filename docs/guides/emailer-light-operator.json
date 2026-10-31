@@ -1,6 +1,6 @@
 {
   "title": "Light operator and troubleshooting reference",
-  "subtitle": "Version 1.2.13 | Exceptional hosting, updates and recovery",
+  "subtitle": "Version 1.2.14 | Exceptional hosting, updates and recovery",
   "blocks": [
     {
       "type": "p",
@@ -171,7 +171,7 @@
     },
     {
       "type": "p",
-      "text": "Fresh redacted diagnostics are under <code>/var/lib/emailer-light-installer/last-error.json</code>. Managed operations use <code>/etc/emailer-light/installer/&lt;edition&gt;/1.2.13/last-error.json</code>. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status."
+      "text": "Fresh redacted diagnostics are under <code>/var/lib/emailer-light-installer/last-error.json</code>. Managed operations use <code>/etc/emailer-light/installer/&lt;edition&gt;/1.2.14/last-error.json</code>. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status."
     },
     {
       "type": "h2",
@@ -341,7 +341,7 @@
     },
     {
       "type": "p",
-      "text": "If 1.2.1 stopped during Checking this server with Existing Nginx/Caddy was preserved, download the official 1.2.13 setup file and start it with sudo sh as in the installation guide. That check occurs before installation initialization or database creation. Keep the existing installer state directory and its operation lock; no state or database deletion is needed. An operation that progressed beyond this check remains bound to its original signed package; complete it with that package before a normal update. If Light reports an address-specific Apache website, this server configuration requires Ripe; retrying Light will retain the same supported-profile restriction."
+      "text": "If 1.2.1 stopped during Checking this server with Existing Nginx/Caddy was preserved, download the official 1.2.14 setup file and start it with sudo sh as in the installation guide. That check occurs before installation initialization or database creation. Keep the existing installer state directory and its operation lock; no state or database deletion is needed. An operation that progressed beyond this check remains bound to its original signed package; complete it with that package before a normal update. If Light reports an address-specific Apache website, this server configuration requires Ripe; retrying Light will retain the same supported-profile restriction."
     },
     {
       "type": "h2",
@@ -402,7 +402,7 @@
     },
     {
       "type": "p",
-      "text": "Light 1.2.13 and Ripe 1.3.3 allow campaign drafts without a selected template. Their schema is 20261025000000. The guided setup file authenticates both installed and target releases, fences application writers, creates verified recovery material, applies the reviewed migration and checks the final runtime. Publication, approval and delivery remain explicit."
+      "text": "Light 1.2.14 and Ripe 1.3.3 allow campaign drafts without a selected template. Their schema is 20261025000000. The guided setup file authenticates both installed and target releases, fences application writers, creates verified recovery material, applies the reviewed migration and checks the final runtime. Publication, approval and delivery remain explicit."
     },
     {
       "type": "p",
@@ -438,7 +438,7 @@
     },
     {
       "type": "p",
-      "text": "Ripe 1.3.6 and Light 1.2.13 correct delivery-control directory access under restrictive installer umask0077. Root-owned control base, installation namespace and holds are explicitly root:root0755; only the owner directory is application-owned0700, with private0600 intent and lock files. An unreadable, malformed or inaccessible namespace blocks sending with delivery_control_unavailable; it is never accepted as absent legacy state. Production requires configured controls. Missing records on an already protocol-aware source require protected recovery; the installer will not recreate them over a potentially lost owner pause."
+      "text": "Ripe 1.3.6 and Light 1.2.14 correct delivery-control directory access under restrictive installer umask0077. Root-owned control base, installation namespace and holds are explicitly root:root0755; only the owner directory is application-owned0700, with private0600 intent and lock files. An unreadable, malformed or inaccessible namespace blocks sending with delivery_control_unavailable; it is never accepted as absent legacy state. Production requires configured controls. Missing records on an already protocol-aware source require protected recovery; the installer will not recreate them over a potentially lost owner pause."
     },
     {
       "type": "p",
