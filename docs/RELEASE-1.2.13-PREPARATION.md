@@ -1,0 +1,9 @@
+# 1.2.13: bounded automatic maintenance completion
+
+Authorized maintenance scope: remove post-success delivery steps, retire matching recovered predecessor blocks even when old receipts are missing, preserve independent owner intent and every normal sending rule. No schema/dependency/HTTP-route changes. Signed prior release assets are immutable.
+
+Review: current operation still requires verified live successful handoff; its latest-operation/root identity binding remains. Prior records must be recovered and match installation/private/source/archive lineage. Unfinished or unrelated holds remain. Journals are not fabricated or rewritten. Completion is idempotent and never mutates queue items/campaign approvals/attempts; existing fake-delivery regression exercises failed/accepted message replay. Failed/incomplete host proof cannot retire its block. Owner Pause survives. The successful ordinary setup path invokes completion internally; Finish remains for interrupted handoffs only.
+
+Focused delivery control/maintenance fixtures: 40 tests /385 assertions passed under root with actual nonroot claim/access checks. Ripe-only exact two missing-receipt reproduction failed on the released source and passed after repair. Existing successful-update, failed/incomplete, owner pause/overlap and no-send/no-retry coverage reused. Static analysis, formatting, shell/module boundaries, secrets/private-data scans run; final results recorded in administration release custody. No historical/OS/PHP matrix or browser-suite rerun under explicit owner cost constraint. Earlier reviewed release evidence remains historical, not a claim that new matrices passed.
+
+Publication/deployment authority: Anton explicitly authorizes exact-head merge/publication/deployment for this bounded job. Production remains with Emailer Administration; operate clients sequentially, fresh protected recovery and no-email live checks.
