@@ -3,6 +3,8 @@
 {% block body %}
 <main class="auth-shell">
     <h1>Sign in</h1>
+    {% if expiry_notice == 'idle' %}<p class="alert" role="alert">You’ve been signed out due to inactivity. Sign in again to continue.</p>
+    {% elseif expiry_notice == 'absolute' %}<p class="alert" role="alert">Your session reached its 12-hour limit. Sign in again to continue.</p>{% endif %}
     {% if error %}<p class="alert" role="alert">Authentication failed.</p>{% endif %}
     <form method="post" action="{{ path('identity_login') }}">
         <input type="hidden" name="_token" value="{{ csrf_token('identity-login') }}">

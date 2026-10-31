@@ -10,7 +10,7 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 final class LoginSessionTest extends WebTestCase
 {
-    public function testPasswordLoginCsrfLogoutAndSessionExpiry(): void
+    public function testPasswordLoginCsrfLogoutAndNoAutomaticSessionExpiry(): void
     {
         $private = sys_get_temp_dir().'/light-http-'.bin2hex(random_bytes(8));
         mkdir($private, 0o700);
@@ -58,7 +58,23 @@ final class LoginSessionTest extends WebTestCase
             self::assertIsString($csrf);
             $client->request('POST', '/login', [...$credentials, '_token' => $csrf], server: [...$server, 'REMOTE_ADDR' => '198.51.100.43']);
             self::assertResponseRedirects('/admin');
-            $database->executeStatement("UPDATE user_session SET idle_expires_at = '2020-01-01 00:00:00.000000' WHERE user_id = ? AND revoked_at IS NULL", [$id]);
+            $database->executeStatement("UPDATE user_session SET idle_expires_at = '2020-01-01 00:00:00.000000', absolute_expires_at = '2020-01-01 00:00:00.000000' WHERE user_id = ? AND revoked_at IS NULL", [$id]);
+            $handler = self::getContainer()->get(\App\Module\Identity\Infrastructure\DatabaseSessionHandler::class);
+            self::assertInstanceOf(\App\Module\Identity\Infrastructure\DatabaseSessionHandler::class, $handler);
+            $handler->write('old-light-session', 'retained-light-authority');
+            $database->executeStatement("UPDATE user_session SET idle_expires_at = '2020-01-01', absolute_expires_at = '2020-01-01' WHERE revoked_at IS NULL");
+            self::assertSame(0, $handler->gc(1800));
+            self::assertTrue($handler->validateId('old-light-session'));
+            self::assertSame('retained-light-authority', $handler->read('old-light-session'));
+            $handler->destroy('old-light-session');
+            $handler->write('old-light-session', 'late-authority');
+            self::assertFalse($handler->validateId('old-light-session'));
+            self::assertSame('', $handler->read('old-light-session'));
+            $client->request('GET', '/admin', server: $server);
+            self::assertResponseIsSuccessful();
+            $registry = self::getContainer()->get(\App\Module\Identity\Application\SessionRegistry::class);
+            self::assertInstanceOf(\App\Module\Identity\Application\SessionRegistry::class, $registry);
+            self::assertGreaterThanOrEqual(1, $registry->revokeAll($id));
             $client->request('GET', '/admin', server: $server);
             self::assertResponseRedirects('/login');
             $client->request('POST', '/login', [...$credentials, '_token' => 'invalid'], server: [...$server, 'REMOTE_ADDR' => '192.0.2.9']);

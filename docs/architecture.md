@@ -14,3 +14,9 @@ The one-way edition contract is in [`docs/upgrade/contract-1.0.json`](upgrade/co
 Ripe 1.3.6 and Light 1.2.12 correct delivery-control directory access under restrictive installer umask0077. Root-owned control base, installation namespace and holds are explicitly root:root0755; only the owner directory is application-owned0700, with private0600 intent and lock files. An unreadable, malformed or inaccessible namespace blocks sending with delivery_control_unavailable; it is never accepted as absent legacy state.
 
 The root updater publishes an installation-bound access-repair receipt before mode changes. Interrupted replay retains ambiguous zero-generation intent as unknown while preserving newer owner generations. No root operation record becomes application-writable. Nonroot actor and actual service-namespace checks supplement root health; affected releases remain advisory/immutable.
+
+## Maintenance session policy
+
+Emailer Light has no automatic inactivity or absolute session-age expiry. Explicit sign-out, revocation and credential/security invalidation remain effective. Browser closure still follows the existing session-cookie behavior. No timeout setting or schema migration is added.
+
+When a background poll loses authentication, sign in using the notice link in another tab, then return to the unchanged editor. Campaign fields and selected CSV remain in that tab; choose Refresh security check before saving. Template editor recovery continues to use its existing per-tab recovery copy. An authentication expiry is not a delivery fault; do not change SMTP, resume delivery or retry failed work to fix it.

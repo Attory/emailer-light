@@ -44,8 +44,8 @@ SQL, [
     {
         $current = $this->hashId($currentSessionId);
         $rows = $this->connection->fetchAllAssociative(
-            'SELECT id_hash, created_at, last_seen_at, idle_expires_at, absolute_expires_at FROM user_session WHERE user_id = ? AND revoked_at IS NULL AND idle_expires_at > ? AND absolute_expires_at > ? ORDER BY last_seen_at DESC',
-            [$userId, IdentityUtil::now(), IdentityUtil::now()],
+            'SELECT id_hash, created_at, last_seen_at, idle_expires_at, absolute_expires_at FROM user_session WHERE user_id = ? AND revoked_at IS NULL ORDER BY last_seen_at DESC',
+            [$userId],
         );
 
         $result = [];

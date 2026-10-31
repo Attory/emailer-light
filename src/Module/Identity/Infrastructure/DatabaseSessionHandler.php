@@ -35,18 +35,11 @@ final readonly class DatabaseSessionHandler implements \SessionHandlerInterface,
             'SELECT payload, idle_expires_at, absolute_expires_at, revoked_at FROM user_session WHERE id_hash = ?',
             [$this->digest($id)],
         );
-        if (false === $record || null !== ($record['revoked_at'] ?? null)) {
+        if (false === $record) {
             return '';
         }
 
-        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
-        if (!$this->future($record['idle_expires_at'] ?? null, $now) || !$this->future($record['absolute_expires_at'] ?? null, $now)) {
-            $this->destroy($id);
-
-            return '';
-        }
-
-        return \is_string($record['payload'] ?? null) ? $record['payload'] : '';
+        return null === ($record['revoked_at'] ?? null) && \is_string($record['payload'] ?? null) ? $record['payload'] : '';
     }
 
     public function write(string $id, string $data): bool
@@ -93,16 +86,12 @@ SQL, [$this->digest($id), $now, $now, $now, $now, $now]);
     public function gc(int $max_lifetime): int
     {
         $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
-        $revoked = $this->connection->executeStatement(
-            "UPDATE user_session SET payload = '', revoked_at = COALESCE(revoked_at, ?) WHERE revoked_at IS NULL AND (idle_expires_at <= ? OR absolute_expires_at <= ?) LIMIT 1000",
-            [$now->format('Y-m-d H:i:s.u'), $now->format('Y-m-d H:i:s.u'), $now->format('Y-m-d H:i:s.u')],
-        );
         $deleted = $this->connection->executeStatement(
             'DELETE FROM user_session WHERE revoked_at <= ? AND absolute_expires_at <= ? LIMIT 1000',
             [$now->modify('-7 days')->format('Y-m-d H:i:s.u'), $now->format('Y-m-d H:i:s.u')],
         );
 
-        return (is_numeric($revoked) ? (int) $revoked : 0) + (is_numeric($deleted) ? (int) $deleted : 0);
+        return is_numeric($deleted) ? (int) $deleted : 0;
     }
 
     public function validateId(string $id): bool
@@ -111,12 +100,11 @@ SQL, [$this->digest($id), $now, $now, $now, $now, $now]);
             'SELECT idle_expires_at, absolute_expires_at, revoked_at FROM user_session WHERE id_hash = ?',
             [$this->digest($id)],
         );
-        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        if (false === $record) {
+            return false;
+        }
 
-        return false !== $record
-            && null === ($record['revoked_at'] ?? null)
-            && $this->future($record['idle_expires_at'] ?? null, $now)
-            && $this->future($record['absolute_expires_at'] ?? null, $now);
+        return null === ($record['revoked_at'] ?? null);
     }
 
     public function updateTimestamp(string $id, string $data): bool
@@ -127,18 +115,5 @@ SQL, [$this->digest($id), $now, $now, $now, $now, $now]);
     private function digest(string $id): string
     {
         return $this->hasher->hash('session-id', $id);
-    }
-
-    private function future(mixed $value, \DateTimeImmutable $now): bool
-    {
-        if (!\is_string($value)) {
-            return false;
-        }
-
-        try {
-            return new \DateTimeImmutable($value, new \DateTimeZone('UTC')) > $now;
-        } catch (\Throwable) {
-            return false;
-        }
     }
 }

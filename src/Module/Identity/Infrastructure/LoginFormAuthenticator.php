@@ -11,6 +11,7 @@ use App\Module\Identity\Application\LoginThrottle;
 use App\Module\Identity\Application\LoginThrottled;
 use App\Module\Identity\Application\SessionRegistry;
 use Doctrine\DBAL\Connection;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -43,6 +44,19 @@ final class LoginFormAuthenticator extends AbstractLoginFormAuthenticator
     public function supports(Request $request): bool
     {
         return 'identity_login' === $request->attributes->get('_route') && $request->isMethod('POST');
+    }
+
+    public function start(Request $request, ?AuthenticationException $authException = null): Response
+    {
+        $reason = $request->attributes->get('identity.session_expiry');
+        $reason = \in_array($reason, ['idle', 'absolute'], true) ? $reason : 'required';
+        $url = $this->urls->generate('identity_login', 'required' === $reason ? [] : ['expiry' => $reason]);
+        // Polls must neither follow HTML login redirects nor replace the page target.
+        if ($request->isXmlHttpRequest()) {
+            return new JsonResponse(['authentication_required' => true, 'expiry' => $reason, 'login_url' => $url], Response::HTTP_UNAUTHORIZED, ['Cache-Control' => 'no-store']);
+        }
+
+        return new RedirectResponse($url);
     }
 
     public function authenticate(Request $request): Passport
@@ -103,6 +117,7 @@ final class LoginFormAuthenticator extends AbstractLoginFormAuthenticator
             $this->throttle->loginSucceeded($reservation);
         }
         $request->getSession()->remove('identity.last_login');
+        $request->getSession()->remove('identity.expiry_notice');
         $request->getSession()->migrate(true);
         $this->sessions->bind(
             $request->getSession()->getId(),
