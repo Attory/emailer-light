@@ -38,7 +38,11 @@ final readonly class DeliveryReadinessProbe implements LightweightReadinessProbe
     public function findings(): array
     {
         $findings = [];
-        $control = $this->control?->status();
+        try {
+            $control = $this->control?->status();
+        } catch (\App\Shared\DeliveryControlUnavailable) {
+            return [$this->critical('delivery_control_unavailable', 'Delivery controls are unreadable or invalid; sending is blocked.', 'Keep delivery stopped. Use the matching verified installer repair; preserve independent owner pauses and all operation holds.')];
+        }
         if (null !== $control && [] !== $control['holds']) {
             foreach ($control['holds'] as $hold) {
                 $phase = \is_string($hold['phase'] ?? null) ? $hold['phase'] : 'unknown';

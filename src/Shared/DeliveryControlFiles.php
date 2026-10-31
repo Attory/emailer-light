@@ -9,7 +9,7 @@ final readonly class DeliveryControlFiles
 {
     private string $root;
 
-    public function __construct(string $privateDirectory, private string $installation)
+    public function __construct(string $privateDirectory, private string $installation, private bool $requireConfigured = false)
     {
         if (1 !== preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/D', $installation) || (!str_starts_with($privateDirectory, '/') || 1 === preg_match('~(^|/)\.\.?(/|$)|//~', $privateDirectory))) {
             throw new \RuntimeException('Delivery control identity is invalid.');
@@ -20,16 +20,48 @@ final readonly class DeliveryControlFiles
     /** @return array{configured: bool, owner: string, generation: int, holds: list<array<string, mixed>>} */
     public function status(): array
     {
-        if (!file_exists($this->root) && !is_link($this->root)) {
+        try {
+            return $this->readStatus();
+        } catch (\Throwable) {
+            // No path, record content or previous exception enters diagnostics.
+            throw new DeliveryControlUnavailable();
+        }
+    }
+
+    /** @return array{configured: bool, owner: string, generation: int, holds: list<array<string, mixed>>} */
+    private function readStatus(): array
+    {
+        if (!$this->namespaceAvailable()) {
+            if ($this->requireConfigured) {
+                throw new \RuntimeException('Required delivery control namespace is missing.');
+            }
+
             return ['configured' => false, 'owner' => 'legacy', 'generation' => 0, 'holds' => []];
         }
         $this->rootDirectory($this->root);
         $intent = $this->intent();
-        $this->rootDirectory($this->root.'/holds');
-        $paths = glob($this->root.'/holds/*.json');
-        if (false === $paths || 1024 < \count($paths)) {
-            throw new \RuntimeException('Delivery hold inventory is unavailable.');
+        if (0 !== posix_geteuid() && !is_writable($this->root.'/owner')) {
+            throw new \RuntimeException('Application owner intent is not writable.');
         }
+        $this->rootDirectory($this->root.'/holds');
+        $stream = @opendir($this->root.'/holds');
+        if (false === $stream) {
+            throw new \RuntimeException('Delivery hold inventory is unreadable.');
+        }
+        $paths = [];
+        try {
+            while (false !== ($entry = readdir($stream))) {
+                if (str_ends_with($entry, '.json')) {
+                    $paths[] = $this->root.'/holds/'.$entry;
+                    if (1024 < \count($paths)) {
+                        throw new \RuntimeException('Delivery hold inventory exceeds its bound.');
+                    }
+                }
+            }
+        } finally {
+            closedir($stream);
+        }
+        sort($paths, SORT_STRING);
         $holds = [];
         foreach ($paths as $path) {
             $hold = $this->read($path, 0, 0o644);
@@ -43,22 +75,23 @@ final readonly class DeliveryControlFiles
     }
 
     /** Root calls this only after authenticating the source or proving a fresh installation. */
-    public function prepare(int $uid, int $gid, string $priorIntent): void
+    public function prepare(int $uid, int $gid, string $priorIntent, bool $requireExisting = false): void
     {
         $this->requireRoot();
         if (0 >= $uid || 0 > $gid || !\in_array($priorIntent, ['enabled', 'paused', 'unknown'], true)) {
             throw new \RuntimeException('Delivery intent custody is invalid.');
         }
+        if ($requireExisting) {
+            // Authenticated protocol-aware sources must not bootstrap over lost
+            // owner/operation records. Restrictive existing modes are repairable.
+            $this->intent();
+            $this->rootDirectory($this->root.'/holds');
+        }
         $base = \dirname($this->root);
         $this->rootDirectory(\dirname($base));
+        $repair = $this->beginAccessRepair('unknown' === $priorIntent);
         foreach ([$base, $this->root, $this->root.'/holds'] as $directory) {
-            if (!file_exists($directory) && !is_link($directory)) {
-                if (!mkdir($directory, 0o755)) {
-                    throw new \RuntimeException('Delivery control directory could not be prepared.');
-                }
-                $this->syncDirectory(\dirname($directory));
-            }
-            $this->rootDirectory($directory);
+            $this->prepareControlDirectory($directory);
         }
         $transfer = $this->root.'/owner-transfer.json';
         if (file_exists($transfer) || is_link($transfer)) {
@@ -110,6 +143,15 @@ final readonly class DeliveryControlFiles
         if ('active' === ($initial['phase'] ?? null)) {
             $initial['phase'] = 'complete';
             $this->write($bootstrap, $initial, 0, 0, 0o644);
+        }
+        if ([] !== $repair) {
+            if (true === ($repair['unknown_prior'] ?? null)) {
+                // The inaccessible source could acknowledge a DB-only Pause.
+                // Never override a newer independently recorded owner generation.
+                $this->invalidateUnprovenLegacyIntent();
+            }
+            $repair['phase'] = 'complete';
+            $this->write($this->root.'/access-repair.json', $repair, 0, 0, 0o644);
         }
     }
 
@@ -311,8 +353,9 @@ final readonly class DeliveryControlFiles
     private function intent(): array
     {
         $this->rootDirectory($this->root);
+        clearstatcache(true, $this->root.'/owner');
         $owner = @lstat($this->root.'/owner');
-        if (!\is_array($owner) || 0o040000 !== ($owner['mode'] & 0o170000) || 0 !== ($owner['mode'] & 0o077) || 0 >= $owner['uid']) {
+        if (!\is_array($owner) || 0o040000 !== ($owner['mode'] & 0o170000) || 0o700 !== ($owner['mode'] & 0o777) || 0 >= $owner['uid']) {
             throw new \RuntimeException('Owner intent directory is unsafe.');
         }
         $intent = $this->read($this->root.'/owner/intent.json', $owner['uid'], 0o600);
@@ -428,6 +471,7 @@ final readonly class DeliveryControlFiles
 
     private function readLock(string $path, int $uid): void
     {
+        clearstatcache(true, $path);
         $m = @lstat($path);
         if (!\is_array($m) || 0o100000 !== ($m['mode'] & 0o170000) || $uid !== $m['uid'] || 0o600 !== ($m['mode'] & 0o777) || 1 !== $m['nlink']) {
             throw new \RuntimeException('Owner intent lock metadata is unsafe.');
@@ -437,6 +481,7 @@ final readonly class DeliveryControlFiles
     /** @return array<string, mixed> */
     private function read(string $path, int $uid, int $mode): array
     {
+        clearstatcache(true, $path);
         $m = @lstat($path);
         if (!\is_array($m) || 0o100000 !== ($m['mode'] & 0o170000) || $uid !== $m['uid'] || ($m['mode'] & 0o777) !== $mode || 1 !== $m['nlink'] || 16384 < $m['size']) {
             throw new \RuntimeException('Delivery control record is unsafe.');
@@ -508,9 +553,141 @@ final readonly class DeliveryControlFiles
         }
     }
 
+    /** An absent namespace is legacy only when absence can actually be examined. */
+    private function namespaceAvailable(): bool
+    {
+        $base = \dirname($this->root);
+        if (!$this->entryExists(\dirname($base), basename($base))) {
+            return false;
+        }
+        $this->publicControlDirectory($base);
+        if (!$this->entryExists($base, $this->installation)) {
+            throw new \RuntimeException('Delivery namespace identity is missing.');
+        }
+        $this->publicControlDirectory($this->root);
+        $this->publicControlDirectory($this->root.'/holds');
+
+        return true;
+    }
+
+    private function entryExists(string $directory, string $name): bool
+    {
+        $m = @lstat($directory);
+        if (!\is_array($m) || 0o040000 !== ($m['mode'] & 0o170000) || !is_readable($directory) || !is_executable($directory)) {
+            throw new \RuntimeException('Control namespace cannot be examined.');
+        }
+        $stream = @opendir($directory);
+        if (false === $stream) {
+            throw new \RuntimeException('Control namespace inventory is unreadable.');
+        }
+        try {
+            for ($count = 0; false !== ($entry = readdir($stream)); ++$count) {
+                if (4096 <= $count) {
+                    throw new \RuntimeException('Control namespace inventory exceeds its bound.');
+                }
+                if ($entry === $name) {
+                    return true;
+                }
+            }
+
+            return false;
+        } finally {
+            closedir($stream);
+        }
+    }
+
+    private function publicControlDirectory(string $path): void
+    {
+        $this->rootDirectory($path);
+        $m = lstat($path);
+        if (false === $m || 0 !== $m['gid'] || 0o755 !== ($m['mode'] & 0o777)) {
+            throw new \RuntimeException('Control namespace traversal is invalid.');
+        }
+        for ($p = \dirname($path);; $p = \dirname($p)) {
+            $m = lstat($p);
+            if (false === $m || 0 === ($m['mode'] & 0o001)) {
+                throw new \RuntimeException('Control namespace ancestor traversal is invalid.');
+            }
+            if ('/' === $p) {
+                break;
+            }
+        }
+    }
+
+    /** Repair only protected product-owned directories, never arbitrary ancestors. */
+    private function prepareControlDirectory(string $path): void
+    {
+        $this->rootDirectory(\dirname($path));
+        if (!$this->entryExists(\dirname($path), basename($path))) {
+            if (!mkdir($path, 0o700)) {
+                throw new \RuntimeException('Control namespace could not be created.');
+            }
+            $this->syncDirectory(\dirname($path));
+        }
+        $this->rootDirectory($path);
+        $before = lstat($path);
+        $stream = fopen($path, 'r');
+        if (false === $before || false === $stream) {
+            throw new \RuntimeException('Control namespace descriptor is unavailable.');
+        }
+        try {
+            $opened = fstat($stream);
+            if (false === $opened || $before['dev'] !== $opened['dev'] || $before['ino'] !== $opened['ino'] || 0o040000 !== ($opened['mode'] & 0o170000) || 0 !== $opened['uid'] || 0 !== ($opened['mode'] & 0o022) || !chgrp($path, 0) || !chmod($path, 0o755)) {
+                throw new \RuntimeException('Control namespace publication failed.');
+            }
+            clearstatcache(true, $path);
+            $after = lstat($path);
+            if (false === $after || $opened['dev'] !== $after['dev'] || $opened['ino'] !== $after['ino'] || 0 !== $after['uid'] || 0 !== $after['gid'] || 0o755 !== ($after['mode'] & 0o777) || !fsync($stream)) {
+                throw new \RuntimeException('Control namespace publication is unverified.');
+            }
+        } finally {
+            fclose($stream);
+        }
+        $this->publicControlDirectory($path);
+    }
+
+    /** @return array<string, mixed> */
+    private function beginAccessRepair(bool $unknownPrior): array
+    {
+        $base = \dirname($this->root);
+        $needed = false;
+        foreach ([$base, $this->root, $this->root.'/holds'] as $path) {
+            if (\is_array($m = @lstat($path))) {
+                $this->rootDirectory($path);
+                $needed = $needed || 0 !== $m['gid'] || 0o755 !== ($m['mode'] & 0o777);
+            }
+        }
+        if (!\is_array(@lstat($this->root.'/owner/intent.json'))) {
+            return []; // Fresh/bootstrap state has no previously acknowledged intent.
+        }
+        $this->intent();
+        foreach ([$base, $this->root, $this->root.'/holds'] as $path) {
+            if (!\is_array(@lstat($path))) {
+                throw new \RuntimeException('Established delivery namespace is incomplete.');
+            }
+        }
+        $path = $this->root.'/access-repair.json';
+        $record = [];
+        if (\is_array(@lstat($path))) {
+            $record = $this->read($path, 0, 0o644);
+            if ('emailer-control-access-repair-v1' !== ($record['format'] ?? null) || $this->installation !== ($record['installation_uuid'] ?? null) || !\is_bool($record['unknown_prior'] ?? null) || !\in_array($record['phase'] ?? null, ['active', 'complete'], true)) {
+                throw new \RuntimeException('Control access repair binding is invalid.');
+            }
+        }
+        if (!$needed && 'active' !== ($record['phase'] ?? null)) {
+            return [];
+        }
+        // Publish before chmod, so interruption cannot lose an ambiguous DB-only Pause.
+        $record = ['format' => 'emailer-control-access-repair-v1', 'installation_uuid' => $this->installation, 'phase' => 'active', 'unknown_prior' => $unknownPrior || true === ($record['unknown_prior'] ?? null)];
+        $this->write($path, $record, 0, 0, 0o644);
+
+        return $record;
+    }
+
     private function rootDirectory(string $path): void
     {
         for ($p = $path;; $p = \dirname($p)) {
+            clearstatcache(true, $p);
             $m = @lstat($p);
             if (!\is_array($m) || 0o040000 !== ($m['mode'] & 0o170000) || 0 !== $m['uid'] || 0 !== ($m['mode'] & 0o022)) {
                 throw new \RuntimeException('Delivery control directory ownership is unsafe.');

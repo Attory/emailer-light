@@ -9,6 +9,14 @@ use PHPUnit\Framework\TestCase;
 
 final class NativeVersionBindingTest extends TestCase
 {
+    public function testTraversalRepairSupportsAffectedSourceWithoutRelabellingSchema(): void
+    {
+        $binding = new NativeVersionBinding('1.2.11', '1.2.12');
+        $source = ['installation_uuid' => 'unchanged', 'product_version' => '1.2.11', 'schema_version' => '20261025000000'];
+        self::assertSame('20261025000000', $binding->sourceSchema());
+        self::assertSame($binding->lock(json_encode($source, JSON_THROW_ON_ERROR), true), $binding->lock(json_encode([...$source, 'product_version' => '1.2.12'], JSON_THROW_ON_ERROR)));
+    }
+
     public function testPostCorePauseFollowupAcceptsExactPublishedSources(): void
     {
         foreach (['1.2.6', '1.2.7', '1.2.8', '1.2.9', '1.2.10'] as $source) {

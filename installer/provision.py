@@ -764,6 +764,26 @@ class Installer:
         self.check_unit(name)
         self.claims().write(Path('/etc/systemd/system') / name, content, 0o644)
 
+    def verify_delivery_control_access(self, *, live=False):
+        if not self.owned_delivery():
+            return
+        identity = getattr(self, 'delivery_control_identity', '')
+        if not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', identity):
+            raise SetupError('delivery_control_unavailable: installation binding is unavailable; keep delivery held.')
+        try:
+            code = (self.bundle / 'control-access.php').read_text().removeprefix('<?php')
+            command = ['env', '-i', 'PATH=/usr/sbin:/usr/bin:/sbin:/bin', 'LANG=C.UTF-8', 'runuser', '-u', self.user, '--', self.php, '-r', code, str(self.release), str(self.private), identity]
+            if not live:
+                run(command)
+                return
+            for suffix in ('fpm.service', 'worker.service'):
+                pid = run(['systemctl', 'show', self.name + '-' + suffix, '--property=MainPID', '--value']).strip()
+                if not pid.isdigit() or int(pid) <= 1:
+                    raise SetupError('delivery_control_unavailable: actual service namespace is unavailable; keep delivery held.')
+                run(['nsenter', '--target', pid, '--mount', '--', *command])
+        except (OSError, SetupError):
+            raise SetupError('delivery_control_unavailable: actual nonroot control access or hold enforcement failed. Keep delivery held and use this operation’s original Finish or Recover action.') from None
+
     def services(self):
         if self.owned_delivery() and not getattr(self, 'resource_claims', None):
             self.fresh_delivery_control('begin-fresh')
@@ -843,10 +863,12 @@ WantedBy=multi-user.target
         self.claims().check_all()
         for suffix in ('fpm.service', 'worker.service', 'scheduler.service', 'scheduler.timer', 'operations.service', 'operations.timer'):
             self.check_unit(self.name + '-' + suffix)
+        self.verify_delivery_control_access()
         run(['systemctl', 'daemon-reload'])
         for unit in ('fpm.service', 'worker.service', 'scheduler.timer', 'operations.timer'):
             run(['systemctl', 'enable', '--now', self.name + '-' + unit])
         run(['systemctl', 'start', self.name + '-scheduler.service'])
+        self.verify_delivery_control_access(live=True)
         # Self-contained least-privilege command launcher, no shell expansion of runtime secrets.
         launcher = generated_launcher(self.bundle, self.name, self.user, runtime, self.base / 'releases/current', php=self.php)
         self.claims().write('/usr/local/sbin/' + self.name, launcher, 0o755)
