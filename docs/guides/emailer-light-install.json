@@ -1,6 +1,6 @@
 {
   "title": "Install Emailer Light",
-  "subtitle": "Version 1.2.12 | Beginner guide | Ubuntu Apache or Debian Nginx VPS",
+  "subtitle": "Version 1.2.13 | Beginner guide | Ubuntu Apache or Debian Nginx VPS",
   "blocks": [
     {
       "type": "p",
@@ -100,11 +100,11 @@
     },
     {
       "type": "code",
-      "text": "curl --fail --location --output emailer-light-1.2.12-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.2.12/\\\nemailer-light-1.2.12-setup.run"
+      "text": "curl --fail --location --output emailer-light-1.2.13-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.2.13/\\\nemailer-light-1.2.13-setup.run"
     },
     {
       "type": "p",
-      "text": "Or download <b>emailer-light-1.2.12-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.2.12\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
+      "text": "Or download <b>emailer-light-1.2.13-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.2.13\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
     },
     {
       "type": "p",
@@ -124,7 +124,7 @@
     },
     {
       "type": "code",
-      "text": "sudo sh emailer-light-1.2.12-setup.run"
+      "text": "sudo sh emailer-light-1.2.13-setup.run"
     },
     {
       "type": "p",
@@ -250,6 +250,14 @@
     {
       "type": "p",
       "text": "Standalone native updates that reopen an older source writer before live-service verification cannot prove whether that source acknowledged a database-only Pause. Completion releases its installer hold but keeps inferred owner intent unknown for explicit review and supported Resume. Independently recorded owner actions are preserved. Guided host updates keep the source continuously fenced through completion and can automatically restore proven enabled intent."
+    },
+    {
+      "type": "h2",
+      "text": "Automatic maintenance completion"
+    },
+    {
+      "type": "p",
+      "text": "After a successful manually initiated install/update and live service verification, setup automatically releases the operation temporary sending exclusion. Successful edition Accept does the same. Normal owner pauses, campaign approval, suppression, authentication and SMTP rules remain. Already approved delivery may continue; drafts are never approved and failed or uncertain messages are never retried. A failed or incomplete operation names its concrete failure and recovery action, not a misleading successful-maintenance hold."
     }
   ]
 }

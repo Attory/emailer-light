@@ -124,11 +124,6 @@ final readonly class InstallerDeliveryControl
         if ('released' === $hold['phase']) {
             return;
         }
-        if (true !== ($record['delivery_control_source_aware'] ?? null) && true !== ($record['retain_source_fence'] ?? null)) {
-            // A legacy writer reopened before live verification can acknowledge
-            // Pause only in the DB. Do not project inferred enabled intent over it.
-            $this->files->invalidateUnprovenLegacyIntent();
-        }
         $lease = $this->files->projectionLease();
         try {
             $holds = [];
@@ -144,11 +139,11 @@ final readonly class InstallerDeliveryControl
                 }
                 $seen[$previous] = true;
                 $priorHold = $holds[$previous];
-                if ('native' !== $priorHold['kind'] || 'recovered' !== $priorHold['phase'] || ['proof_path' => $proof] !== $priorHold['evidence']) {
+                if ('native' !== $priorHold['kind'] || !\in_array($priorHold['phase'], ['active', 'failed', 'recovered'], true) || ['proof_path' => $proof] !== $priorHold['evidence']) {
                     throw new \RuntimeException('A separate Light native operation still owns its hold.');
                 }
                 $prior = $this->rootProof(\dirname($proof).'/recovered-'.$previous.'.json');
-                if ('emailer-light-native-update-v1' !== ($prior['format'] ?? null) || $previous !== ($prior['id'] ?? null) || 'recovered' !== ($prior['phase'] ?? null) || true !== ($prior['fence_restored'] ?? null) || ($record['binding'] ?? null) !== ($prior['binding'] ?? null) || ($record['source_sha256'] ?? null) !== ($prior['source_sha256'] ?? null)) {
+                if ('emailer-light-native-update-v1' !== ($prior['format'] ?? null) || $previous !== ($prior['id'] ?? null) || 'recovered' !== ($prior['phase'] ?? null) || ($record['binding'] ?? null) !== ($prior['binding'] ?? null) || ($record['source_sha256'] ?? null) !== ($prior['source_sha256'] ?? null)) {
                     throw new \RuntimeException('Recovered Light predecessor provenance is not verified.');
                 }
                 $retire[] = $previous;

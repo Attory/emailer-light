@@ -1,6 +1,6 @@
 {
   "title": "Emailer Light user manual",
-  "subtitle": "Version 1.2.12 | Setup and everyday newsletters",
+  "subtitle": "Version 1.2.13 | Setup and everyday newsletters",
   "blocks": [
     {
       "type": "p",
@@ -24,7 +24,7 @@
     },
     {
       "type": "p",
-      "text": "The 1.2.12 setup file supports Ubuntu 22.04/24.04/26.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action."
+      "text": "The 1.2.13 setup file supports Ubuntu 22.04/24.04/26.04 with Apache and Debian 13 with Nginx. It creates a dedicated PHP runtime, application services, backups and a command launcher. Ubuntu 22.04 gets an isolated supported database beside existing sites. Administrator email is the default login name on fresh setup; existing accounts keep their identifier and password. You can sign in, prepare templates and campaigns, and configure SMTP later. See the beginner installation guide for the tested hosting profile and one-file setup action."
     },
     {
       "type": "h2",
@@ -284,7 +284,7 @@
     {
       "type": "ol",
       "items": [
-        "Official Light 1.0.0, 1.1.0 and 1.2.0 through 1.2.10 retain their supported direct update to 1.2.12. Start the signed setup and check the displayed installation address.",
+        "Official Light 1.0.0, 1.1.0 and 1.2.0 through 1.2.10 retain their supported direct update to 1.2.13. Start the signed setup and check the displayed installation address.",
         "Choose Update with a verified backup. The installer tracks its own operation hold and drains current work without retrying failed or uncertain messages.",
         "Successful completion retires only this operation’s hold. Existing owner pauses and other holds remain; Doctor names any actual SMTP or readiness blocker. Previously approved due work can continue when delivery was already enabled and readiness passes.",
         "For an interrupted operation use its retained Finish or Recover action. Recovery remains held until explicitly reviewed. Keep the verified recovery material."
@@ -296,7 +296,7 @@
     },
     {
       "type": "callout",
-      "text": "Light 1.2.6 and 1.2.12 use the same database schema. Older installations need the guided draft-schema migration; keep verified recovery material. Normal restore needs the same schema. Recover older backups with their matching release in an isolated environment. For interrupted updates choose Recover in setup; a completed update cannot be downgraded through recovery."
+      "text": "Light 1.2.6 and 1.2.13 use the same database schema. Older installations need the guided draft-schema migration; keep verified recovery material. Normal restore needs the same schema. Recover older backups with their matching release in an isolated environment. For interrupted updates choose Recover in setup; a completed update cannot be downgraded through recovery."
     },
     {
       "type": "p",
@@ -321,6 +321,14 @@
     {
       "type": "p",
       "text": "Standalone native updates that reopen an older source writer before live-service verification cannot prove whether that source acknowledged a database-only Pause. Completion releases its installer hold but keeps inferred owner intent unknown for explicit review and supported Resume. Independently recorded owner actions are preserved. Guided host updates keep the source continuously fenced through completion and can automatically restore proven enabled intent."
+    },
+    {
+      "type": "h2",
+      "text": "Automatic maintenance completion"
+    },
+    {
+      "type": "p",
+      "text": "After a successful manually initiated install/update and live service verification, setup automatically releases the operation temporary sending exclusion. Successful edition Accept does the same. Normal owner pauses, campaign approval, suppression, authentication and SMTP rules remain. Already approved delivery may continue; drafts are never approved and failed or uncertain messages are never retried. A failed or incomplete operation names its concrete failure and recovery action, not a misleading successful-maintenance hold."
     }
   ]
 }
