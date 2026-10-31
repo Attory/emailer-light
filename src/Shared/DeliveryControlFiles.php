@@ -353,8 +353,9 @@ final readonly class DeliveryControlFiles
     private function intent(): array
     {
         $this->rootDirectory($this->root);
+        clearstatcache(true, $this->root.'/owner');
         $owner = @lstat($this->root.'/owner');
-        if (!\is_array($owner) || 0o040000 !== ($owner['mode'] & 0o170000) || 0 !== ($owner['mode'] & 0o077) || 0 >= $owner['uid']) {
+        if (!\is_array($owner) || 0o040000 !== ($owner['mode'] & 0o170000) || 0o700 !== ($owner['mode'] & 0o777) || 0 >= $owner['uid']) {
             throw new \RuntimeException('Owner intent directory is unsafe.');
         }
         $intent = $this->read($this->root.'/owner/intent.json', $owner['uid'], 0o600);

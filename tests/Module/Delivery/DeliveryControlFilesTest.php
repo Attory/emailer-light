@@ -228,6 +228,33 @@ PHP;
         self::assertSame($paused, $files->status());
     }
 
+    public function testLongLivedNonrootWorkerRejectsAChangedOwnerDirectoryMode(): void
+    {
+        $this->files()->prepare(1000, 1000, 'enabled');
+        $script = <<<'PHP'
+require $argv[1].'/src/Shared/DeliveryControlFiles.php';
+require $argv[1].'/src/Shared/DeliveryControlUnavailable.php';
+if (!posix_setgid(1000) || !posix_setuid(1000)) { exit(3); }
+$f=new App\Shared\DeliveryControlFiles($argv[2].'/private',$argv[3]);
+if (!$f->status()['configured']) { exit(4); }
+echo "ready\n"; fflush(STDOUT); fgets(STDIN);
+try { $f->status(); echo 'invalid-state-accepted'; } catch (App\Shared\DeliveryControlUnavailable) { echo 'blocked'; }
+PHP;
+        $process = proc_open([PHP_BINARY, '-r', $script, \dirname(__DIR__, 3), $this->directory, self::INSTALLATION], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        self::assertIsResource($process);
+        stream_set_timeout($pipes[1], 3);
+        self::assertSame("ready\n", fgets($pipes[1]));
+        $owner = $this->directory.'/delivery-control/'.self::INSTALLATION.'/owner';
+        chmod($owner, 0o300);
+        fwrite($pipes[0], "continue\n");
+        fclose($pipes[0]);
+        self::assertSame('blocked', stream_get_contents($pipes[1]));
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        self::assertSame(0, proc_close($process));
+        chmod($owner, 0o700);
+    }
+
     public function testAwareSourceCannotRecreateLostNamespaceOrEraseItsPause(): void
     {
         $files = $this->files();
@@ -364,6 +391,9 @@ PHP;
         self::assertFalse($this->actor('inspect', 'application')['configured']);
         $files->prepare(1000, 1000, 'enabled');
         $root = $this->directory.'/delivery-control/'.self::INSTALLATION;
+        chmod($root.'/owner', 0o300);
+        self::assertSame(['uid' => 1000, 'blocked' => 'delivery_control_unavailable'], $this->actor('inspect', 'application'));
+        chmod($root.'/owner', 0o700);
         chmod($this->directory, 0o700);
         self::assertSame(['uid' => 1000, 'blocked' => 'delivery_control_unavailable'], $this->actor('inspect', 'worker'));
         chmod($this->directory, 0o755);
