@@ -111,7 +111,7 @@ final class DeliveryControlFilesTest extends TestCase
         $files->hold(self::FIRST, 'host', []);
         $path = $this->directory.'/delivery-control/'.self::INSTALLATION.'/holds/'.self::FIRST.'.json';
         chmod($path, 0o666);
-        $this->expectException(\RuntimeException::class);
+        $this->expectException(\App\Shared\DeliveryControlUnavailable::class);
         $files->status();
     }
 
@@ -226,6 +226,179 @@ PHP;
         $paused = $files->status();
         $files->invalidateUnprovenLegacyIntent();
         self::assertSame($paused, $files->status());
+    }
+
+    public function testSignedInstallerProbeRunsAsTheActualNonrootAccountWhileHeld(): void
+    {
+        $files = $this->files();
+        $mask = umask(0o077);
+        try {
+            $files->prepare(1000, 1000, 'enabled');
+        } finally {
+            umask($mask);
+        }
+        $files->hold(self::FIRST, 'host', []);
+        foreach (['application', 'worker', 'scheduler'] as $role) {
+            $probe = $this->actor('probe', $role);
+            self::assertTrue($probe['delivery_control_access']);
+            self::assertSame(1000, $probe['nonroot_uid']);
+            self::assertTrue($probe['held_claim_rejected']);
+            self::assertTrue($probe['owner_writable']);
+            self::assertTrue($probe['root_holds_read_only']);
+        }
+    }
+
+    public function testRestrictiveInstallerUmaskPublishesUsableLeastPrivilegeControls(): void
+    {
+        $files = $this->files();
+        $mask = umask(0o077);
+        try {
+            $files->prepare(1000, 1000, 'enabled');
+        } finally {
+            umask($mask);
+        }
+        $root = $this->directory.'/delivery-control/'.self::INSTALLATION;
+        foreach ([$this->directory.'/delivery-control', $root, $root.'/holds'] as $path) {
+            clearstatcache(true, $path);
+            self::assertSame(0o755, fileperms($path) & 0o777);
+            self::assertSame(0, fileowner($path));
+            self::assertSame(0, filegroup($path));
+        }
+        foreach (['application', 'worker', 'scheduler'] as $role) {
+            self::assertSame(['uid' => 1000, 'configured' => true, 'owner' => 'enabled', 'holds' => 0, 'claim' => true, 'owner_writable' => true, 'holds_writable' => false], $this->actor('inspect', $role));
+        }
+        $files->hold(self::FIRST, 'host', []);
+        $files->hold(self::SECOND, 'manual', []);
+        self::assertFalse($this->actor('inspect', 'worker')['claim']);
+        self::assertSame('paused', $this->actor('pause', 'application')['owner']);
+        $paused = $files->status();
+        $files->phase(self::FIRST, 'released');
+        self::assertSame(1, $this->actor('inspect', 'scheduler')['holds']);
+        $files->phase(self::SECOND, 'released');
+        self::assertSame('paused', $this->actor('inspect', 'worker')['owner']);
+        self::assertSame($paused['generation'], $files->status()['generation']);
+        self::assertTrue($this->actor('enable', 'application')['claim']);
+    }
+
+    public function testPublishedRestrictiveNamespaceIsBlockedAndRepairPreservesHoldsAndPause(): void
+    {
+        $files = $this->files();
+        $files->prepare(1000, 1000, 'enabled');
+        $files->hold(self::FIRST, 'host', []);
+        $files->hold(self::SECOND, 'manual', []);
+        $files->pause();
+        $before = $files->status();
+        $root = $this->directory.'/delivery-control/'.self::INSTALLATION;
+        // Actual published-package footprint under0077. No state contents edited.
+        foreach ([$root.'/holds', $root, $this->directory.'/delivery-control'] as $path) {
+            chmod($path, 0o700);
+        }
+        foreach (['application', 'worker', 'scheduler'] as $role) {
+            self::assertSame(['uid' => 1000, 'blocked' => 'delivery_control_unavailable'], $this->actor('inspect', $role));
+        }
+        $mask = umask(0o077);
+        try {
+            $files->prepare(1000, 1000, 'unknown');
+        } finally {
+            umask($mask);
+        }
+        self::assertSame($before, $files->status());
+        self::assertSame('paused', $this->actor('inspect', 'worker')['owner']);
+        self::assertSame(2, $this->actor('inspect', 'scheduler')['holds']);
+    }
+
+    public function testOpaqueZeroIntentBecomesUnknownButNewerExplicitIntentSurvivesRepair(): void
+    {
+        $files = $this->files();
+        $files->prepare(1000, 1000, 'enabled');
+        $root = $this->directory.'/delivery-control/'.self::INSTALLATION;
+        chmod($root, 0o700);
+        $files->prepare(1000, 1000, 'unknown');
+        self::assertSame('unknown', $files->status()['owner']);
+        self::assertSame(1, $files->status()['generation']);
+        $files->enable();
+        $explicit = $files->status();
+        chmod($root, 0o700);
+        $files->prepare(1000, 1000, 'unknown');
+        self::assertSame($explicit, $files->status());
+    }
+
+    public function testInterruptedAccessRepairRetainsAmbiguousDatabasePause(): void
+    {
+        $files = $this->files();
+        $files->prepare(1000, 1000, 'enabled');
+        $root = $this->directory.'/delivery-control/'.self::INSTALLATION;
+        // Crash after permission publication but before invalidation: durable
+        // active repair receipt must survive a retry whose current DB is enabled.
+        file_put_contents($root.'/access-repair.json', json_encode(['format' => 'emailer-control-access-repair-v1', 'installation_uuid' => self::INSTALLATION, 'phase' => 'active', 'unknown_prior' => true], JSON_THROW_ON_ERROR));
+        chmod($root.'/access-repair.json', 0o644);
+        $files->prepare(1000, 1000, 'enabled');
+        self::assertSame('unknown', $files->status()['owner']);
+        self::assertFalse($this->actor('inspect', 'worker')['claim']);
+        $files->enable();
+        $newer = $files->status();
+        $files->prepare(1000, 1000, 'unknown');
+        self::assertSame($newer, $files->status());
+    }
+
+    public function testUnreadableParentAndTamperedOrMissingHoldsNeverBecomeLegacy(): void
+    {
+        $files = $this->files();
+        self::assertFalse($this->actor('inspect', 'application')['configured']);
+        $files->prepare(1000, 1000, 'enabled');
+        $root = $this->directory.'/delivery-control/'.self::INSTALLATION;
+        chmod($this->directory, 0o700);
+        self::assertSame(['uid' => 1000, 'blocked' => 'delivery_control_unavailable'], $this->actor('inspect', 'worker'));
+        chmod($this->directory, 0o755);
+        rmdir($root.'/holds');
+        self::assertSame(['uid' => 1000, 'blocked' => 'delivery_control_unavailable'], $this->actor('inspect', 'scheduler'));
+        mkdir($root.'/holds', 0o755);
+        $files->hold(self::FIRST, 'host', []);
+        chmod($root.'/holds/'.self::FIRST.'.json', 0o666);
+        self::assertSame(['uid' => 1000, 'blocked' => 'delivery_control_unavailable'], $this->actor('inspect', 'application'));
+    }
+
+    /** @return array<string, mixed> */
+    private function actor(string $action, string $role): array
+    {
+        $script = <<<'PHP'
+require $argv[1].'/src/Shared/DeliveryControlFiles.php';
+require $argv[1].'/src/Shared/DeliveryControlUnavailable.php';
+require $argv[1].'/src/Shared/DeliveryIntentLease.php';
+if (!in_array($argv[5], ['application','worker','scheduler'], true) || !posix_setgid(1000) || !posix_setuid(1000) || posix_geteuid() !== 1000) { exit(3); }
+if ($argv[4] === 'probe') {
+ $source=$argv[1]; $argv=['control-access.php',$source,$argv[2].'/private',$argv[3]]; $argc=4;
+ require $source.'/installer/control-access.php'; exit(0);
+}
+$f = new App\Shared\DeliveryControlFiles($argv[2].'/private', $argv[3]);
+try {
+ if ($argv[4] === 'pause') { $f->pause(); }
+ if ($argv[4] === 'enable') { $f->enable(); }
+ $state = $f->status(); $claim = false;
+ try { $lease=$f->claimLease(); $lease->release(); $claim=true; } catch (App\Shared\DeliveryControlUnavailable $e) { throw $e; } catch (DomainException) {}
+ $root=$argv[2].'/delivery-control/'.$argv[3];
+ echo json_encode(['uid'=>posix_geteuid(),'configured'=>$state['configured'],'owner'=>$state['owner'],'holds'=>count($state['holds']),'claim'=>$claim,'owner_writable'=>is_writable($root.'/owner'),'holds_writable'=>is_writable($root.'/holds')],JSON_THROW_ON_ERROR);
+} catch (App\Shared\DeliveryControlUnavailable) { echo json_encode(['uid'=>posix_geteuid(),'blocked'=>'delivery_control_unavailable'],JSON_THROW_ON_ERROR); }
+PHP;
+        $source = \dirname(__DIR__, 3);
+        $process = proc_open([PHP_BINARY, '-r', $script, $source, $this->directory, self::INSTALLATION, $action, $role], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        self::assertIsResource($process);
+        fclose($pipes[0]);
+        $output = stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $error = stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+        self::assertSame(0, proc_close($process), $error);
+        $result = json_decode($output, true, 16, JSON_THROW_ON_ERROR);
+        self::assertIsArray($result);
+
+        $record = [];
+        foreach ($result as $key => $value) {
+            self::assertIsString($key);
+            $record[$key] = $value;
+        }
+
+        return $record;
     }
 
     private function files(): DeliveryControlFiles

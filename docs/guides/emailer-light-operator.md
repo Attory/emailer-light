@@ -1,6 +1,6 @@
 # Light operator and troubleshooting reference
 
-Version 1.2.11 | Exceptional hosting, updates and recovery
+Version 1.2.12 | Exceptional hosting, updates and recovery
 
 This reference covers exceptional hosting, update and recovery work. Start with the [beginner installation guide](emailer-light-install.md) for the normal path. The installer supplies the runtime, verifier, launcher, database provisioning, keys, services, backup defaults and HTTPS configuration; customers do not assemble these pieces.
 
@@ -68,7 +68,7 @@ sudo emailer-light emailer:doctor:run --json
 
 The health command distinguishes structural installation completion from sending readiness. Deferred SMTP is compatible with structural completion and blocks actual sending. Doctor retains its original sending gates and severity. Open Doctor after changing mail or MFA settings; installer Check does not remove the operational hold.
 
-Fresh redacted diagnostics are under `/var/lib/emailer-light-installer/last-error.json`. Managed operations use `/etc/emailer-light/installer/<edition>/1.2.11/last-error.json`. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status.
+Fresh redacted diagnostics are under `/var/lib/emailer-light-installer/last-error.json`. Managed operations use `/etc/emailer-light/installer/<edition>/1.2.12/last-error.json`. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status.
 
 ## Error reference
 
@@ -142,7 +142,7 @@ If setup says a reserved host resource is occupied or changed, it has kept that 
 
 ## Resume after the 1.2.1 web-server check
 
-If 1.2.1 stopped during Checking this server with Existing Nginx/Caddy was preserved, download the official 1.2.11 setup file and start it with sudo sh as in the installation guide. That check occurs before installation initialization or database creation. Keep the existing installer state directory and its operation lock; no state or database deletion is needed. An operation that progressed beyond this check remains bound to its original signed package; complete it with that package before a normal update. If Light reports an address-specific Apache website, this server configuration requires Ripe; retrying Light will retain the same supported-profile restriction.
+If 1.2.1 stopped during Checking this server with Existing Nginx/Caddy was preserved, download the official 1.2.12 setup file and start it with sudo sh as in the installation guide. That check occurs before installation initialization or database creation. Keep the existing installer state directory and its operation lock; no state or database deletion is needed. An operation that progressed beyond this check remains bound to its original signed package; complete it with that package before a normal update. If Light reports an address-specific Apache website, this server configuration requires Ripe; retrying Light will retain the same supported-profile restriction.
 
 ## Template images and unsaved editor recovery
 
@@ -165,7 +165,7 @@ Earlier uploaded images become visible in the updated gallery. Browser draft rec
 
 ## Incomplete-draft schema update and recovery
 
-Light 1.2.11 and Ripe 1.3.3 allow campaign drafts without a selected template. Their schema is 20261025000000. The guided setup file authenticates both installed and target releases, fences application writers, creates verified recovery material, applies the reviewed migration and checks the final runtime. Publication, approval and delivery remain explicit.
+Light 1.2.12 and Ripe 1.3.3 allow campaign drafts without a selected template. Their schema is 20261025000000. The guided setup file authenticates both installed and target releases, fences application writers, creates verified recovery material, applies the reviewed migration and checks the final runtime. Publication, approval and delivery remain explicit.
 
 Use the same setup file and its Recover action after interruption. Light recovery admits only the recorded complete source or intermediate schema/ledger/identity states and unchanged business data; it never deletes or coerces new incomplete drafts to fit an older schema. Ripe uses its verified complete source schema checkpoint. A completed update cannot be rolled back with an interruption recovery command.
 
@@ -180,3 +180,10 @@ An interrupted or recovered operation retains its operation identifier, lifecycl
 After recovery to an older release, that release may record Pause only in its database. A standalone retry treats its zero delivery flag as unknown intent instead of automatically restoring inferred enabled intent. Successful retry retires only the installer holds; review readiness and use supported Resume explicitly. A newer independently recorded owner pause is preserved. Use this signed follow-up rather than the standalone recovery/retry route in 1.2.9.
 
 Standalone native updates that reopen an older source writer before live-service verification cannot prove whether that source acknowledged a database-only Pause. Completion releases its installer hold but keeps inferred owner intent unknown for explicit review and supported Resume. Independently recorded owner actions are preserved. Guided host updates keep the source continuously fenced through completion and can automatically restore proven enabled intent.
+
+
+## Corrected control access and incident recovery
+
+Ripe 1.3.6 and Light 1.2.12 correct delivery-control directory access under restrictive installer umask0077. Root-owned control base, installation namespace and holds are explicitly root:root0755; only the owner directory is application-owned0700, with private0600 intent and lock files. An unreadable, malformed or inaccessible namespace blocks sending with delivery_control_unavailable; it is never accepted as absent legacy state.
+
+Use the corrected signed setup through its normal authenticated Update/Finish flow. It verifies the installed source before repairing safe product-owned directory metadata. Keep independent pauses, other operation holds and any incident worker/scheduler fence. Do not recursively chmod private storage, edit journals or patch the installed package. A database-only Pause acknowledged while old controls were inaccessible may require explicit owner review; newer independent intent is preserved. Before restarting dedicated delivery services, verify control status and hold rejection as their actual nonroot accounts inside their service namespaces. Then verify genuine fresh heartbeats and readiness. Release only the completed installer-owned hold; do not send test mail or retry failed work.

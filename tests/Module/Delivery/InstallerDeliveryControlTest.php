@@ -240,7 +240,12 @@ final class InstallerDeliveryControlTest extends TestCase
         $record = ['control_operation_id' => self::OPERATION, 'control_installation_uuid' => self::INSTALLATION, 'control_private_directory' => $this->directory.'/private', 'completed' => ['Creating your administrator account']];
         file_put_contents($path, json_encode($record, JSON_THROW_ON_ERROR));
         $control = new InstallerDeliveryControl($this->db, $this->directory.'/private');
-        $control->beginFresh(self::OPERATION, $path, 1000, 1000);
+        $mask = umask(0o077);
+        try {
+            $control->beginFresh(self::OPERATION, $path, 1000, 1000);
+        } finally {
+            umask($mask);
+        }
         self::assertSame(0, $this->accepting());
         self::assertCount(1, $this->files()->status()['holds']);
         $record['completed'][] = 'Checking application health and initial backup';
@@ -371,7 +376,7 @@ final class InstallerDeliveryControlTest extends TestCase
         }
         $base = $this->directory.'/native-updates';
         mkdir($base, 0o700);
-        $proof = $base.'/light-1.2.8-to-1.2.11.json';
+        $proof = $base.'/light-1.2.8-to-1.2.12.json';
         file_put_contents($proof, json_encode(['format' => 'emailer-light-native-update-v1', 'identity' => ['installation_uuid' => self::INSTALLATION], 'id' => self::OPERATION, 'phase' => 'completed', 'binding' => str_repeat('a', 64), 'source_sha256' => str_repeat('b', 64), 'target_sha256' => str_repeat('c', 64), 'fence_restored' => true, 'control_runtime_verified' => true, 'retain_source_fence' => $fenced, 'delivery_control_source_aware' => $aware], JSON_THROW_ON_ERROR));
         chmod($proof, 0o600);
         $files->hold(self::OPERATION, 'native', ['proof_path' => $proof]);
@@ -406,7 +411,12 @@ final class InstallerDeliveryControlTest extends TestCase
     private function begin(): InstallerDeliveryControl
     {
         $control = new InstallerDeliveryControl($this->db, $this->directory.'/private');
-        $control->beginHost(self::OPERATION, $this->directory.'/management.json', 1000, 1000);
+        $mask = umask(0o077);
+        try {
+            $control->beginHost(self::OPERATION, $this->directory.'/management.json', 1000, 1000);
+        } finally {
+            umask($mask);
+        }
         $this->db->executeStatement('UPDATE delivery_runtime SET accepting_work=0');
 
         return $control;
