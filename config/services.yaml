@@ -155,6 +155,7 @@ services:
     App\Module\Delivery\Infrastructure\FilesystemDeliveryControl:
         arguments:
             $privateDirectory: '%emailer.private_dir%'
+            $environment: '%kernel.environment%'
 
     App\Module\Delivery\Application\Contract\SendingGate: '@App\Module\Health\Infrastructure\DeliverySendingGate'
 

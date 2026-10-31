@@ -228,6 +228,23 @@ PHP;
         self::assertSame($paused, $files->status());
     }
 
+    public function testAwareSourceCannotRecreateLostNamespaceOrEraseItsPause(): void
+    {
+        $files = $this->files();
+        $files->prepare(1000, 1000, 'paused');
+        $root = $this->directory.'/delivery-control/'.self::INSTALLATION;
+        rename($root, $root.'.retained');
+        try {
+            $files->prepare(1000, 1000, 'enabled', true);
+            self::fail('A known source cannot replace missing installation controls.');
+        } catch (\RuntimeException) {
+            self::assertDirectoryDoesNotExist($root);
+        }
+        self::assertSame(['uid' => 1000, 'blocked' => 'delivery_control_unavailable'], $this->actor('inspect', 'worker'));
+        rename($root.'.retained', $root);
+        self::assertSame('paused', $files->status()['owner']);
+    }
+
     public function testSignedInstallerProbeRunsAsTheActualNonrootAccountWhileHeld(): void
     {
         $files = $this->files();

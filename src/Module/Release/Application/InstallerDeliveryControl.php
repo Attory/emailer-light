@@ -71,7 +71,7 @@ final readonly class InstallerDeliveryControl
         if ((!\is_string($prior) && !\is_int($prior)) || !\in_array((string) $prior, ['0', '1'], true)) {
             throw new \RuntimeException('Earlier delivery intent is unavailable.');
         }
-        $this->files->prepare($uid, $gid, '1' === (string) $prior ? 'enabled' : 'unknown');
+        $this->files->prepare($uid, $gid, '1' === (string) $prior ? 'enabled' : 'unknown', false === ($record['control_legacy_source'] ?? null));
         foreach ($this->files->status()['holds'] as $other) {
             $evidence = $other['evidence'];
             if ($operation !== ($other['operation_id'] ?? null) && \in_array($other['kind'] ?? null, ['host', 'native', 'edition'], true) && !('native' === $other['kind'] && \is_array($evidence) && $operation === ($evidence['parent_operation'] ?? null))) {

@@ -9,7 +9,7 @@ final readonly class DeliveryControlFiles
 {
     private string $root;
 
-    public function __construct(string $privateDirectory, private string $installation)
+    public function __construct(string $privateDirectory, private string $installation, private bool $requireConfigured = false)
     {
         if (1 !== preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/D', $installation) || (!str_starts_with($privateDirectory, '/') || 1 === preg_match('~(^|/)\.\.?(/|$)|//~', $privateDirectory))) {
             throw new \RuntimeException('Delivery control identity is invalid.');
@@ -32,6 +32,10 @@ final readonly class DeliveryControlFiles
     private function readStatus(): array
     {
         if (!$this->namespaceAvailable()) {
+            if ($this->requireConfigured) {
+                throw new \RuntimeException('Required delivery control namespace is missing.');
+            }
+
             return ['configured' => false, 'owner' => 'legacy', 'generation' => 0, 'holds' => []];
         }
         $this->rootDirectory($this->root);
@@ -71,11 +75,17 @@ final readonly class DeliveryControlFiles
     }
 
     /** Root calls this only after authenticating the source or proving a fresh installation. */
-    public function prepare(int $uid, int $gid, string $priorIntent): void
+    public function prepare(int $uid, int $gid, string $priorIntent, bool $requireExisting = false): void
     {
         $this->requireRoot();
         if (0 >= $uid || 0 > $gid || !\in_array($priorIntent, ['enabled', 'paused', 'unknown'], true)) {
             throw new \RuntimeException('Delivery intent custody is invalid.');
+        }
+        if ($requireExisting) {
+            // Authenticated protocol-aware sources must not bootstrap over lost
+            // owner/operation records. Restrictive existing modes are repairable.
+            $this->intent();
+            $this->rootDirectory($this->root.'/holds');
         }
         $base = \dirname($this->root);
         $this->rootDirectory(\dirname($base));
@@ -551,7 +561,7 @@ final readonly class DeliveryControlFiles
         }
         $this->publicControlDirectory($base);
         if (!$this->entryExists($base, $this->installation)) {
-            return false;
+            throw new \RuntimeException('Delivery namespace identity is missing.');
         }
         $this->publicControlDirectory($this->root);
         $this->publicControlDirectory($this->root.'/holds');

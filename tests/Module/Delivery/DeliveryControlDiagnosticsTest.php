@@ -12,6 +12,33 @@ use PHPUnit\Framework\TestCase;
 
 final class DeliveryControlDiagnosticsTest extends TestCase
 {
+    public function testProductionNeverTreatsMissingRequiredControlsAsLegacy(): void
+    {
+        $db = self::createStub(Connection::class);
+        $db->method('fetchOne')->willReturn('01900000-0000-7000-8000-000000000001');
+        $parent = sys_get_temp_dir().'/missing-control-'.bin2hex(random_bytes(8));
+        mkdir($parent, 0o700);
+        try {
+            $control = new \App\Module\Delivery\Infrastructure\FilesystemDeliveryControl($db, $parent.'/private');
+            $checks = [
+                'status' => static function () use ($control): void { $control->status(); },
+                'claimLease' => static function () use ($control): void { $control->claimLease(); },
+                'pause' => static function () use ($control): void { $control->pause(); },
+                'enable' => static function () use ($control): void { $control->enable(); },
+            ];
+            foreach ($checks as $action => $check) {
+                try {
+                    $check();
+                    self::fail('Missing production controls must block '.$action);
+                } catch (DeliveryControlUnavailable $error) {
+                    self::assertStringContainsString('delivery_control_unavailable', $error->getMessage());
+                }
+            }
+        } finally {
+            rmdir($parent);
+        }
+    }
+
     public function testUnavailableControlsAreASpecificCriticalSendingRequirement(): void
     {
         $db = self::createMock(Connection::class);

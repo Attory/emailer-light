@@ -10,7 +10,7 @@ use Doctrine\DBAL\Connection;
 
 final readonly class FilesystemDeliveryControl implements DeliveryControl
 {
-    public function __construct(private Connection $connection, private string $privateDirectory)
+    public function __construct(private Connection $connection, private string $privateDirectory, private string $environment = 'prod')
     {
     }
 
@@ -36,7 +36,7 @@ final readonly class FilesystemDeliveryControl implements DeliveryControl
             if (!\is_array($metadata) || !\is_string($metadata['installation_uuid'] ?? null)) {
                 throw $error;
             }
-            $files = new DeliveryControlFiles($this->privateDirectory, $metadata['installation_uuid']);
+            $files = new DeliveryControlFiles($this->privateDirectory, $metadata['installation_uuid'], 'prod' === $this->environment);
         }
         if ($files->status()['configured']) {
             $files->pause();
@@ -67,6 +67,6 @@ final readonly class FilesystemDeliveryControl implements DeliveryControl
             throw new \RuntimeException('Delivery control installation identity is unavailable.');
         }
 
-        return new DeliveryControlFiles($this->privateDirectory, $installation);
+        return new DeliveryControlFiles($this->privateDirectory, $installation, 'prod' === $this->environment);
     }
 }

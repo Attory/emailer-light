@@ -213,7 +213,7 @@ final readonly class NativeSchemaUpdate
             }
             $prior = NativeUpdateJournal::integer($this->connection->fetchOne("SELECT accepting_work FROM delivery_runtime WHERE singleton_key='1'"));
             $control = new \App\Shared\DeliveryControlFiles($this->privateDirectory, $installation);
-            $control->prepare($key['uid'], $key['gid'], 1 === $prior ? 'enabled' : 'unknown');
+            $control->prepare($key['uid'], $key['gid'], 1 === $prior ? 'enabled' : 'unknown', \is_array($source['files'] ?? null) && isset($source['files']['src/Shared/DeliveryControlFiles.php']));
             if (0 === $prior && (!\is_array($source['files'] ?? null) || !isset($source['files']['src/Shared/DeliveryControlFiles.php']))) {
                 // A recovered old source can acknowledge only a DB pause.
                 // Never infer enabled intent over that possible owner action.
