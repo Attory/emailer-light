@@ -2,7 +2,7 @@
 {% block body %}
 <a class="skip-link" href="#main-content">Skip to main content</a>
 <header class="admin-header">
-    <a class="brand" href="{{ path('admin_dashboard') }}"><span class="brand-mark" aria-hidden="true">el</span>Emailer Light</a>
+    <a class="brand" href="{{ path('admin_dashboard') }}"><img class="brand-mark" src="{{ asset('identity/emailer-app-icon.svg') }}" alt="" width="32" height="32">Emailer Light</a>
     <nav aria-label="Administration">
         {% set current_route = app.request.attributes.get('_route')|default('') %}
         {% for label, route in {'Overview': 'admin_dashboard', 'Campaigns': 'admin_campaigns', 'Templates': 'admin_templates'} %}

@@ -2,6 +2,7 @@
 {% block title %}Sign in — Emailer Light{% endblock %}
 {% block body %}
 <main class="auth-shell">
+    <img class="auth-brand" src="{{ asset('identity/emailer-lockup-light.svg') }}" alt="Emailer Light" width="670" height="205">
     <h1>Sign in</h1>
     {% if expiry_notice == 'idle' %}<p class="alert" role="alert">You’ve been signed out due to inactivity. Sign in again to continue.</p>
     {% elseif expiry_notice == 'absolute' %}<p class="alert" role="alert">Your session reached its 12-hour limit. Sign in again to continue.</p>{% endif %}
