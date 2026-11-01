@@ -1,6 +1,6 @@
 {
   "title": "Install Emailer Light",
-  "subtitle": "Version 1.2.14 | Beginner guide | Ubuntu Apache or Debian Nginx VPS",
+  "subtitle": "Version 1.2.15 | Beginner guide | Ubuntu Apache or Debian Nginx VPS",
   "blocks": [
     {
       "type": "p",
@@ -100,11 +100,11 @@
     },
     {
       "type": "code",
-      "text": "curl --fail --location --output emailer-light-1.2.14-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.2.14/\\\nemailer-light-1.2.14-setup.run"
+      "text": "curl --fail --location --output emailer-light-1.2.15-setup.run \\\n  https://github.com/Attory/emailer-light/releases/download/v1.2.15/\\\nemailer-light-1.2.15-setup.run"
     },
     {
       "type": "p",
-      "text": "Or download <b>emailer-light-1.2.14-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.2.14\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
+      "text": "Or download <b>emailer-light-1.2.15-setup.run</b> from the <a href=\"https://github.com/Attory/emailer-light/releases/tag/v1.2.15\">official release</a> in your browser and upload that one file using your provider's file-transfer facility. If curl is unavailable, use that browser download/upload path."
     },
     {
       "type": "p",
@@ -124,7 +124,7 @@
     },
     {
       "type": "code",
-      "text": "sudo sh emailer-light-1.2.14-setup.run"
+      "text": "sudo sh emailer-light-1.2.15-setup.run"
     },
     {
       "type": "p",

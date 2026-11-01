@@ -18,7 +18,7 @@ final readonly class CampaignDraftSchemaPlan
 
     public function __construct(private Connection $connection, private string $projectDirectory, private string $targetVersion = '1.2.6')
     {
-        if (!\in_array($targetVersion, ['1.2.6', '1.2.7', '1.2.8', '1.2.9', '1.2.10', '1.2.11', '1.2.12', '1.2.13', '1.2.14'], true)) {
+        if (!\in_array($targetVersion, ['1.2.6', '1.2.7', '1.2.8', '1.2.9', '1.2.10', '1.2.11', '1.2.12', '1.2.13', '1.2.14', '1.2.15'], true)) {
             throw new \InvalidArgumentException('The draft schema target is unsupported.');
         }
     }

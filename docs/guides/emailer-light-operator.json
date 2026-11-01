@@ -1,6 +1,6 @@
 {
   "title": "Light operator and troubleshooting reference",
-  "subtitle": "Version 1.2.14 | Exceptional hosting, updates and recovery",
+  "subtitle": "Version 1.2.15 | Exceptional hosting, updates and recovery",
   "blocks": [
     {
       "type": "p",
@@ -171,7 +171,7 @@
     },
     {
       "type": "p",
-      "text": "Fresh redacted diagnostics are under <code>/var/lib/emailer-light-installer/last-error.json</code>. Managed operations use <code>/etc/emailer-light/installer/&lt;edition&gt;/1.2.14/last-error.json</code>. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status."
+      "text": "Fresh redacted diagnostics are under <code>/var/lib/emailer-light-installer/last-error.json</code>. Managed operations use <code>/etc/emailer-light/installer/&lt;edition&gt;/1.2.15/last-error.json</code>. These contain a bounded failed step/category and blocker codes. Full management receipts and runtime settings contain secrets: do not dump them into logs, tickets, screenshots or chat. Share only named redacted error codes and service status."
     },
     {
       "type": "h2",
@@ -341,7 +341,7 @@
     },
     {
       "type": "p",
-      "text": "If 1.2.1 stopped during Checking this server with Existing Nginx/Caddy was preserved, download the official 1.2.14 setup file and start it with sudo sh as in the installation guide. That check occurs before installation initialization or database creation. Keep the existing installer state directory and its operation lock; no state or database deletion is needed. An operation that progressed beyond this check remains bound to its original signed package; complete it with that package before a normal update. If Light reports an address-specific Apache website, this server configuration requires Ripe; retrying Light will retain the same supported-profile restriction."
+      "text": "If 1.2.1 stopped during Checking this server with Existing Nginx/Caddy was preserved, download the official 1.2.15 setup file and start it with sudo sh as in the installation guide. That check occurs before installation initialization or database creation. Keep the existing installer state directory and its operation lock; no state or database deletion is needed. An operation that progressed beyond this check remains bound to its original signed package; complete it with that package before a normal update. If Light reports an address-specific Apache website, this server configuration requires Ripe; retrying Light will retain the same supported-profile restriction."
     },
     {
       "type": "h2",
