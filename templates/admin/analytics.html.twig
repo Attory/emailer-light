@@ -2,6 +2,7 @@
 {% block title %}Analytics · Emailer Light{% endblock %}
 {% block admin_body %}
 <h1>Campaign analytics</h1>
+<div class="section-stack">
 {% if is_granted('ROLE_ADMIN') %}
 <form method="post" action="{{ path('admin_analytics_policy') }}">
     <input type="hidden" name="_token" value="{{ csrf_token('analytics-policy') }}">
@@ -19,4 +20,5 @@
 <table><thead><tr><th scope="col">Campaign</th><th scope="col">Open policy</th><th scope="col">Click policy</th><th scope="col">Approximate opens</th><th scope="col">Approximate clicks</th></tr></thead><tbody>
 {% for campaign in campaigns %}<tr><td>{{ campaign.name }}</td><td>{{ campaign.open_tracking ? 'On' : 'Off' }}</td><td>{{ campaign.click_tracking ? 'On' : 'Off' }}</td><td>{{ campaign.approximate_opens }}</td><td>{{ campaign.approximate_clicks }}</td></tr>{% else %}<tr><td colspan="5">No approved campaigns.</td></tr>{% endfor %}
 </tbody></table>
+</div>
 {% endblock %}
