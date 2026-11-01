@@ -1,8 +1,7 @@
 {% extends 'admin/layout.html.twig' %}
 {% block title %}Analytics · Emailer Light{% endblock %}
 {% block admin_body %}
-<h1>Privacy-minimized analytics</h1>
-<p>Open and click figures are approximate. Email addresses, IP addresses, user agents, and raw destination URLs are not stored in analytics records.</p>
+<h1>Campaign analytics</h1>
 {% if is_granted('ROLE_ADMIN') %}
 <form method="post" action="{{ path('admin_analytics_policy') }}">
     <input type="hidden" name="_token" value="{{ csrf_token('analytics-policy') }}">
