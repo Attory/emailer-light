@@ -9,6 +9,17 @@ use PHPUnit\Framework\TestCase;
 
 final class NativeVersionBindingTest extends TestCase
 {
+    public function testIdentityMaintenanceSupportsPublishedSourceWithoutSchemaDrift(): void
+    {
+        $binding = new NativeVersionBinding('1.2.14', '1.2.15');
+        self::assertSame('20261025000000', $binding->sourceSchema());
+        $source = ['installation_uuid' => 'unchanged', 'product_version' => '1.2.14', 'schema_version' => '20261025000000'];
+        self::assertSame($binding->lock(json_encode($source, JSON_THROW_ON_ERROR), true), $binding->lock(json_encode([...$source, 'product_version' => '1.2.15'], JSON_THROW_ON_ERROR)));
+        self::assertFalse(\App\Module\Release\Application\NativeSchemaUpdate::supports('1.2.15', '1.2.15'));
+        self::assertFalse(\App\Module\Release\Application\NativeSchemaUpdate::supports('1.2.15', '1.2.14'));
+        self::assertFalse(\App\Module\Release\Application\NativeSchemaUpdate::supports('1.2.16', '1.2.15'));
+    }
+
     public function testTraversalRepairSupportsAffectedSourceWithoutRelabellingSchema(): void
     {
         $binding = new NativeVersionBinding('1.2.11', '1.2.12');

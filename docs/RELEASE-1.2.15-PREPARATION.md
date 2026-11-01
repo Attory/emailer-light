@@ -1,0 +1,3 @@
+# Unfold identity maintenance 1.2.15
+
+Release from the merged Unfold identity source, using the existing Light signing identity. 1.2.14 is already published and must not be overwritten. This follow-up registers 1.2.15 with the existing native schema, identity, recovery and automatic completion protocol and includes the original signed1.2.14 predecessor. No delivery-control implementation or schema change. Existing focused visual acceptance is reused; no broad CI rerun or historical rehearsal. Build deterministically, verify signatures and published downloads through the official candidate process.
